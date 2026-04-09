@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# User uploaded files (if you want to ignore them)
+# uploads/
+
+# Output files (uncomment if you want to ignore generated reports)
+# outputs/*.docx
+
+# Credentials and Secrets
+credentials.json
+*.env
+.env
+.env.local
+secrets.toml
+
+# Git
+.git/
+
+# Cursor/AI
+.cursor/

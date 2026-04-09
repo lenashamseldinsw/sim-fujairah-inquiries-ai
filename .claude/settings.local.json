@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3)",
+      "Bash(python3 -m py_compile report_display.py)",
+      "Bash(python3 -m py_compile report_extractor.py report_display.py)",
+      "Bash(python3 -m py_compile app.py)",
+      "Bash(python3 -m py_compile report_extractor.py)",
+      "Bash(python3 -m py_compile report_extractor.py report_display.py app.py)",
+      "Bash(python3 -m py_compile report_display.py app.py)"
+    ]
+  }
+}
