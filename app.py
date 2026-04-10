@@ -4,8 +4,14 @@ import os
 import json
 from pathlib import Path
 from report_display import display_report_tabs
+from analysis import DemoAnalyzer, RealAnalyzer
+from dotenv import load_dotenv
 import zipfile
 import io
+
+# Load environment variables
+load_dotenv()
+APP_MODE = os.getenv('APP_MODE', 'demo').lower()
 
 # Page configuration - must be first Streamlit command
 st.set_page_config(
@@ -1449,14 +1455,22 @@ def verify_credentials(username, password):
             return True
     return False
 
+# ── Analyzer Setup ────────────────────────────────────────────────────────────
+def get_analyzer():
+    """Get the appropriate analyzer based on APP_MODE environment variable."""
+    if APP_MODE == 'real':
+        return RealAnalyzer()
+    else:
+        return DemoAnalyzer()
+
+ANALYZER = get_analyzer()
+
 # ── Validation ────────────────────────────────────────────────────────────────
 def validate_file(uploaded_file, lang='ar'):
     tx = T[lang]
-    if uploaded_file is None:
-        return False, tx['err_no_file']
-    ext = os.path.splitext(uploaded_file.name)[1].lower()
-    if ext not in ['.xlsx', '.xls', '.pdf']:
-        return False, tx['err_bad_type']
+    is_valid, error_msg = ANALYZER.validate_file(uploaded_file)
+    if not is_valid:
+        return False, error_msg or tx['err_bad_type']
     return True, ""
 
 
@@ -1488,16 +1502,67 @@ INQUIRIES_STAGES = [
     {"start": 22.5, "end": 30,   "progress_start": 75, "progress_end": 100},
 ]
 
-COMPLAINTS_STAGES = [
-    {"start": 0,    "end": 7.5,  "progress_start": 0,  "progress_end": 25},
-    {"start": 7.5,  "end": 15,   "progress_start": 25, "progress_end": 50},
-    {"start": 15,   "end": 22.5, "progress_start": 50, "progress_end": 75},
-    {"start": 22.5, "end": 30,   "progress_start": 75, "progress_end": 100},
-]
+# ── Processing ───────────────────────────────────────────────────────────────
+def process_with_analyzer(uploaded_files, lang='ar'):
+    """Process files using the analyzer and display progress."""
+    tx = T[lang]
+    progress_bar = st.progress(0)
+    pct_container = st.empty()
+
+    try:
+        # For now, just process the first file (can be extended to handle multiple)
+        uploaded_file = uploaded_files[0] if uploaded_files else None
+        if not uploaded_file:
+            st.error(tx['err_no_file'])
+            return None
+
+        # Get analyzer's processing stages
+        analyzer_stages = ANALYZER.get_processing_stages()
+
+        # Simulate processing with stages from analyzer
+        total_duration = 120  # 2 minutes
+        update_interval = 0.5
+        total_steps = int(total_duration / update_interval)
+
+        for step in range(total_steps + 1):
+            elapsed = step * update_interval
+            # Find current stage based on elapsed time
+            current_pct = min(1.0, elapsed / total_duration)
+            progress_bar.progress(current_pct)
+
+            # Update stage display
+            current_stage = next(
+                (s for s in analyzer_stages
+                 if s.get('percent_start', 0) <= current_pct * 100 < s.get('percent_end', 100)),
+                analyzer_stages[0] if analyzer_stages else None
+            )
+
+            if current_stage:
+                pct_container.markdown(
+                    f"<div class='{tx.get('pct_class', 'pct-display')}'>"
+                    f"{int(current_pct * 100)}% — {current_stage.get('label', 'Processing...')}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            time.sleep(update_interval)
+
+        progress_bar.progress(1.0)
+        pct_container.empty()
+
+        # Now call the actual analyzer
+        report = ANALYZER.analyze(uploaded_file)
+        return report
+
+    except Exception as e:
+        st.error(f"Error during processing: {str(e)}")
+        progress_bar.empty()
+        pct_container.empty()
+        return None
 
 
-# ── Simulate Processing ───────────────────────────────────────────────────────
-def simulate_processing(stages, pct_class="pct-display"):
+def simulate_processing_legacy(stages, pct_class="pct-display"):
+    """Legacy function for backwards compatibility - delegates to analyzer."""
     progress_bar  = st.progress(0)
     pct_container = st.empty()
 
@@ -1831,10 +1896,12 @@ def inquiries_page(lang):
                 <div class="stage-desc">{tx['stage_desc_inq']}</div>
             </div>
             """, unsafe_allow_html=True)
-            simulate_processing(INQUIRIES_STAGES, pct_class="pct-display")
+            report = process_with_analyzer(uploaded_files, lang)
             st.markdown('</div>', unsafe_allow_html=True)
             st.session_state.processing = False
             st.session_state.completed  = True
+            if report:
+                st.session_state.report_data = report
             st.rerun()
 
     else:
@@ -1984,10 +2051,12 @@ def complaints_page(lang):
                 <div class="stage-desc">{tx['stage_desc_cmp']}</div>
             </div>
             """, unsafe_allow_html=True)
-            simulate_processing(COMPLAINTS_STAGES, pct_class="pct-display-blue")
+            report = process_with_analyzer(uploaded_files, lang)
             st.markdown('</div>', unsafe_allow_html=True)
             st.session_state.processing = False
             st.session_state.completed  = True
+            if report:
+                st.session_state.report_data = report
             st.rerun()
 
     else:
