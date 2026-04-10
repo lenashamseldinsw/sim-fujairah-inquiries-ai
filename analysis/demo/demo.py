@@ -27,7 +27,7 @@ class DemoAnalyzer(Analyzer):
     ]
 
     # Total processing time in seconds (simulated)
-    TOTAL_PROCESSING_TIME = 3  # 3 seconds (for development - will be increased later)
+    TOTAL_PROCESSING_TIME = 30  # 30 seconds
 
     def validate_file(self, uploaded_file) -> tuple[bool, str]:
         """Validate file type and size."""
