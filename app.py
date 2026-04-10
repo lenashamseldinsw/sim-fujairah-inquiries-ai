@@ -1133,7 +1133,7 @@ def load_css(lang='ar'):
         text-align: center !important;
     }}
     .pct-display {{
-        font-size: 3.5rem;
+        font-size: 2rem;
         font-weight: 900;
         background: linear-gradient(135deg, {GOLD_LIGHT}, {GOLD});
         -webkit-background-clip: text;
@@ -1144,7 +1144,7 @@ def load_css(lang='ar'):
         letter-spacing: -1px;
     }}
     .pct-display-blue {{
-        font-size: 3.5rem;
+        font-size: 2rem;
         font-weight: 900;
         background: linear-gradient(135deg, {BLUE_LIGHT}, {BLUE});
         -webkit-background-clip: text;
@@ -1478,18 +1478,18 @@ def validate_file(uploaded_file, lang='ar'):
 def create_download_zip():
     """Create a ZIP file containing the Word report and Excel file"""
     zip_buffer = io.BytesIO()
-    
+
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Add Word document
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين.docx")
+        # Add Word document (with trailing space in filename)
+        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
         if report_path.exists():
-            zip_file.write(report_path, "تقرير_تحليل_استفسارات_المتعاملين.docx")
-        
+            zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
+
         # Add Excel file
-        excel_path = Path("ADPF_Contact_Type_Triage_Detail.xlsx")
+        excel_path = Path("outputs/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
         if excel_path.exists():
-            zip_file.write(excel_path, "ADPF_Contact_Type_Triage_Detail.xlsx")
-    
+            zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
 
@@ -1520,7 +1520,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
         analyzer_stages = ANALYZER.get_processing_stages()
 
         # Simulate processing with stages from analyzer
-        total_duration = 120  # 2 minutes
+        total_duration = 3  # 3 seconds (for development - will be increased later)
         update_interval = 0.5
         total_steps = int(total_duration / update_interval)
 
@@ -1649,10 +1649,10 @@ def show_login_modal(lang):
             direction: {DIR};
             margin-bottom: 1.5rem;
         ">
-            <div style="text-align: center !important; margin-bottom: 2.5rem; direction: {DIR}; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <div style="font-size: 3rem; margin-bottom: 0.8rem; text-align: center !important;">🔐</div>
-                <h2 style="color: {GOLD_LIGHT}; font-size: 1.8rem; font-weight: 700; margin: 0 0 0.5rem; text-align: center !important; direction: inherit; width: 100%;">{tx['login_title']}</h2>
-                <p style="color: {TEXT_MUTED}; font-size: 0.95rem; margin: 0; text-align: center !important; direction: inherit; width: 100%; padding: 0 1rem;">{tx['login_subtitle']}</p>
+            <div style="margin-bottom: 2.5rem; direction: {DIR}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%;">
+                <div style="font-size: 3rem; margin-bottom: 0.8rem; text-align: center;">🔐</div>
+                <h2 style="color: {GOLD_LIGHT}; font-size: 1.8rem; font-weight: 700; margin: 0 0 0.5rem 0; text-align: center;">{tx['login_title']}</h2>
+                <p style="color: {TEXT_MUTED}; font-size: 0.95rem; margin: 0; text-align: center; padding: 0 1rem; max-width: 90%;">{tx['login_subtitle']}</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1898,6 +1898,7 @@ def inquiries_page(lang):
             """, unsafe_allow_html=True)
             report = process_with_analyzer(uploaded_files, lang)
             st.markdown('</div>', unsafe_allow_html=True)
+
             st.session_state.processing = False
             st.session_state.completed  = True
             if report:
@@ -1918,7 +1919,7 @@ def inquiries_page(lang):
         display_report_tabs(lang)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين.docx")
+        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
         if report_path.exists():
             zip_data = create_download_zip()
             st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
@@ -2073,7 +2074,7 @@ def complaints_page(lang):
         display_report_tabs(lang)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين.docx")
+        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
         if report_path.exists():
             zip_data = create_download_zip()
             st.markdown('<div class="blue-download" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)

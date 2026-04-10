@@ -9,13 +9,13 @@ from lxml import etree
 
 
 def extract_charts_from_docx(docx_path: str) -> List[Dict[str, Any]]:
-    """Extract all native charts from Word document with data and styling."""
+    """Extract all visual content (charts, images, shapes) from Word document."""
     try:
         doc = Document(docx_path)
         charts = []
-        chart_count = 0
+        visual_count = 0
 
-        # Iterate through document parts to find chart parts
+        # 1. Extract native charts
         for rel_id, rel in doc.part.rels.items():
             if "chart" in rel.target_ref:
                 try:
@@ -26,14 +26,30 @@ def extract_charts_from_docx(docx_path: str) -> List[Dict[str, Any]]:
                     chart_data = parse_chart_xml(chart_xml)
                     if chart_data:
                         charts.append(chart_data)
-                        chart_count += 1
-                        print(f"Successfully extracted chart: {chart_data.get('title', 'Unknown')}")
+                        visual_count += 1
+                        print(f"✓ Extracted chart: {chart_data.get('title', 'Unknown')}")
                 except Exception as e:
                     print(f"Error extracting chart {rel_id}: {e}")
-                    import traceback
-                    traceback.print_exc()
 
-        print(f"✓ Extracted {chart_count} charts from document")
+        # 2. Also extract images/pictures as visual content
+        for rel_id, rel in doc.part.rels.items():
+            if "image" in rel.target_ref:
+                try:
+                    image_part = rel.target_part
+                    image_data = {
+                        'type': 'image',
+                        'title': f'Image {visual_count}',
+                        'rel_id': rel_id,
+                        'content_type': image_part.content_type,
+                        'is_image': True
+                    }
+                    charts.append(image_data)
+                    visual_count += 1
+                    print(f"✓ Extracted image: {rel_id}")
+                except Exception as e:
+                    print(f"Error extracting image {rel_id}: {e}")
+
+        print(f"✓ Extracted {visual_count} visual elements from document")
         return charts
     except Exception as e:
         print(f"Error in extract_charts_from_docx: {e}")

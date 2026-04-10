@@ -3,8 +3,8 @@
 import time
 from typing import Dict, Any
 from pathlib import Path
-from analysis.base import Analyzer
-from report_extractor import extract_full_report
+from analysis.shared.base import Analyzer
+from analysis.demo.adaptive_extractor import AdaptiveReportExtractor
 
 
 class DemoAnalyzer(Analyzer):
@@ -27,7 +27,7 @@ class DemoAnalyzer(Analyzer):
     ]
 
     # Total processing time in seconds (simulated)
-    TOTAL_PROCESSING_TIME = 120  # 2 minutes
+    TOTAL_PROCESSING_TIME = 3  # 3 seconds (for development - will be increased later)
 
     def validate_file(self, uploaded_file) -> tuple[bool, str]:
         """Validate file type and size."""
@@ -60,7 +60,7 @@ class DemoAnalyzer(Analyzer):
         In demo mode, this:
         1. Validates the file
         2. Simulates processing stages with time delays
-        3. Loads and returns a pre-built report from outputs directory
+        3. Uses adaptive extraction with caching to load pre-built report
 
         Args:
             uploaded_file: Streamlit UploadedFile object
@@ -73,27 +73,31 @@ class DemoAnalyzer(Analyzer):
         if not is_valid:
             raise ValueError(error_msg)
 
-        # Simulate processing with realistic timing
-        stages = self.PROCESSING_STAGES
-        time_per_stage = self.TOTAL_PROCESSING_TIME / len(stages)
-
-        for stage in stages:
-            time.sleep(time_per_stage)
-            # In real implementation, update progress bar here
-            # For now, just simulate the processing time
+        # Note: Progress simulation happens in process_with_analyzer() in app.py
+        # We just extract and return the pre-built report here
 
         # Load pre-built report from outputs directory
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين.docx")
+        outputs_dir = Path("outputs").resolve()
 
-        if not report_path.exists():
+        # Find the report file - look for any .docx with "تقرير" and "استفسارات"
+        docx_files = [f for f in outputs_dir.glob("*.docx") if not f.name.startswith("~$")]
+
+        report_path = None
+        for f in docx_files:
+            if 'تقرير' in f.name and 'استفسارات' in f.name:
+                report_path = f
+                break
+
+        if report_path is None:
             raise FileNotFoundError(
-                f"Demo report not found at {report_path}. "
-                "Please ensure the pre-built report exists in the outputs directory."
+                f"Report file not found in {outputs_dir}. "
+                f"Found: {[f.name for f in docx_files]}"
             )
 
-        # Extract and return the report
+        # Extract and return the report using adaptive extractor (with caching)
         try:
-            report = extract_full_report(str(report_path))
+            extractor = AdaptiveReportExtractor()
+            report = extractor.extract_report(str(report_path))
             return report
         except Exception as e:
             raise RuntimeError(f"Error extracting report: {str(e)}")

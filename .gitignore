@@ -37,6 +37,9 @@ tmp/
 # Output files (uncomment if you want to ignore generated reports)
 # outputs/*.docx
 
+# Cache directory for extracted reports
+outputs/cache/
+
 # Credentials and Secrets
 credentials.json
 *.env

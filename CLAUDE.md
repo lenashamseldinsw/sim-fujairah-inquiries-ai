@@ -11,27 +11,77 @@ This project uses a **dual-implementation strategy** to maintain a stable demo v
 
 ### Separation of Concerns
 
-The codebase is organized to clearly separate **UI logic** from **analysis logic**:
+The codebase is organized to clearly separate **UI logic** from **analysis logic**, with analysis further organized by implementation:
 
 ```
 sim-fujairah-inquiries-ai/
-├── app.py                      # UI layer (Streamlit) - uses analyzers via interface
-├── report_display.py           # Report visualization (UI)
-├── analysis/                   # Analysis logic layer
-│   ├── __init__.py
-│   ├── base.py                # Abstract Analyzer interface
-│   ├── demo.py                # DemoAnalyzer (simulated, for main branch)
-│   └── real.py                # RealAnalyzer (stub, for real branch)
-├── report_extractor.py        # Data extraction utilities
-├── chart_parser.py            # Chart parsing utilities
-└── .env                       # Loaded by app.py to select APP_MODE
+├── app.py                          # UI layer (Streamlit)
+├── report_display.py               # Backward-compatible wrapper (legacy)
+├── report_extractor.py             # Backward-compatible wrapper (legacy)
+├── analysis/                       # Analysis logic layer (refactored)
+│   ├── __init__.py                # Re-exports from subfolders
+│   ├── shared/                    # Shared components (base + display)
+│   │   ├── __init__.py
+│   │   ├── base.py                # Abstract Analyzer interface
+│   │   └── dynamic_display.py     # Dynamic report display
+│   ├── demo/                      # Demo analyzer + extraction utilities
+│   │   ├── __init__.py
+│   │   ├── demo.py                # DemoAnalyzer (simulated - uses extraction)
+│   │   ├── adaptive_extractor.py  # Report extraction with caching
+│   │   └── report_structure_detector.py  # Auto-detects report structure
+│   ├── real/                      # Real analyzer implementation
+│   │   ├── __init__.py
+│   │   └── real.py                # RealAnalyzer (with AI agents - TODO)
+│   └── legacy/                    # Legacy modules (backward compatibility)
+│       ├── __init__.py
+│       ├── report_display.py      # Old display logic
+│       └── report_extractor.py    # Old extraction logic
+├── docs/                           # Documentation (consolidated)
+│   ├── README.md
+│   ├── ADAPTIVE_SYSTEM_SUMMARY.md
+│   ├── DETECTION_METHOD.md
+│   ├── HIERARCHICAL_IMPLEMENTATION.md
+│   ├── QUICK_REFERENCE.md
+│   └── WORKFLOW.md
+├── chart_parser.py                # Chart parsing utilities
+├── outputs/
+│   └── cache/                     # JSON cache for extracted reports
+└── .env                           # APP_MODE configuration
 ```
+
+## Adaptive Report System (New)
+
+The system now features **automatic structure detection** that works with any Word report without hardcoding.
+
+### Key Features
+
+1. **Auto-Detection**: Automatically detects sections from Word headings
+2. **Smart Table Assignment**: Tables are assigned to sections based on proximity
+3. **JSON Caching**: Extracted structures are cached for fast subsequent loads
+4. **Dynamic Display**: UI adapts to whatever structure is detected
+5. **Automatic Cache Usage**: Display automatically uses cached JSON if available
+
+### Quick Start
+
+```python
+from analysis import DynamicReportDisplay, AdaptiveReportExtractor
+
+# Extract report (uses cache if available)
+extractor = AdaptiveReportExtractor()
+report = extractor.extract_report("outputs/your_report.docx")
+
+# Display report dynamically
+display = DynamicReportDisplay(lang='ar')
+display.display_report("outputs/your_report.docx")  # Uses cache automatically
+```
+
+See `docs/ADAPTIVE_SYSTEM_SUMMARY.md` and `docs/README.md` for full documentation.
 
 ## How It Works
 
 ### The Analyzer Interface (Analysis Layer)
 
-All analyzer implementations inherit from `analysis/base.py:Analyzer`, which defines three methods:
+All analyzer implementations inherit from `analysis/shared/base.py:Analyzer`, which defines three methods. The demo analyzer uses the extraction utilities from `analysis/demo/`:
 
 ```python
 class Analyzer(ABC):
@@ -49,8 +99,8 @@ class Analyzer(ABC):
 
 The `app.py` file loads an environment variable `APP_MODE` to select which analyzer to use:
 
-- `APP_MODE=demo` → loads `DemoAnalyzer` (from `analysis/demo.py`)
-- `APP_MODE=real` → loads `RealAnalyzer` (from `analysis/real.py`)
+- `APP_MODE=demo` → loads `DemoAnalyzer` (from `analysis/demo/demo.py`)
+- `APP_MODE=real` → loads `RealAnalyzer` (from `analysis/real/real.py`)
 
 The UI calls the analyzer through the abstract interface, so it doesn't need to know which implementation is running.
 
@@ -141,32 +191,46 @@ Opens at `http://localhost:8501` but will fail until the `RealAnalyzer` is imple
 
 ### Adding a New Analyzer Type
 
-1. Create a new file in `analysis/` (e.g., `analysis/experimental.py`)
-2. Inherit from `Analyzer` in `analysis/base.py`
-3. Implement all abstract methods
-4. Update `analysis/__init__.py` to export it
-5. Add the mode to `app.py:get_analyzer()`:
+1. Create a new folder in `analysis/` (e.g., `analysis/experimental/`)
+2. Create `analysis/experimental/__init__.py` that exports your analyzer
+3. Create `analysis/experimental/experimental.py` with your implementation
+4. Inherit from `Analyzer` in `analysis/shared/base.py`
+5. Implement all abstract methods
+6. Update `analysis/__init__.py` to import and export it
+7. Add the mode to `app.py:get_analyzer()`:
    ```python
    if APP_MODE == 'experimental':
        return ExperimentalAnalyzer()
    ```
-6. Create `.env.experimental` file
-7. Update the Makefile with a `make experimental` target
+8. Create `.env.experimental` file
+9. Update the Makefile with a `make experimental` target
 
 ### Improving the Demo Analyzer
 
-Edit `analysis/demo.py`:
+Edit `analysis/demo/demo.py`:
 - Adjust processing stages
 - Improve the report loading logic
 - Add more realistic simulation
 
+The demo analyzer uses extraction utilities from `analysis/demo/`:
+- `AdaptiveReportExtractor` - for extracting reports with caching
+- `ReportStructureDetector` - for auto-detecting report structure
+
+And display components from `analysis/shared/`:
+- `DynamicReportDisplay` - for displaying extracted reports (automatically uses cache)
+
 ### Implementing the Real Analyzer
 
-Edit `analysis/real.py`:
+Edit `analysis/real/real.py`:
 - Implement all stub methods
 - Add Claude API integration
 - Build analysis agents
 - Return properly structured report data
+
+The real analyzer will use display components from `analysis/shared/`:
+- `DynamicReportDisplay` - for displaying results
+
+Note: The real analyzer will implement its own analysis logic, not use extraction from demo.
 
 ## Key Files Explained
 
@@ -176,25 +240,97 @@ Edit `analysis/real.py`:
 - **Lines 1453-1465**: `get_analyzer()` function that selects the right analyzer
 - **Lines 1467-1475**: Updated `validate_file()` that delegates to analyzer
 - **Lines 1531-1562**: New `process_with_analyzer()` that handles file processing
+- Calls `display_report_tabs()` which automatically uses cached JSON if available
 - Rest: Unchanged UI/Streamlit code
 
-### `analysis/base.py`
+### Root-level backward compatibility wrappers
+
+- `report_display.py` - Delegates to `analysis.legacy.report_display`
+- `report_extractor.py` - Delegates to `analysis.legacy.report_extractor`
+- Maintained for existing code that imports from root level
+
+### `analysis/__init__.py`
+
+- Main entry point for the analysis module
+- Re-exports all public classes from subfolders
+- Maintains backward compatibility by exporting everything
+- Imports extraction utilities from real/ (not shared/)
+
+### `analysis/shared/base.py`
 
 - Abstract base class defining the analyzer interface
-- All implementations must provide the three abstract methods
+- All implementations must inherit from `Analyzer` and provide the three abstract methods
 - Keep this stable; new methods should be added carefully
 
-### `analysis/demo.py`
+### `analysis/shared/dynamic_display.py`
+
+- Dynamically displays any report structure without hardcoding
+- Creates tabs based on detected sections
+- Renders tables and charts
+- **Automatically uses cached JSON** from `analysis/demo/adaptive_extractor.py`
+- Used by the UI layer for display
+
+### `analysis/demo/adaptive_extractor.py`
+
+- Extracts report structure from Word documents with caching
+- Auto-detects sections using `ReportStructureDetector`
+- **Caches extracted data in JSON** (`outputs/cache/`) for fast subsequent loads
+- Used by demo analyzer and display layer
+- Includes extraction utilities (extraction is demo-specific)
+
+### `analysis/demo/report_structure_detector.py`
+
+- Automatically detects report structure (sections, subsections, tables)
+- Uses Word heading styles as primary detection method
+- Organizes content hierarchically
+- Makes the system adaptable to different report formats
+- Part of demo extraction utilities
+
+### `analysis/demo/demo.py`
 
 - Simulates file processing with realistic timing
-- Loads pre-built reports from `outputs/`
+- Uses `AdaptiveReportExtractor` from `analysis/demo/` to load pre-built reports
+- Extraction uses cache automatically when available
 - Good reference for what a complete implementation looks like
 
-### `analysis/real.py`
+### `analysis/real/real.py`
 
 - Scaffold with TODO comments
 - Stub methods that will be implemented on the real branch
-- Shows the expected structure for the full implementation
+- Shows the expected structure for the full agentic AI implementation
+- Will use its own analysis logic (not extraction-based)
+
+### `analysis/legacy/` folder
+
+- `report_display.py` - Old display logic (delegates to shared.dynamic_display)
+- `report_extractor.py` - Old extraction logic (delegates to real.adaptive_extractor)
+- Kept for backward compatibility
+
+## How the Demo Works
+
+1. **User uploads file** → `app.py` calls `DemoAnalyzer`
+2. **DemoAnalyzer** simulates processing with `process_with_analyzer()`
+3. **After simulation**, `display_report_tabs()` is called
+4. **display_report_tabs()** uses `DynamicReportDisplay` to show the report
+5. **DynamicReportDisplay** calls `AdaptiveReportExtractor.extract_report()` from `analysis/demo/`
+6. **Extractor checks cache** - if JSON exists in `outputs/cache/`, loads from cache (instant!)
+7. **If no cache**, extracts from Word document and creates cache
+8. **Display renders** extracted structure with sections, tables, and charts
+
+The cached JSON file is automatically reused on subsequent views of the same report.
+
+## Caching in Action
+
+- **First load**: Extracts from Word → creates `outputs/cache/[hash].json` → displays
+- **Subsequent loads**: Uses `outputs/cache/[hash].json` → displays instantly
+- **Force refresh**: Call `extractor.extract_report(path, force_refresh=True)` to bypass cache
+
+## Extraction Location
+
+All extraction utilities are in `analysis/demo/` because:
+- They're used by the demo analyzer for simulated processing
+- They enable the demo to display pre-built reports quickly using cached JSON
+- The real analyzer will implement its own AI-based analysis (not extraction)
 
 ## Troubleshooting
 
@@ -212,7 +348,20 @@ Ensure `python-dotenv` is installed: `pip install python-dotenv`
 
 ### "Report file not found" (Demo mode)
 
-The demo analyzer expects a pre-built Word report at `outputs/تقرير تحليل استفسارات المتعاملين.docx`. Check that this file exists.
+The demo analyzer expects a pre-built Word report at:
+- `outputs/تقرير تحليل استفسارات المتعاملين.docx` (without trailing space)
+- `outputs/تقرير تحليل استفسارات المتعاملين .docx` (with trailing space)
+
+Check that one of these files exists.
+
+### "Cache not being used"
+
+The cache is automatically created and used. Check `outputs/cache/` for JSON files:
+```bash
+ls -la outputs/cache/
+```
+
+To verify extraction used the cache, run the extraction code twice and compare timings—the second run should be instant.
 
 ## Notes for Future Development
 
@@ -220,3 +369,7 @@ The demo analyzer expects a pre-built Word report at `outputs/تقرير تحل�
 - UI improvements can happen independently on `main`
 - Real analyzer development can proceed independently on `real`
 - When switching between branches, `make demo` or `make real` will set up the right environment
+- All documentation has been consolidated in `docs/` folder
+- Extraction logic is in `analysis/demo/` (used for simulated demo processing)
+- Demo automatically uses cached JSON for fast display
+- Real analyzer will implement its own AI-based analysis (not use demo extraction)

@@ -7,7 +7,15 @@
       "Bash(python3 -m py_compile app.py)",
       "Bash(python3 -m py_compile report_extractor.py)",
       "Bash(python3 -m py_compile report_extractor.py report_display.py app.py)",
-      "Bash(python3 -m py_compile report_display.py app.py)"
+      "Bash(python3 -m py_compile report_display.py app.py)",
+      "Bash(python -c \"from analysis import DemoAnalyzer, RealAnalyzer; print\\('✓ Imports successful'\\)\")",
+      "Bash(python -c \"from analysis.shared.dynamic_display import DynamicReportDisplay; print\\('✓ DynamicReportDisplay import successful'\\)\")",
+      "Bash(python -c \"from analysis import AdaptiveReportExtractor, ReportStructureDetector, DynamicReportDisplay, Analyzer; print\\('✓ All shared imports successful'\\)\")",
+      "Bash(python -c \"from report_display import display_report_tabs; print\\('✓ report_display imports successful'\\)\")",
+      "Bash(python -c \"from report_extractor import extract_full_report; print\\('✓ report_extractor imports successful'\\)\")",
+      "Bash(python -c \"from app import get_analyzer; print\\('✓ app imports successful'\\)\")",
+      "Bash(python)",
+      "Bash(python -m py_compile app.py report_display.py report_extractor.py)"
     ]
   }
 }
