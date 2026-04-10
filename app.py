@@ -1437,6 +1437,11 @@ def load_credentials():
                     "username": st.secrets.users.demo_username,
                     "password": st.secrets.users.demo_password
                 })
+            if 'fujairah_username' in st.secrets.users:
+                users.append({
+                    "username": st.secrets.users.fujairah_username,
+                    "password": st.secrets.users.fujairah_password
+                })
             return {"users": users}
     except Exception:
         pass

@@ -15,7 +15,8 @@
       "Bash(python -c \"from report_extractor import extract_full_report; print\\('✓ report_extractor imports successful'\\)\")",
       "Bash(python -c \"from app import get_analyzer; print\\('✓ app imports successful'\\)\")",
       "Bash(python)",
-      "Bash(python -m py_compile app.py report_display.py report_extractor.py)"
+      "Bash(python -m py_compile app.py report_display.py report_extractor.py)",
+      "Bash(git push:*)"
     ]
   }
 }
