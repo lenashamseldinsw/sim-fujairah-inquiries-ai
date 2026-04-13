@@ -30,10 +30,13 @@ CHART_COLORS = [
 
 # HTML table styling (unchanged from original)
 HTML_STYLES = """
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+    * {
+        font-family: 'Tajawal', sans-serif;
+    }
     .report-table-wrapper {
         direction: rtl;
-        text-align: right;
         display: flex;
         justify-content: center;
         margin: 2rem 0;
@@ -54,7 +57,7 @@ HTML_STYLES = """
         background-color: rgba(201, 150, 60, 0.3);
         color: #B68A35;
         padding: 15px 12px;
-        text-align: right;
+        text-align: center !important;
         direction: rtl;
         border: 1px solid #555;
         font-weight: 700;
@@ -68,7 +71,7 @@ HTML_STYLES = """
         padding: 15px 12px;
         border: 1px solid #444;
         color: #E4E4F0;
-        text-align: right;
+        text-align: center !important;
         direction: rtl;
         white-space: normal;
         word-wrap: break-word;
@@ -76,7 +79,13 @@ HTML_STYLES = """
         word-break: break-word;
         line-height: 1.6;
         min-height: 80px;
-        vertical-align: top;
+        vertical-align: middle;
+        font-size: 14px;
+    }
+
+    .report-table td .cell-content {
+        display: inline-block;
+        max-width: 100%;
     }
 
     .report-table tr:nth-child(even) {
@@ -131,6 +140,56 @@ HTML_STYLES = """
         color: #E4E4F0;
     }
 </style>
+
+<script>
+function adjustTableFontSizes() {
+    const cells = document.querySelectorAll('.report-table td');
+    cells.forEach(cell => {
+        adjustCellFontSize(cell);
+    });
+}
+
+function adjustCellFontSize(cell) {
+    const content = cell.querySelector('.cell-content');
+    if (!content) return;
+
+    let fontSize = 14; // Start with default
+    const minFontSize = 10;
+    const maxAttempts = 10;
+    let attempts = 0;
+
+    // Keep reducing font size until text fits on one line or reaches minimum
+    while (attempts < maxAttempts && fontSize >= minFontSize) {
+        content.style.fontSize = fontSize + 'px';
+
+        // Check if content wraps to multiple lines
+        const scrollHeight = content.scrollHeight;
+        const lineHeight = parseFloat(window.getComputedStyle(content).lineHeight);
+        const lines = Math.round(scrollHeight / lineHeight);
+
+        if (lines <= 1) {
+            // Text fits on one line
+            break;
+        }
+
+        // Text still wraps, reduce font size
+        fontSize -= 1;
+        attempts++;
+    }
+}
+
+// Run when DOM is ready and after a short delay to ensure rendering
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(adjustTableFontSizes, 100);
+    });
+} else {
+    setTimeout(adjustTableFontSizes, 100);
+}
+
+// Also run on window resize to adapt to viewport changes
+window.addEventListener('resize', adjustTableFontSizes);
+</script>
 """
 
 
@@ -239,7 +298,7 @@ class DynamicReportDisplay:
         # Create the gold-styled dropdown with RTL layout - no column gap
         col1, col2 = st.columns([0.2, 3.8], vertical_alignment="center")
         with col1:
-            st.markdown('<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">القسم:</span>' if self.lang == 'ar' else '<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">📄 Section:</span>', unsafe_allow_html=True)
+            st.markdown('<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">القسم:</span>' if self.lang == 'ar' else '<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">Section:</span>', unsafe_allow_html=True)
         with col2:
             selected_section = st.selectbox(
                 "اختر قسم" if self.lang == 'ar' else "Select section",
@@ -418,7 +477,7 @@ class DynamicReportDisplay:
         st.markdown(html, unsafe_allow_html=True)
 
     def _create_html_table(self, columns: list, rows: list) -> str:
-        """Create HTML table with RTL support."""
+        """Create HTML table with RTL support and dynamic font sizing."""
         html = '<div class="report-table-wrapper"><table class="report-table">'
 
         # Header
@@ -436,7 +495,7 @@ class DynamicReportDisplay:
                 for col in columns
             ]
             for cell in cells:
-                html += f'<td>{cell}</td>'
+                html += f'<td><div class="cell-content">{cell}</div></td>'
             html += '</tr>'
         html += '</tbody>'
 
