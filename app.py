@@ -1509,14 +1509,14 @@ def create_download_zip(flow_type: str = 'inquiries'):
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         if flow_type == 'complaints':
             # Complaints flow files
-            report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
+            report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx")
             if report_path.exists():
-                zip_file.write(report_path, "تقرير تحليل شكاوى المتعاملين .docx")
+                zip_file.write(report_path, "تقرير تحليل شكاوى المتعاملين.docx")
 
             # Add complaints Excel file
-            excel_path = Path("complaints-output/Fujairah_Police_Complaints_Triage_Detail.xlsx")
+            excel_path = Path("complaints-output/تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
             if excel_path.exists():
-                zip_file.write(excel_path, "Fujairah_Police_Complaints_Triage_Detail.xlsx")
+                zip_file.write(excel_path, "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
         else:
             # Inquiries flow files (default)
             report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
