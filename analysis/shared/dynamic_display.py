@@ -84,8 +84,11 @@ HTML_STYLES = """
     }
 
     .report-table td .cell-content {
-        display: inline-block;
-        max-width: 100%;
+        display: block;
+        width: 100%;
+        overflow: hidden;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
     .report-table tr:nth-child(even) {
@@ -153,41 +156,71 @@ function adjustCellFontSize(cell) {
     const content = cell.querySelector('.cell-content');
     if (!content) return;
 
-    let fontSize = 14; // Start with default
-    const minFontSize = 10;
-    const maxAttempts = 10;
-    let attempts = 0;
+    let fontSize = 14; // Start with default font size
+    const minFontSize = 8;
 
-    // Keep reducing font size until text fits on one line or reaches minimum
-    while (attempts < maxAttempts && fontSize >= minFontSize) {
+    // Measure with no-wrap first to get natural width
+    content.style.whiteSpace = 'nowrap';
+    content.style.fontSize = fontSize + 'px';
+
+    let iterations = 0;
+    const maxIterations = 20;
+
+    // Keep reducing font size until text fits on one line
+    while (iterations < maxIterations && fontSize >= minFontSize) {
         content.style.fontSize = fontSize + 'px';
 
-        // Check if content wraps to multiple lines
-        const scrollHeight = content.scrollHeight;
-        const lineHeight = parseFloat(window.getComputedStyle(content).lineHeight);
-        const lines = Math.round(scrollHeight / lineHeight);
+        // Force layout recalculation
+        const _ = content.offsetHeight;
 
-        if (lines <= 1) {
-            // Text fits on one line
+        // Switch back to normal wrapping to check actual height
+        content.style.whiteSpace = 'normal';
+        const _2 = content.offsetHeight;
+
+        const actualHeight = content.offsetHeight;
+        const lineHeight = parseFloat(window.getComputedStyle(content).lineHeight);
+
+        // If height is approximately one line (with small margin), we're good
+        if (actualHeight <= lineHeight * 1.3) {
             break;
         }
 
-        // Text still wraps, reduce font size
-        fontSize -= 1;
-        attempts++;
+        // Text is wrapping, reduce font size
+        fontSize -= 0.5;
+        iterations++;
     }
+
+    // Ensure normal wrapping behavior for display
+    content.style.whiteSpace = 'normal';
 }
 
-// Run when DOM is ready and after a short delay to ensure rendering
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(adjustTableFontSizes, 100);
+// Use MutationObserver to watch for table additions (works better with Streamlit)
+const observer = new MutationObserver(function(mutations) {
+    // Check if any new tables were added
+    mutations.forEach(function(mutation) {
+        if (mutation.addedNodes.length) {
+            for (let node of mutation.addedNodes) {
+                if (node.querySelector && node.querySelector('.report-table')) {
+                    setTimeout(adjustTableFontSizes, 50);
+                    return;
+                }
+            }
+        }
     });
-} else {
-    setTimeout(adjustTableFontSizes, 100);
-}
+});
 
-// Also run on window resize to adapt to viewport changes
+// Start observing the document for changes
+observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: false
+});
+
+// Also run immediately in case tables already exist
+setTimeout(adjustTableFontSizes, 100);
+setTimeout(adjustTableFontSizes, 500);  // Run again after a bit longer
+
+// Run on window resize
 window.addEventListener('resize', adjustTableFontSizes);
 </script>
 """
