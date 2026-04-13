@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import os
 import json
+import random
 from pathlib import Path
 from report_display import display_report_tabs
 from analysis import DemoAnalyzer, RealAnalyzer
@@ -1587,7 +1588,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
         analyzer_stages = ANALYZER.get_processing_stages()
 
         # Simulate processing with stages from analyzer
-        total_duration = 3  # 3 seconds (for development - will be increased later)
+        total_duration = random.randint(30, 60)  # Random 30-60 seconds
         update_interval = 0.5
         total_steps = int(total_duration / update_interval)
 

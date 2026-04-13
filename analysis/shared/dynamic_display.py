@@ -317,28 +317,28 @@ class DynamicReportDisplay:
             for section in main_sections
         ]
 
-        # Add spacing before dropdown
-        # st.write("")
-        # st.write("")
-
         # Initialize session state for current section
         if "current_section" not in st.session_state:
             st.session_state.current_section = 0
 
-        # Create the gold-styled dropdown with RTL layout - no column gap
-        col1, col2 = st.columns([0.6, 3.4], vertical_alignment="center")
-        with col1:
-            st.markdown('<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">القسم:</span>' if self.lang == 'ar' else '<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">Section:</span>', unsafe_allow_html=True)
-        with col2:
-            selected_section = st.selectbox(
-                "اختر قسم" if self.lang == 'ar' else "Select section",
-                options=range(len(tab_titles)),
-                index=st.session_state.current_section,
-                format_func=lambda i: f"{i + 1}. {tab_titles[i]}",
-                label_visibility="collapsed",
-                key="section_selector"
-            )
-            st.session_state.current_section = selected_section
+        # Create the gold-styled dropdown with RTL layout using HTML for tight spacing
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; direction: rtl; margin-bottom: 1rem;">
+            <span style="color: #B68A35; font-weight: bold; margin-left: 8px; white-space: nowrap;">
+                {'القسم:' if self.lang == 'ar' else 'Section:'}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        selected_section = st.selectbox(
+            "اختر قسم" if self.lang == 'ar' else "Select section",
+            options=range(len(tab_titles)),
+            index=st.session_state.current_section,
+            format_func=lambda i: f"{i + 1}. {tab_titles[i]}",
+            label_visibility="collapsed",
+            key="section_selector"
+        )
+        st.session_state.current_section = selected_section
 
         st.markdown("---")
 
