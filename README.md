@@ -78,7 +78,8 @@ sim-fujairah-inquiries-ai/
 ├── .streamlit/
 │   └── config.toml            # إعدادات Streamlit
 ├── assets/                    # الشعارات والصور
-└── outputs/                   # التقارير المُنتجة
+├── inquiries-output/          # تقارير استفسارات المتعاملين
+└── complaints-output/         # تقارير شكاوى المتعاملين
 ```
 
 ---
@@ -139,8 +140,10 @@ streamlit run app.py --server.port 8502
 
 ### الملف لا يتم تحميله
 ```bash
-ls -la outputs/
-chmod 644 outputs/*.docx
+ls -la inquiries-output/
+ls -la complaints-output/
+chmod 644 inquiries-output/*.docx
+chmod 644 complaints-output/*.docx
 ```
 
 ---

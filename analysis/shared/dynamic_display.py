@@ -8,6 +8,26 @@ from typing import Dict, Any, List
 from analysis.demo.adaptive_extractor import AdaptiveReportExtractor
 
 
+# Neutral color palette: Gold/Bronze, Light Gray, Dark Green, and additional grays
+CHART_COLORS = [
+    '#B68A35',  # Gold/Bronze
+    '#E5E5E5',  # Light Gray
+    '#3D5941',  # Dark Green
+    '#808080',  # Gray
+    '#999999',  # Medium Gray
+    '#666666',  # Dark Gray
+    '#A0A0A0',  # Light Medium Gray
+    '#5A5A5A',  # Darker Gray
+    '#C0C0C0',  # Silver Gray
+    '#707070',  # Steel Gray
+    '#606060',  # Dark Steel Gray
+    '#8B8B8B',  # Dim Gray
+    '#696969',  # Very Dim Gray
+    '#787878',  # Slate Gray
+    '#7F7F7F',  # Gray 50%
+    '#737373',  # Dark Slate Gray
+]
+
 # HTML table styling (unchanged from original)
 HTML_STYLES = """
 <style>
@@ -78,6 +98,38 @@ HTML_STYLES = """
         color: #E4E4F0;
         line-height: 1.8;
     }
+
+    .section-content ul {
+        direction: rtl;
+        text-align: right;
+        margin: 1rem 0;
+        padding-right: 2rem;
+        list-style: none;
+    }
+
+    .section-content ul li {
+        direction: rtl;
+        text-align: right;
+        margin: 0.75rem 0;
+        padding-right: 1.5rem;
+        position: relative;
+        color: #E4E4F0;
+        line-height: 1.8;
+    }
+
+    .section-content ul li:before {
+        content: "●";
+        position: absolute;
+        right: 0;
+        color: #B68A35;
+        font-weight: bold;
+        font-size: 1.2em;
+    }
+
+    .section-content p {
+        margin: 0.5rem 0;
+        color: #E4E4F0;
+    }
 </style>
 """
 
@@ -89,10 +141,40 @@ class DynamicReportDisplay:
     Adapts to whatever sections and tables are found in the report.
     """
 
-    def __init__(self, lang: str = 'ar'):
-        """Initialize display with language preference."""
+    def __init__(self, lang: str = 'ar', cache_dir: str = None):
+        """
+        Initialize display with language preference.
+
+        Args:
+            lang: Language preference ('ar' or 'en')
+            cache_dir: Cache directory for report extraction (default: inquiries-output/cache)
+        """
         self.lang = lang
-        self.extractor = AdaptiveReportExtractor()
+        self.extractor = AdaptiveReportExtractor(cache_dir=cache_dir)
+
+    def _get_colors_for_chart(self, chart_type: str, num_items: int, provided_colors: list = None) -> list:
+        """
+        Get appropriate colors for chart type.
+
+        For pie/doughnut/bar charts, uses custom color palette starting with gold, green, blue.
+        For other charts, uses provided colors or defaults.
+
+        Args:
+            chart_type: Type of chart ('pie', 'doughnut', 'bar', 'horizontalBar', etc.)
+            num_items: Number of colors needed (series for pie, data points for bar)
+            provided_colors: Colors extracted from document (optional)
+
+        Returns:
+            List of hex color codes
+        """
+        if chart_type in ('pie', 'doughnut', 'bar', 'horizontalBar'):
+            # For pie, doughnut, and bar charts, cycle through custom palette
+            return [CHART_COLORS[i % len(CHART_COLORS)] for i in range(num_items)]
+        elif provided_colors:
+            return provided_colors
+        else:
+            # Default colors for other chart types
+            return ['#2E5090', '#87CEEB']
 
     def display_report(self, docx_path: str) -> None:
         """
@@ -126,11 +208,6 @@ class DynamicReportDisplay:
             st.code(traceback.format_exc())
             return
 
-        # Show metadata if available
-        if report.get('metadata'):
-            with st.expander("📄 معلومات الوثيقة" if self.lang == 'ar' else "📄 Document Info"):
-                self._display_metadata(report['metadata'])
-
         # Create tabs dynamically based on detected sections
         sections = report.get('sections', [])
 
@@ -151,14 +228,105 @@ class DynamicReportDisplay:
             for section in main_sections
         ]
 
-        # Create tabs
-        tabs = st.tabs(tab_titles)
+        # Add spacing before dropdown
+        # st.write("")
+        # st.write("")
 
-        # Display each section in its tab
-        for tab, section in zip(tabs, main_sections):
-            with tab:
-                # Use charts assigned to this section during extraction
-                self._display_section(section, section.get('charts', []))
+        # Initialize session state for current section
+        if "current_section" not in st.session_state:
+            st.session_state.current_section = 0
+
+        # Create the gold-styled dropdown with RTL layout - no column gap
+        col1, col2 = st.columns([0.2, 3.8], vertical_alignment="center")
+        with col1:
+            st.markdown('<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">القسم:</span>' if self.lang == 'ar' else '<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">📄 Section:</span>', unsafe_allow_html=True)
+        with col2:
+            selected_section = st.selectbox(
+                "اختر قسم" if self.lang == 'ar' else "Select section",
+                options=range(len(tab_titles)),
+                index=st.session_state.current_section,
+                format_func=lambda i: f"{i + 1}. {tab_titles[i]}",
+                label_visibility="collapsed",
+                key="section_selector"
+            )
+            st.session_state.current_section = selected_section
+
+        st.markdown("---")
+
+        # Display only the selected section
+        current_section = main_sections[st.session_state.current_section]
+        self._display_section(current_section, current_section.get('charts', []))
+
+    def _convert_content_to_html(self, content: str) -> str:
+        """
+        Convert content with bullet points to formatted HTML.
+
+        Detects lines that are bullet points and converts them to <ul><li> items.
+        Also wraps regular paragraphs in <p> tags.
+
+        Recognizes bullet points in multiple formats:
+        - Lines starting with bullet markers (←, -, •, ▪)
+        - Lines matching complaint type patterns (from section 2.2)
+
+        Args:
+            content: Raw content text potentially containing bullet points
+
+        Returns:
+            HTML-formatted content with proper list formatting
+        """
+        if not content:
+            return content
+
+        import re
+
+        lines = content.split('\n')
+        html_parts = []
+        in_list = False
+
+        for line in lines:
+            stripped = line.strip()
+            is_bullet = False
+            bullet_text = stripped
+
+            if not stripped:
+                # Empty line - close list if open
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                continue
+
+            # Check if this line is a bullet point with marker
+            if stripped.startswith('←') or stripped.startswith('-') or \
+               stripped.startswith('•') or stripped.startswith('▪'):
+                is_bullet = True
+                bullet_text = stripped.lstrip('←-•▪').strip()
+
+            # Also check for complaint type patterns: "الشكوى ... — إغلاق خلال ..."
+            elif (stripped.startswith('الشكوى ') and '—' in stripped and
+                  re.search(r'خلال\s+\d+\s+(ساعة|ساعات|يوم|أيام)', stripped)):
+                is_bullet = True
+                bullet_text = stripped
+
+            if is_bullet:
+                # Start list if not already in one
+                if not in_list:
+                    html_parts.append('<ul>')
+                    in_list = True
+
+                html_parts.append(f'<li>{bullet_text}</li>')
+            else:
+                # Regular paragraph text
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+
+                html_parts.append(f'<p>{stripped}</p>')
+
+        # Close any open list
+        if in_list:
+            html_parts.append('</ul>')
+
+        return '\n'.join(html_parts)
 
     def _display_section(self, section: Dict[str, Any], all_charts: List[Dict]) -> None:
         """
@@ -170,8 +338,9 @@ class DynamicReportDisplay:
         """
         # Display main section content if available (always visible, no expander)
         if section.get('content') and section['content'].strip():
+            formatted_content = self._convert_content_to_html(section["content"])
             st.markdown(
-                f'<div class="section-content">{section["content"]}</div>',
+                f'<div class="section-content">{formatted_content}</div>',
                 unsafe_allow_html=True
             )
 
@@ -190,8 +359,9 @@ class DynamicReportDisplay:
 
                 # Show subsection content (always visible, no expander)
                 if subsec.get('content') and subsec['content'].strip():
+                    formatted_content = self._convert_content_to_html(subsec["content"])
                     st.markdown(
-                        f'<div class="section-content">{subsec["content"]}</div>',
+                        f'<div class="section-content">{formatted_content}</div>',
                         unsafe_allow_html=True
                     )
 
@@ -290,19 +460,55 @@ class DynamicReportDisplay:
         title = chart_data.get('title', '')
         categories = chart_data.get('categories', [])
         series = chart_data.get('series', [])
-        colors = chart_data.get('colors', ['#2E5090', '#87CEEB'])
+        provided_colors = chart_data.get('colors', [])
 
         # Build datasets JSON
-        datasets_json = json.dumps([{
-            'label': ser['name'],
-            'data': ser['data'],
-            'backgroundColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
-            'borderColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
-            'borderWidth': 0
-        } for idx, ser in enumerate(series)], ensure_ascii=False)
+        if chart_type in ('pie', 'doughnut'):
+            # For pie/doughnut charts: each data point gets its own color
+            colors = self._get_colors_for_chart(chart_type, len(categories), provided_colors or None)
+            datasets_json = json.dumps([{
+                'label': ser['name'],
+                'data': ser['data'],
+                'backgroundColor': colors[:len(ser['data'])],
+                'borderColor': colors[:len(ser['data'])],
+                'borderWidth': 0
+            } for ser in series], ensure_ascii=False)
+        elif chart_type in ('bar', 'horizontalBar'):
+            # For bar charts: each bar gets its own color
+            # Calculate total number of bars and assign colors
+            colors = self._get_colors_for_chart(chart_type, len(categories) * len(series), provided_colors or None)
+            color_idx = 0
+            datasets = []
+            for ser_idx, ser in enumerate(series):
+                # Assign a unique color to each bar in this series
+                bar_colors = []
+                for _ in ser['data']:
+                    bar_colors.append(colors[color_idx % len(colors)])
+                    color_idx += 1
+                datasets.append({
+                    'label': ser['name'],
+                    'data': ser['data'],
+                    'backgroundColor': bar_colors,
+                    'borderColor': bar_colors,
+                    'borderWidth': 0
+                })
+            datasets_json = json.dumps(datasets, ensure_ascii=False)
+        else:
+            # For other charts: each series gets its own color
+            colors = self._get_colors_for_chart(chart_type, len(series), provided_colors or None)
+            datasets_json = json.dumps([{
+                'label': ser['name'],
+                'data': ser['data'],
+                'backgroundColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
+                'borderColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
+                'borderWidth': 0
+            } for idx, ser in enumerate(series)], ensure_ascii=False)
 
         categories_json = json.dumps(categories, ensure_ascii=False)
         title_json = json.dumps(title, ensure_ascii=False)
+
+        # Determine if scales should be displayed (not for pie/doughnut charts)
+        show_scales = chart_type not in ('pie', 'doughnut')
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -343,20 +549,38 @@ class DynamicReportDisplay:
                                     position: 'bottom',
                                     labels: {{
                                         padding: 20,
-                                        font: {{ size: 12 }},
+                                        font: {{ size: 12, weight: 'bold' }},
                                         color: '#FFFFFF',
-                                        boxWidth: 15,
-                                        boxHeight: 15
-                                    }}
+                                        boxWidth: 18,
+                                        boxHeight: 18,
+                                        usePointStyle: {str(chart_type in ('pie', 'doughnut')).lower()},
+                                        borderRadius: 4,
+                                        generateLabels: function(chart) {{
+                                            var datasets = chart.data.datasets;
+                                            var labels = chart.data.labels;
+                                            return labels.map((label, i) => {{
+                                                return {{
+                                                    text: label,
+                                                    fillStyle: datasets[0].backgroundColor[i],
+                                                    hidden: false,
+                                                    index: i
+                                                }};
+                                            }});
+                                        }}
+                                    }},
+                                    maxHeight: 200,
+                                    fullSize: true
                                 }}
                             }},
                             scales: {{
                                 y: {{
+                                    display: {str(show_scales).lower()},
                                     beginAtZero: true,
                                     ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
                                     grid: {{ color: 'rgba(0,0,0,0.05)' }}
                                 }},
                                 x: {{
+                                    display: {str(show_scales).lower()},
                                     ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
                                     grid: {{ display: false }}
                                 }}
@@ -384,7 +608,10 @@ class DynamicReportDisplay:
         title = chart_data.get('title', '')
         categories = chart_data.get('categories', [])
         series = chart_data.get('series', [])
-        colors = chart_data.get('colors', ['#2E5090', '#87CEEB'])
+        provided_colors = chart_data.get('colors', [])
+
+        # Get appropriate colors for this chart type
+        colors = self._get_colors_for_chart(chart_type, len(series), provided_colors or None)
 
         # Reverse categories for RTL display
         categories_rtl = list(reversed(categories))
@@ -398,16 +625,55 @@ class DynamicReportDisplay:
             })
 
         # Build datasets JSON with reversed data
-        datasets_json = json.dumps([{
-            'label': ser['name'],
-            'data': ser['data'],
-            'backgroundColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
-            'borderColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
-            'borderWidth': 0
-        } for idx, ser in enumerate(series_rtl)], ensure_ascii=False)
+        if chart_type in ('pie', 'doughnut'):
+            # For pie/doughnut charts: each data point gets its own color
+            # Reverse colors to match reversed data
+            colors = self._get_colors_for_chart(chart_type, len(categories), provided_colors or None)
+            colors_rtl = list(reversed(colors))
+            datasets_json = json.dumps([{
+                'label': ser['name'],
+                'data': ser['data'],
+                'backgroundColor': colors_rtl[:len(ser['data'])],
+                'borderColor': colors_rtl[:len(ser['data'])],
+                'borderWidth': 0
+            } for ser in series_rtl], ensure_ascii=False)
+        elif chart_type in ('bar', 'horizontalBar'):
+            # For bar charts: each bar gets its own color
+            # Calculate total number of bars and assign colors
+            colors = self._get_colors_for_chart(chart_type, len(categories) * len(series), provided_colors or None)
+            # Reverse colors to match reversed data
+            colors_rtl = list(reversed(colors))
+            color_idx = 0
+            datasets = []
+            for ser_idx, ser in enumerate(series_rtl):
+                # Assign a unique color to each bar in this series
+                bar_colors = []
+                for _ in ser['data']:
+                    bar_colors.append(colors_rtl[color_idx % len(colors_rtl)])
+                    color_idx += 1
+                datasets.append({
+                    'label': ser['name'],
+                    'data': ser['data'],
+                    'backgroundColor': bar_colors,
+                    'borderColor': bar_colors,
+                    'borderWidth': 0
+                })
+            datasets_json = json.dumps(datasets, ensure_ascii=False)
+        else:
+            # For other charts: each series gets its own color
+            datasets_json = json.dumps([{
+                'label': ser['name'],
+                'data': ser['data'],
+                'backgroundColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
+                'borderColor': colors[idx] if idx < len(colors) else f'hsl({idx * 60}, 70%, 50%)',
+                'borderWidth': 0
+            } for idx, ser in enumerate(series_rtl)], ensure_ascii=False)
 
         categories_json = json.dumps(categories_rtl, ensure_ascii=False)
         title_json = json.dumps(title, ensure_ascii=False)
+
+        # Determine if scales should be displayed (not for pie/doughnut charts)
+        show_scales = chart_type not in ('pie', 'doughnut')
 
         html = f"""<!DOCTYPE html>
 <html dir="rtl">
@@ -448,21 +714,39 @@ class DynamicReportDisplay:
                                     position: 'bottom',
                                     labels: {{
                                         padding: 20,
-                                        font: {{ size: 12 }},
+                                        font: {{ size: 12, weight: 'bold' }},
                                         color: '#FFFFFF',
-                                        boxWidth: 15,
-                                        boxHeight: 15
-                                    }}
+                                        boxWidth: 18,
+                                        boxHeight: 18,
+                                        usePointStyle: {str(chart_type in ('pie', 'doughnut')).lower()},
+                                        borderRadius: 4,
+                                        generateLabels: function(chart) {{
+                                            var datasets = chart.data.datasets;
+                                            var labels = chart.data.labels;
+                                            return labels.map((label, i) => {{
+                                                return {{
+                                                    text: label,
+                                                    fillStyle: datasets[0].backgroundColor[i],
+                                                    hidden: false,
+                                                    index: i
+                                                }};
+                                            }});
+                                        }}
+                                    }},
+                                    maxHeight: 200,
+                                    fullSize: true
                                 }}
                             }},
                             scales: {{
                                 y: {{
+                                    display: {str(show_scales).lower()},
                                     beginAtZero: true,
                                     position: 'right',
                                     ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
                                     grid: {{ color: 'rgba(0,0,0,0.05)' }}
                                 }},
                                 x: {{
+                                    display: {str(show_scales).lower()},
                                     ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
                                     grid: {{ display: false }}
                                 }}
@@ -505,7 +789,7 @@ def display_report_tabs(lang: str = 'ar'):
     Args:
         lang: Language preference ('ar' or 'en')
     """
-    report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين.docx")
+    report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين.docx")
 
     display = DynamicReportDisplay(lang=lang)
     display.display_report(str(report_path))

@@ -13,7 +13,7 @@ This refactoring transforms the hardcoded report extraction system into a fully 
 - **Works with any report format** - no hardcoding needed
 
 ### 2. JSON Caching System ✅
-- **Caches extracted reports** as JSON files in `outputs/cache/`
+- **Caches extracted reports** as JSON files in `inquiries-output/cache/`
 - **Cache key** based on filename + modification time + file size
 - **Automatic invalidation** when source file changes
 - **Significant performance improvement**: ~5-10s first run → ~0.1-0.5s cached runs
@@ -69,7 +69,7 @@ Just provide a different Word file path:
 from analysis import DynamicReportDisplay
 
 display = DynamicReportDisplay(lang='ar')
-display.display_report("outputs/your_new_report.docx")
+display.display_report("inquiries-output/your_new_report.docx")
 ```
 
 That's it! The system will:
@@ -110,7 +110,7 @@ python test_adaptive_system.py
 python test_adaptive_system.py --clear
 
 # Test specific report
-python test_adaptive_system.py --report outputs/your_report.docx
+python test_adaptive_system.py --report inquiries-output/your_report.docx
 ```
 
 ## What Changed
@@ -154,7 +154,7 @@ python test_adaptive_system.py --report outputs/your_report.docx
 
 ### Testing & Utilities
 5. `test_adaptive_system.py` (165 lines) - Test script
-6. `.gitignore` - Updated to exclude `outputs/cache/`
+6. `.gitignore` - Updated to exclude `inquiries-output/cache/`
 
 ### Updated Files
 7. `analysis/demo.py` - Now uses adaptive extractor
@@ -178,7 +178,7 @@ To add custom patterns, edit `ReportStructureDetector._is_heading()` in `analysi
 
 ### Cache Location
 
-Default: `outputs/cache/`
+Default: `inquiries-output/cache/`
 
 To change, edit `AdaptiveReportExtractor.CACHE_DIR` in `analysis/adaptive_extractor.py`.
 
@@ -244,7 +244,7 @@ display_report_tabs(lang='ar')
 
 The system is production-ready. To use with different reports:
 
-1. **Place Word document** in `outputs/` directory
+1. **Place Word document** in `inquiries-output/` directory
 2. **Update path** in your code (if needed)
 3. **Run the app** - structure will be auto-detected and cached
 

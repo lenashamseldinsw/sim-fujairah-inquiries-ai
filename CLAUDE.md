@@ -44,8 +44,9 @@ sim-fujairah-inquiries-ai/
 │   ├── QUICK_REFERENCE.md
 │   └── WORKFLOW.md
 ├── chart_parser.py                # Chart parsing utilities
-├── outputs/
+├── inquiries-output/              # Inquiries flow outputs and cache
 │   └── cache/                     # JSON cache for extracted reports
+├── complaints-output/             # Complaints flow outputs
 └── .env                           # APP_MODE configuration
 ```
 
@@ -68,11 +69,11 @@ from analysis import DynamicReportDisplay, AdaptiveReportExtractor
 
 # Extract report (uses cache if available)
 extractor = AdaptiveReportExtractor()
-report = extractor.extract_report("outputs/your_report.docx")
+report = extractor.extract_report("inquiries-output/your_report.docx")
 
 # Display report dynamically
 display = DynamicReportDisplay(lang='ar')
-display.display_report("outputs/your_report.docx")  # Uses cache automatically
+display.display_report("inquiries-output/your_report.docx")  # Uses cache automatically
 ```
 
 See `docs/ADAPTIVE_SYSTEM_SUMMARY.md` and `docs/README.md` for full documentation.
@@ -274,7 +275,7 @@ Note: The real analyzer will implement its own analysis logic, not use extractio
 
 - Extracts report structure from Word documents with caching
 - Auto-detects sections using `ReportStructureDetector`
-- **Caches extracted data in JSON** (`outputs/cache/`) for fast subsequent loads
+- **Caches extracted data in JSON** (`inquiries-output/cache/`) for fast subsequent loads
 - Used by demo analyzer and display layer
 - Includes extraction utilities (extraction is demo-specific)
 
@@ -313,7 +314,7 @@ Note: The real analyzer will implement its own analysis logic, not use extractio
 3. **After simulation**, `display_report_tabs()` is called
 4. **display_report_tabs()** uses `DynamicReportDisplay` to show the report
 5. **DynamicReportDisplay** calls `AdaptiveReportExtractor.extract_report()` from `analysis/demo/`
-6. **Extractor checks cache** - if JSON exists in `outputs/cache/`, loads from cache (instant!)
+6. **Extractor checks cache** - if JSON exists in `inquiries-output/cache/`, loads from cache (instant!)
 7. **If no cache**, extracts from Word document and creates cache
 8. **Display renders** extracted structure with sections, tables, and charts
 
@@ -321,8 +322,8 @@ The cached JSON file is automatically reused on subsequent views of the same rep
 
 ## Caching in Action
 
-- **First load**: Extracts from Word → creates `outputs/cache/[hash].json` → displays
-- **Subsequent loads**: Uses `outputs/cache/[hash].json` → displays instantly
+- **First load**: Extracts from Word → creates `inquiries-output/cache/[hash].json` → displays
+- **Subsequent loads**: Uses `inquiries-output/cache/[hash].json` → displays instantly
 - **Force refresh**: Call `extractor.extract_report(path, force_refresh=True)` to bypass cache
 
 ## Extraction Location
@@ -349,16 +350,16 @@ Ensure `python-dotenv` is installed: `pip install python-dotenv`
 ### "Report file not found" (Demo mode)
 
 The demo analyzer expects a pre-built Word report at:
-- `outputs/تقرير تحليل استفسارات المتعاملين.docx` (without trailing space)
-- `outputs/تقرير تحليل استفسارات المتعاملين .docx` (with trailing space)
+- `inquiries-output/تقرير تحليل استفسارات المتعاملين.docx` (without trailing space)
+- `inquiries-output/تقرير تحليل استفسارات المتعاملين .docx` (with trailing space)
 
 Check that one of these files exists.
 
 ### "Cache not being used"
 
-The cache is automatically created and used. Check `outputs/cache/` for JSON files:
+The cache is automatically created and used. Check `inquiries-output/cache/` for JSON files:
 ```bash
-ls -la outputs/cache/
+ls -la inquiries-output/cache/
 ```
 
 To verify extraction used the cache, run the extraction code twice and compare timings—the second run should be instant.

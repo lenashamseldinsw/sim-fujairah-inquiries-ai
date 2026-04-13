@@ -46,7 +46,7 @@ This document explains the complete flow of how a Word document is processed and
          │                              ▼
          │                  ┌──────────────────────────────────────┐
          │                  │  Save to JSON Cache                  │
-         │                  │  outputs/cache/{hash}.json           │
+         │                  │  inquiries-output/cache/{hash}.json           │
          │                  └──────────┬───────────────────────────┘
          │                              │
          └──────────────────────────────┘
@@ -326,14 +326,14 @@ extractor.clear_cache("report.docx")
 ## Example: Adding a New Report
 
 ```python
-# Step 1: Place file in outputs/
-# outputs/new_financial_report.docx
+# Step 1: Place file in inquiries-output/
+# inquiries-output/new_financial_report.docx
 
 # Step 2: Use it (that's it!)
 from analysis import DynamicReportDisplay
 
 display = DynamicReportDisplay(lang='ar')
-display.display_report("outputs/new_financial_report.docx")
+display.display_report("inquiries-output/new_financial_report.docx")
 
 # System automatically:
 # ✓ Detects sections (الملخص المالي, تحليل الأرباح, etc.)
@@ -367,7 +367,7 @@ Shows:
 ### Inspect Cache
 ```python
 import json
-with open('outputs/cache/HASH.json', 'r') as f:
+with open('inquiries-output/cache/HASH.json', 'r') as f:
     data = json.load(f)
     print(json.dumps(data, indent=2, ensure_ascii=False))
 ```

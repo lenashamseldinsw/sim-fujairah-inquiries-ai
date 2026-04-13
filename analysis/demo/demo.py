@@ -76,27 +76,41 @@ class DemoAnalyzer(Analyzer):
         # Note: Progress simulation happens in process_with_analyzer() in app.py
         # We just extract and return the pre-built report here
 
-        # Load pre-built report from outputs directory
-        outputs_dir = Path("outputs").resolve()
+        # Determine flow type from Streamlit session state
+        try:
+            import streamlit as st
+            flow_type = st.session_state.get('page', 'inquiries')
+        except:
+            flow_type = 'inquiries'
 
-        # Find the report file - look for any .docx with "تقرير" and "استفسارات"
+        # Select output folder and cache directory based on flow type
+        if flow_type == 'complaints':
+            outputs_dir = Path("complaints-output").resolve()
+            search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints
+            cache_dir = "complaints-output/cache"
+        else:
+            outputs_dir = Path("inquiries-output").resolve()
+            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries
+            cache_dir = "inquiries-output/cache"
+
+        # Find the report file
         docx_files = [f for f in outputs_dir.glob("*.docx") if not f.name.startswith("~$")]
 
         report_path = None
         for f in docx_files:
-            if 'تقرير' in f.name and 'استفسارات' in f.name:
+            if all(keyword in f.name for keyword in search_keywords):
                 report_path = f
                 break
 
         if report_path is None:
             raise FileNotFoundError(
                 f"Report file not found in {outputs_dir}. "
-                f"Found: {[f.name for f in docx_files]}"
+                f"Files found: {[f.name for f in docx_files]}"
             )
 
         # Extract and return the report using adaptive extractor (with caching)
         try:
-            extractor = AdaptiveReportExtractor()
+            extractor = AdaptiveReportExtractor(cache_dir=cache_dir)
             report = extractor.extract_report(str(report_path))
             return report
         except Exception as e:

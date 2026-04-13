@@ -16,7 +16,23 @@
       "Bash(python -c \"from app import get_analyzer; print\\('✓ app imports successful'\\)\")",
       "Bash(python)",
       "Bash(python -m py_compile app.py report_display.py report_extractor.py)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(grep -E \"\\\\.md$\")",
+      "Bash(find /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/ -type d -name __pycache__ -exec rm -rf {} +)",
+      "Bash(find /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/ -name \"*.pyc\" -delete)",
+      "Bash(python test_adaptive_system.py)",
+      "Bash(ls -la /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/inquiries-output/*.docx /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/complaints-output/*.docx)",
+      "Bash(python debug_structure.py)",
+      "Bash(python -c ':*)",
+      "Bash(rm -f /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/inquiries-output/cache/*.json)",
+      "Bash(python -c \" from pathlib import Path from analysis.demo.report_structure_detector import ReportStructureDetector report_path = Path\\('inquiries-output/تقرير تحليل استفسارات المتعاملين .docx'\\) detector = ReportStructureDetector\\(str\\(report_path\\)\\) structure = detector.detect_structure\\(\\) print\\('Section 3 subsections:'\\) section3 = structure['sections'][2] for i, subsec in enumerate\\(section3['subsections']\\): tables = len\\(subsec.get\\('tables', []\\)\\) charts = len\\(subsec.get\\('charts', []\\)\\) print\\(f' 3.{i+1} {subsec[\\\\\"title_ar\\\\\"][:40]}...: tables={tables}, charts={charts}'\\) \")",
+      "Bash(python -c \" from pathlib import Path from analysis.demo.report_structure_detector import ReportStructureDetector report_path = Path\\('inquiries-output/تقرير تحليل استفسارات المتعاملين .docx'\\) detector = ReportStructureDetector\\(str\\(report_path\\)\\) structure = detector.detect_structure\\(\\) print\\('=== Section 3 subsections with charts and tables ==='\\) section3 = structure['sections'][2] for i, subsec in enumerate\\(section3['subsections']\\): tables = len\\(subsec.get\\('tables', []\\)\\) charts = len\\(subsec.get\\('charts', []\\)\\) status = '' if charts > 0: status = f' ✓ HAS {charts} CHART\\(S\\)' if tables > 0: status += f' ✓ HAS {tables} TABLE\\(S\\)' print\\(f' 3.{i+1}: {tables=}, {charts=}{status}'\\) \")",
+      "Bash(python -c \" from pathlib import Path from analysis.demo.report_structure_detector import ReportStructureDetector report_path = Path\\('inquiries-output/تقرير تحليل استفسارات المتعاملين .docx'\\) detector = ReportStructureDetector\\(str\\(report_path\\)\\) structure = detector.detect_structure\\(\\) print\\('\\\\\\\\nCharts found:', len\\(structure['charts']\\)\\) if structure['charts']: print\\(f' Chart 0 position: {structure[\\\\\"charts\\\\\"][0][\\\\\"position\\\\\"]}, assigned_to: {structure[\\\\\"charts\\\\\"][0].get\\(\\\\\"assigned_section\\\\\"\\)}'\\) print\\('\\\\\\\\nSection 3 subsections:'\\) section3 = structure['sections'][2] for i, subsec in enumerate\\(section3['subsections']\\): tables = len\\(subsec.get\\('tables', []\\)\\) charts = len\\(subsec.get\\('charts', []\\)\\) print\\(f' 3.{i+1}: tables={tables}, charts={charts}'\\) \")"
+    ],
+    "additionalDirectories": [
+      "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/outputs",
+      "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/inquiries-output/cache",
+      "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/complaints-output/cache"
     ]
   }
 }

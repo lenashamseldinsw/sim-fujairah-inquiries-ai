@@ -1056,6 +1056,14 @@ def load_css(lang='ar'):
     }}
 
     /* ── PROGRESS ── */
+    .progress-container {{
+        direction: {DIR} !important;
+        width: 100%;
+        margin: 1.5rem 0;
+    }}
+    .stProgress {{
+        direction: {DIR} !important;
+    }}
     .stProgress > div > div > div > div {{
         background: linear-gradient(90deg, {GOLD_DARK}, {GOLD}, {GOLD_LIGHT});
         border-radius: 10px;
@@ -1139,7 +1147,8 @@ def load_css(lang='ar'):
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        text-align: center !important;
+        text-align: {ALIGN} !important;
+        direction: {DIR} !important;
         margin: 1rem 0 0;
         letter-spacing: -1px;
     }}
@@ -1150,7 +1159,8 @@ def load_css(lang='ar'):
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        text-align: center !important;
+        text-align: {ALIGN} !important;
+        direction: {DIR} !important;
         margin: 1rem 0 0;
         letter-spacing: -1px;
     }}
@@ -1480,20 +1490,35 @@ def validate_file(uploaded_file, lang='ar'):
 
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
-def create_download_zip():
-    """Create a ZIP file containing the Word report and Excel file"""
+def create_download_zip(flow_type: str = 'inquiries'):
+    """Create a ZIP file containing the Word report and Excel file
+
+    Args:
+        flow_type: 'inquiries' or 'complaints' - determines which output folder to use
+    """
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Add Word document (with trailing space in filename)
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
-        if report_path.exists():
-            zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
+        if flow_type == 'complaints':
+            # Complaints flow files
+            report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
+            if report_path.exists():
+                zip_file.write(report_path, "تقرير تحليل شكاوى المتعاملين .docx")
 
-        # Add Excel file
-        excel_path = Path("outputs/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
-        if excel_path.exists():
-            zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+            # Add complaints Excel file
+            excel_path = Path("complaints-output/Fujairah_Police_Complaints_Triage_Detail.xlsx")
+            if excel_path.exists():
+                zip_file.write(excel_path, "Fujairah_Police_Complaints_Triage_Detail.xlsx")
+        else:
+            # Inquiries flow files (default)
+            report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
+            if report_path.exists():
+                zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
+
+            # Add inquiries Excel file
+            excel_path = Path("inquiries-output/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+            if excel_path.exists():
+                zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
@@ -1507,11 +1532,41 @@ INQUIRIES_STAGES = [
     {"start": 22.5, "end": 30,   "progress_start": 75, "progress_end": 100},
 ]
 
+# ── Custom Progress Bar for RTL/LTR Support ──────────────────────────────────
+def create_custom_progress_bar(current_pct=0, lang='ar'):
+    """Create a custom HTML progress bar that supports RTL/LTR."""
+    DIR = 'rtl' if lang == 'ar' else 'ltr'
+    percentage = current_pct * 100
+
+    progress_html = f"""
+    <div style="direction: {DIR}; width: 100%; margin: 0;">
+        <div style="
+            width: 100%;
+            height: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        ">
+            <div style="
+                height: 100%;
+                background: linear-gradient(90deg, #B68A35, #E2B95A, #F0D080);
+                width: {percentage}%;
+                border-radius: 10px;
+                transition: width 0.4s ease;
+            "></div>
+        </div>
+    </div>
+    """
+    return progress_html
+
 # ── Processing ───────────────────────────────────────────────────────────────
 def process_with_analyzer(uploaded_files, lang='ar'):
     """Process files using the analyzer and display progress."""
     tx = T[lang]
-    progress_bar = st.progress(0)
+    DIR = 'rtl' if lang == 'ar' else 'ltr'
+
+    # Display custom progress bar
+    progress_container = st.empty()
     pct_container = st.empty()
 
     try:
@@ -1533,7 +1588,12 @@ def process_with_analyzer(uploaded_files, lang='ar'):
             elapsed = step * update_interval
             # Find current stage based on elapsed time
             current_pct = min(1.0, elapsed / total_duration)
-            progress_bar.progress(current_pct)
+
+            # Update custom progress bar
+            progress_container.markdown(
+                create_custom_progress_bar(current_pct, lang),
+                unsafe_allow_html=True,
+            )
 
             # Update stage display
             current_stage = next(
@@ -1543,16 +1603,22 @@ def process_with_analyzer(uploaded_files, lang='ar'):
             )
 
             if current_stage:
+                # Use language-specific label
+                stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
                 pct_container.markdown(
                     f"<div class='{tx.get('pct_class', 'pct-display')}'>"
-                    f"{int(current_pct * 100)}% — {current_stage.get('label', 'Processing...')}"
+                    f"{int(current_pct * 100)}% — {stage_label}"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
 
             time.sleep(update_interval)
 
-        progress_bar.progress(1.0)
+        # Final progress bar at 100%
+        progress_container.markdown(
+            create_custom_progress_bar(1.0, lang),
+            unsafe_allow_html=True,
+        )
         pct_container.empty()
 
         # Now call the actual analyzer
@@ -1561,7 +1627,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
 
     except Exception as e:
         st.error(f"Error during processing: {str(e)}")
-        progress_bar.empty()
+        progress_container.empty()
         pct_container.empty()
         return None
 
@@ -1921,12 +1987,12 @@ def inquiries_page(lang):
 
         # Display report outputs in tabs
         st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
-        display_report_tabs(lang)
+        display_report_tabs(lang, flow_type='inquiries')
         st.markdown('</div>', unsafe_allow_html=True)
 
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
+        report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
         if report_path.exists():
-            zip_data = create_download_zip()
+            zip_data = create_download_zip(flow_type='inquiries')
             st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
@@ -2076,12 +2142,12 @@ def complaints_page(lang):
 
         # Display report outputs in tabs
         st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
-        display_report_tabs(lang)
+        display_report_tabs(lang, flow_type='complaints')
         st.markdown('</div>', unsafe_allow_html=True)
 
-        report_path = Path("outputs/تقرير تحليل استفسارات المتعاملين .docx")
+        report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
         if report_path.exists():
-            zip_data = create_download_zip()
+            zip_data = create_download_zip(flow_type='complaints')
             st.markdown('<div class="blue-download" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:

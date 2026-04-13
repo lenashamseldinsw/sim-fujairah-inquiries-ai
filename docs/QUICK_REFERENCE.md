@@ -20,7 +20,7 @@ Just change the file path:
 from analysis import DynamicReportDisplay
 
 display = DynamicReportDisplay(lang='ar')
-display.display_report("outputs/new_report.docx")
+display.display_report("inquiries-output/new_report.docx")
 ```
 
 ## For Developers
@@ -80,7 +80,7 @@ python test_adaptive_system.py
 python test_adaptive_system.py --clear
 
 # Test specific report
-python test_adaptive_system.py --report outputs/your_report.docx
+python test_adaptive_system.py --report inquiries-output/your_report.docx
 ```
 
 ## Common Tasks
@@ -121,7 +121,7 @@ main_sections = [
 ## File Locations
 
 - **Core System**: `analysis/`
-- **Cache**: `outputs/cache/`
+- **Cache**: `inquiries-output/cache/`
 - **Documentation**: `analysis/README.md`, `ADAPTIVE_SYSTEM_SUMMARY.md`
 - **Test Script**: `test_adaptive_system.py`
 - **Legacy (backward compat)**: `report_extractor.py`, `report_display.py`

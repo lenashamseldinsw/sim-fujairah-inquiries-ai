@@ -21,8 +21,8 @@ from analysis.report_structure_detector import ReportStructureDetector
 
 
 def find_default_report():
-    """Find the default report in outputs directory."""
-    docx_files = glob.glob('outputs/*.docx')
+    """Find the default report in inquiries-output directory."""
+    docx_files = glob.glob('inquiries-output/*.docx')
     # Filter out temp files (starting with ~$)
     docx_files = [f for f in docx_files if not f.split('/')[-1].startswith('~$')]
     
@@ -122,7 +122,7 @@ def main():
     parser.add_argument(
         '--report',
         type=str,
-        help='Path to Word document to test (default: auto-find in outputs/)'
+        help='Path to Word document to test (default: auto-find in inquiries-output/)'
     )
     parser.add_argument(
         '--clear',

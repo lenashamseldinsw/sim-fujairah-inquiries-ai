@@ -21,10 +21,19 @@ class AdaptiveReportExtractor:
     - Works with any Word report structure
     """
 
-    CACHE_DIR = Path("outputs/cache")
+    # Increment this when extraction logic changes to invalidate old cache
+    EXTRACTION_VERSION = 9
 
-    def __init__(self):
-        """Initialize extractor and ensure cache directory exists."""
+    def __init__(self, cache_dir: str = None):
+        """
+        Initialize extractor and ensure cache directory exists.
+
+        Args:
+            cache_dir: Directory to store cache files (default: inquiries-output/cache for backward compat)
+        """
+        if cache_dir is None:
+            cache_dir = "inquiries-output/cache"
+        self.CACHE_DIR = Path(cache_dir)
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     def extract_report(self, docx_path: str, force_refresh: bool = False) -> Dict[str, Any]:
@@ -46,8 +55,13 @@ class AdaptiveReportExtractor:
 
         # Check cache first (unless force refresh)
         if not force_refresh and cache_file.exists():
-            print(f"✓ Loading cached report structure from: {cache_file.name}")
-            return self._load_from_cache(cache_file)
+            cached_report = self._load_from_cache(cache_file)
+            # Verify cache version matches current extraction logic
+            if cached_report.get('extraction_version') == self.EXTRACTION_VERSION:
+                print(f"✓ Loading cached report structure from: {cache_file.name}")
+                return cached_report
+            else:
+                print(f"✓ Cache invalidated (extraction logic updated). Re-extracting from: {doc_path.name}")
 
         print(f"✓ Extracting report structure from: {doc_path.name}")
 
@@ -106,6 +120,7 @@ class AdaptiveReportExtractor:
         print(f"📍 Sections detected: {len(structure['sections'])}")
 
         report = {
+            'extraction_version': self.EXTRACTION_VERSION,
             'document_name': doc_path.name,
             'document_path': str(doc_path),
             'metadata': structure['metadata'],
@@ -130,6 +145,9 @@ class AdaptiveReportExtractor:
             for table_info in section['tables']:
                 table_data = table_info['data']
                 table_data['original_index'] = table_info['index']
+                # Include dynamically detected caption if available
+                if table_info.get('caption'):
+                    table_data['caption'] = table_info['caption']
                 section_data['tables'].append(table_data)
 
             # Add charts assigned to this main section
@@ -159,6 +177,9 @@ class AdaptiveReportExtractor:
                 for table_info in subsec['tables']:
                     table_data = table_info['data']
                     table_data['original_index'] = table_info['index']
+                    # Include dynamically detected caption if available
+                    if table_info.get('caption'):
+                        table_data['caption'] = table_info['caption']
                     subsec_data['tables'].append(table_data)
 
                 # Add charts assigned to this subsection

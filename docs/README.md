@@ -33,7 +33,7 @@ The `AdaptiveReportExtractor` class provides:
 - **Automatic cache invalidation** when source file changes
 - **Cache management** functions (clear, list cached reports)
 
-Cache files are stored in: `outputs/cache/`
+Cache files are stored in: `inquiries-output/cache/`
 
 ### 3. Dynamic Display
 
@@ -159,12 +159,12 @@ For each section:
 
 To process a different report:
 
-1. **Place the Word document** in `outputs/` directory
+1. **Place the Word document** in `inquiries-output/` directory
 2. **Update the path** in your code:
 
 ```python
 display = DynamicReportDisplay(lang='ar')
-display.display_report("outputs/your_new_report.docx")
+display.display_report("inquiries-output/your_new_report.docx")
 ```
 
 3. **Done!** The system will automatically:
@@ -195,7 +195,7 @@ HEADING_PATTERNS = [
 To change cache location, edit `AdaptiveReportExtractor.CACHE_DIR`:
 
 ```python
-CACHE_DIR = Path("outputs/cache")  # Change as needed
+CACHE_DIR = Path("inquiries-output/cache")  # Change as needed
 ```
 
 ## Troubleshooting
