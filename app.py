@@ -2153,7 +2153,7 @@ def complaints_page(lang):
         display_report_tabs(lang, flow_type='complaints')
         st.markdown('</div>', unsafe_allow_html=True)
 
-        report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
+        report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx")
         if report_path.exists():
             zip_data = create_download_zip(flow_type='complaints')
             st.markdown('<div class="blue-download" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
