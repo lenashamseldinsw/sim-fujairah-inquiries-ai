@@ -188,7 +188,7 @@ T = {
 def load_css(lang='ar'):
     DIR              = 'rtl' if lang == 'ar' else 'ltr'
     ALIGN            = 'right' if lang == 'ar' else 'left'
-    FONT             = "'Cairo', 'Tajawal', sans-serif" if lang == 'ar' else "'Inter', 'Cairo', system-ui, sans-serif"
+    FONT             = "'Tajawal', 'Cairo', sans-serif" if lang == 'ar' else "'Inter', 'Cairo', system-ui, sans-serif"
     BORDER_ACCENT    = 'right' if lang == 'ar' else 'left'
     LANG_ACTIVE_COL  = 'first-child' if lang == 'en' else 'last-child'
 
@@ -201,6 +201,7 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
         text-align: {ALIGN} !important;
         box-sizing: border-box;
+        font-family: {FONT} !important;
     }}
     html, body {{
         font-family: {FONT} !important;
