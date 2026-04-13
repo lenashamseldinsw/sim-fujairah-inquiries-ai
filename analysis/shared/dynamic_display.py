@@ -84,11 +84,8 @@ HTML_STYLES = """
     }
 
     .report-table td .cell-content {
-        display: block;
-        width: 100%;
-        overflow: hidden;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
+        display: inline-block;
+        max-width: 100%;
     }
 
     .report-table tr:nth-child(even) {
