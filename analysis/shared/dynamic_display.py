@@ -779,7 +779,7 @@ class DynamicReportDisplay:
 
 
 # Backward compatible function
-def display_report_tabs(lang: str = 'ar'):
+def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries'):
     """
     Display report tabs dynamically based on detected structure.
 
@@ -788,8 +788,14 @@ def display_report_tabs(lang: str = 'ar'):
 
     Args:
         lang: Language preference ('ar' or 'en')
+        flow_type: Type of flow ('inquiries' or 'complaints')
     """
-    report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين.docx")
+    if flow_type == 'complaints':
+        report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
+        cache_dir = "complaints-output/cache"
+    else:
+        report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين.docx")
+        cache_dir = "inquiries-output/cache"
 
-    display = DynamicReportDisplay(lang=lang)
+    display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
     display.display_report(str(report_path))
