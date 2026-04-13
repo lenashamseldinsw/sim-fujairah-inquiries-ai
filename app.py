@@ -1004,6 +1004,12 @@ def load_css(lang='ar'):
         font-weight: 600;
         direction: {DIR} !important;
     }}
+    [data-testid="stFileUploader"] button {{
+        display: none !important;
+    }}
+    [data-testid="stFileUploader"] button::before {{
+        display: none !important;
+    }}
 
     /* Blue uploader */
     .blue-uploader [data-testid="stFileUploader"] section {{
@@ -1171,11 +1177,11 @@ def load_css(lang='ar'):
         background: rgba(61,214,140,0.06);
         border: 1px solid rgba(61,214,140,0.2);
         border-radius: 16px;
-        padding: 2rem;
+        padding: 1.2rem;
         text-align: center !important;
         direction: {DIR} !important;
         max-width: 820px;
-        margin: 0 auto 1.5rem;
+        margin: 0 auto 2rem;
     }}
     .success-title {{
         font-size: 1.8rem;
@@ -1980,7 +1986,7 @@ def inquiries_page(lang):
     else:
         st.markdown(f"""
         <div class="success-panel">
-            <div style="font-size:3rem;text-align:center;margin-bottom:0.5rem;">✅</div>
+            <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
             <div class="success-title">{tx['success_title_inq']}</div>
             <div class="success-sub">{tx['success_sub_inq']}</div>
         </div>
@@ -2007,7 +2013,7 @@ def inquiries_page(lang):
                 )
             st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div style="max-width:820px;margin:1rem auto 0;">', unsafe_allow_html=True)
+        st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button(tx['btn_reset'], use_container_width=True, key="inq_reset"):
@@ -2135,7 +2141,7 @@ def complaints_page(lang):
     else:
         st.markdown(f"""
         <div class="success-panel">
-            <div style="font-size:3rem;text-align:center;margin-bottom:0.5rem;">✅</div>
+            <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
             <div class="success-title">{tx['success_title_cmp']}</div>
             <div class="success-sub">{tx['success_sub_cmp']}</div>
         </div>
@@ -2162,7 +2168,7 @@ def complaints_page(lang):
                 )
             st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div style="max-width:820px;margin:1rem auto 0;">', unsafe_allow_html=True)
+        st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown('<div class="blue-btn">', unsafe_allow_html=True)

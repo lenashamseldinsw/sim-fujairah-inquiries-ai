@@ -329,7 +329,7 @@ class DynamicReportDisplay:
             st.session_state.current_section = 0
 
         # Create the gold-styled dropdown with RTL layout - no column gap
-        col1, col2 = st.columns([0.2, 3.8], vertical_alignment="center")
+        col1, col2 = st.columns([0.6, 3.4], vertical_alignment="center")
         with col1:
             st.markdown('<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">القسم:</span>' if self.lang == 'ar' else '<span style="color: #B68A35; font-weight: bold; display: block; padding-top: 8px;">Section:</span>', unsafe_allow_html=True)
         with col2:
