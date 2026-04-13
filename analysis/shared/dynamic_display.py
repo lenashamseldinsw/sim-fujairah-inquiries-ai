@@ -314,9 +314,9 @@ class DynamicReportDisplay:
         # sections are already main sections only from the detector
         main_sections = sections
 
-        # Generate tab titles from main section titles
+        # Generate tab titles from main section titles (always in original language)
         tab_titles = [
-            section['title'] if self.lang == 'ar' else section.get('title_en', section['title'])
+            section['title']
             for section in main_sections
         ]
 
@@ -446,8 +446,8 @@ class DynamicReportDisplay:
         # Display subsections
         if section.get('subsections'):
             for subsec in section['subsections']:
-                # Show subsection title
-                st.markdown(f"### {subsec['title'] if self.lang == 'ar' else subsec.get('title_en', subsec['title'])}")
+                # Show subsection title (always in original language)
+                st.markdown(f"### {subsec['title']}")
 
                 # Show subsection content (always visible, no expander)
                 if subsec.get('content') and subsec['content'].strip():
