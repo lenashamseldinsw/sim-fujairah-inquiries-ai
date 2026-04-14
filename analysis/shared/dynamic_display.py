@@ -770,13 +770,15 @@ class DynamicReportDisplay:
                         console.log('Colors:', dataset.backgroundColor);
 
                         meta.data.forEach(function(element, metaIndex) {{
-                            console.log('--- Processing metadata element', metaIndex);
-
-                            // Chart.js pie slices are in the same order as data array
-                            var dataIndex = metaIndex;
+                            // Check if element has index property (Chart.js metadata)
+                            // This is the actual data array index, not metaIndex
+                            var dataIndex = element.index !== undefined ? element.index : metaIndex;
                             var value = dataset.data[dataIndex];
+                            var startAngle = element.startAngle * 180 / Math.PI;
+                            var endAngle = element.endAngle * 180 / Math.PI;
+                            var midAngle = (element.startAngle + element.endAngle) / 2 * 180 / Math.PI;
 
-                            console.log('Data index:', dataIndex, 'value:', value);
+                            console.log('metaIdx:', metaIndex, 'elemIdx:', element.index, '→dataIdx:', dataIndex, 'val:', value, 'angles:', startAngle.toFixed(0) + '°-' + endAngle.toFixed(0) + '° (mid:' + midAngle.toFixed(0) + '°)', 'color:', dataset.backgroundColor[dataIndex]);
 
                             if (typeof value === 'number' && !isNaN(value) && value > 0) {{
                                 console.log('✓ Valid data, processing...');
@@ -1235,13 +1237,15 @@ class DynamicReportDisplay:
                         console.log('Colors:', dataset.backgroundColor);
 
                         meta.data.forEach(function(element, metaIndex) {{
-                            console.log('--- Processing metadata element', metaIndex);
-
-                            // Chart.js pie slices are in the same order as data array
-                            var dataIndex = metaIndex;
+                            // Check if element has index property (Chart.js metadata)
+                            // This is the actual data array index, not metaIndex
+                            var dataIndex = element.index !== undefined ? element.index : metaIndex;
                             var value = dataset.data[dataIndex];
+                            var startAngle = element.startAngle * 180 / Math.PI;
+                            var endAngle = element.endAngle * 180 / Math.PI;
+                            var midAngle = (element.startAngle + element.endAngle) / 2 * 180 / Math.PI;
 
-                            console.log('Data index:', dataIndex, 'value:', value);
+                            console.log('metaIdx:', metaIndex, 'elemIdx:', element.index, '→dataIdx:', dataIndex, 'val:', value, 'angles:', startAngle.toFixed(0) + '°-' + endAngle.toFixed(0) + '° (mid:' + midAngle.toFixed(0) + '°)', 'color:', dataset.backgroundColor[dataIndex]);
 
                             if (typeof value === 'number' && !isNaN(value) && value > 0) {{
                                 console.log('✓ Valid data, processing...');
