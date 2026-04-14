@@ -4,3 +4,4 @@ Pillow>=11.0.0
 lxml>=5.2.0
 pandas>=2.0.0
 python-dotenv>=1.0.0
+highcharts-core>=1.10.0
