@@ -860,27 +860,17 @@ class DynamicReportDisplay:
 
                         console.log('=== AFTER FOREACH: Total labels =', labelData.length);
 
-                        // NO collision detection. Just position labels at fixed distances along radial lines.
+                        // NO collision detection. Position all labels at consistent distance along radial lines.
                         // This guarantees correct angle alignment with slices.
-                        var labelDistances = {{
-                            small: radius * 1.3,   // For slices < 10%
-                            medium: radius * 1.5,  // For slices 10-50%
-                            large: radius * 1.2    // For large slices
-                        }};
+                        var labelDistance = radius * 1.4;  // Fixed distance for all labels
 
-                        // Draw lines and labels - position based on slice size
+                        // Draw lines and labels - all at same distance from center
                         labelData.forEach(function(label) {{
-                            // Determine distance based on percentage
-                            var labelDist = labelDistances.medium;
-                            var percentVal = parseFloat(label.percentage);
-                            if (percentVal < 10) labelDist = labelDistances.small;
-                            else if (percentVal > 50) labelDist = labelDistances.large;
+                            // Position label at fixed distance along radial line (same for all)
+                            var labelEndX = label.centerX + labelDistance * label.cosAngle;
+                            var labelEndY = label.centerY + labelDistance * label.sinAngle;
 
-                            // Position label at fixed distance along radial line
-                            var labelEndX = label.centerX + labelDist * label.cosAngle;
-                            var labelEndY = label.centerY + labelDist * label.sinAngle;
-
-                            console.log('FINAL position for', label.percentage, '- X:', labelEndX.toFixed(0), 'Y:', labelEndY.toFixed(0), 'angle:', (Math.atan2(labelEndY - label.centerY, labelEndX - label.centerX) * 180 / Math.PI).toFixed(1) + '°');
+                            console.log('Label:', label.percentage, 'Color:', label.sliceColor, 'dataIdx:', label.dataIndex, 'SliceAngle:', (label.angle * 180 / Math.PI).toFixed(1) + '°');
 
                             // Draw line in SVG from slice edge to label
                             var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -1335,27 +1325,17 @@ class DynamicReportDisplay:
 
                         console.log('=== AFTER FOREACH: Total labels =', labelData.length);
 
-                        // NO collision detection. Just position labels at fixed distances along radial lines.
+                        // NO collision detection. Position all labels at consistent distance along radial lines.
                         // This guarantees correct angle alignment with slices.
-                        var labelDistances = {{
-                            small: radius * 1.3,   // For slices < 10%
-                            medium: radius * 1.5,  // For slices 10-50%
-                            large: radius * 1.2    // For large slices
-                        }};
+                        var labelDistance = radius * 1.4;  // Fixed distance for all labels
 
-                        // Draw lines and labels - position based on slice size
+                        // Draw lines and labels - all at same distance from center
                         labelData.forEach(function(label) {{
-                            // Determine distance based on percentage
-                            var labelDist = labelDistances.medium;
-                            var percentVal = parseFloat(label.percentage);
-                            if (percentVal < 10) labelDist = labelDistances.small;
-                            else if (percentVal > 50) labelDist = labelDistances.large;
+                            // Position label at fixed distance along radial line (same for all)
+                            var labelEndX = label.centerX + labelDistance * label.cosAngle;
+                            var labelEndY = label.centerY + labelDistance * label.sinAngle;
 
-                            // Position label at fixed distance along radial line
-                            var labelEndX = label.centerX + labelDist * label.cosAngle;
-                            var labelEndY = label.centerY + labelDist * label.sinAngle;
-
-                            console.log('FINAL position for', label.percentage, '- X:', labelEndX.toFixed(0), 'Y:', labelEndY.toFixed(0), 'angle:', (Math.atan2(labelEndY - label.centerY, labelEndX - label.centerX) * 180 / Math.PI).toFixed(1) + '°');
+                            console.log('Label:', label.percentage, 'Color:', label.sliceColor, 'dataIdx:', label.dataIndex, 'SliceAngle:', (label.angle * 180 / Math.PI).toFixed(1) + '°');
 
                             // Draw line in SVG from slice edge to label
                             var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
