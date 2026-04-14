@@ -241,23 +241,36 @@ class DynamicReportDisplay:
         self.lang = lang
         self.extractor = AdaptiveReportExtractor(cache_dir=cache_dir)
 
-    def _get_colors_for_chart(self, chart_type: str, num_items: int, provided_colors: list = None) -> list:
+    def _get_colors_for_chart(self, chart_type: str, num_items: int, provided_colors: list = None, num_series: int = None) -> list:
         """
         Get appropriate colors for chart type.
 
-        For pie/doughnut/bar charts, uses custom color palette starting with gold, green, blue.
+        For bar charts:
+            - If 1 or 0 series: all bars gold
+            - If 2+ series: gold and gray alternating
+        For pie/doughnut charts: uses custom color palette.
         For other charts, uses provided colors or defaults.
 
         Args:
             chart_type: Type of chart ('pie', 'doughnut', 'bar', 'horizontalBar', etc.)
             num_items: Number of colors needed (series for pie, data points for bar)
             provided_colors: Colors extracted from document (optional)
+            num_series: Number of series (for bar chart logic)
 
         Returns:
             List of hex color codes
         """
-        if chart_type in ('pie', 'doughnut', 'bar', 'horizontalBar'):
-            # For pie, doughnut, and bar charts, cycle through custom palette
+        if chart_type in ('bar', 'horizontalBar'):
+            # For bar charts: check number of series
+            if num_series and num_series <= 1:
+                # If 1 or 0 series: all bars gold
+                return ['#B68A35'] * num_items
+            else:
+                # If 2+ series: alternate between gold and gray
+                bar_colors = ['#B68A35', '#E5E5E5']  # Gold and Light Gray
+                return [bar_colors[i % len(bar_colors)] for i in range(num_items)]
+        elif chart_type in ('pie', 'doughnut'):
+            # For pie/doughnut charts, cycle through custom palette
             return [CHART_COLORS[i % len(CHART_COLORS)] for i in range(num_items)]
         elif provided_colors:
             return provided_colors
@@ -563,17 +576,13 @@ class DynamicReportDisplay:
                 'borderWidth': 0
             } for ser in series], ensure_ascii=False)
         elif chart_type in ('bar', 'horizontalBar'):
-            # For bar charts: each bar gets its own color
-            # Calculate total number of bars and assign colors
-            colors = self._get_colors_for_chart(chart_type, len(categories) * len(series), provided_colors or None)
-            color_idx = 0
+            # For bar charts: each series gets one color
+            colors = self._get_colors_for_chart(chart_type, len(series), provided_colors or None, num_series=len(series))
             datasets = []
             for ser_idx, ser in enumerate(series):
-                # Assign a unique color to each bar in this series
-                bar_colors = []
-                for _ in ser['data']:
-                    bar_colors.append(colors[color_idx % len(colors)])
-                    color_idx += 1
+                # All bars in this series get the same color
+                series_color = colors[ser_idx]
+                bar_colors = [series_color] * len(ser['data'])
                 datasets.append({
                     'label': ser['name'],
                     'data': ser['data'],
@@ -646,15 +655,29 @@ class DynamicReportDisplay:
                                         borderRadius: 4,
                                         generateLabels: function(chart) {{
                                             var datasets = chart.data.datasets;
-                                            var labels = chart.data.labels;
-                                            return labels.map((label, i) => {{
-                                                return {{
-                                                    text: label,
-                                                    fillStyle: datasets[0].backgroundColor[i],
-                                                    hidden: false,
-                                                    index: i
-                                                }};
-                                            }});
+                                            var chartType = chart.config.type;
+
+                                            // For bar charts, use dataset labels; for pie/doughnut, use category labels
+                                            if (chartType === 'bar' || chartType === 'horizontalBar') {{
+                                                return datasets.map((dataset, i) => {{
+                                                    return {{
+                                                        text: dataset.label,
+                                                        fillStyle: dataset.backgroundColor[0],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }} else {{
+                                                var labels = chart.data.labels;
+                                                return labels.map((label, i) => {{
+                                                    return {{
+                                                        text: label,
+                                                        fillStyle: datasets[0].backgroundColor[i],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }}
                                         }}
                                     }},
                                     maxHeight: 200,
@@ -727,19 +750,13 @@ class DynamicReportDisplay:
                 'borderWidth': 0
             } for ser in series_rtl], ensure_ascii=False)
         elif chart_type in ('bar', 'horizontalBar'):
-            # For bar charts: each bar gets its own color
-            # Calculate total number of bars and assign colors
-            colors = self._get_colors_for_chart(chart_type, len(categories) * len(series), provided_colors or None)
-            # Reverse colors to match reversed data
-            colors_rtl = list(reversed(colors))
-            color_idx = 0
+            # For bar charts: each series gets one color
+            colors = self._get_colors_for_chart(chart_type, len(series), provided_colors or None, num_series=len(series))
             datasets = []
             for ser_idx, ser in enumerate(series_rtl):
-                # Assign a unique color to each bar in this series
-                bar_colors = []
-                for _ in ser['data']:
-                    bar_colors.append(colors_rtl[color_idx % len(colors_rtl)])
-                    color_idx += 1
+                # All bars in this series get the same color
+                series_color = colors[ser_idx]
+                bar_colors = [series_color] * len(ser['data'])
                 datasets.append({
                     'label': ser['name'],
                     'data': ser['data'],
@@ -811,15 +828,29 @@ class DynamicReportDisplay:
                                         borderRadius: 4,
                                         generateLabels: function(chart) {{
                                             var datasets = chart.data.datasets;
-                                            var labels = chart.data.labels;
-                                            return labels.map((label, i) => {{
-                                                return {{
-                                                    text: label,
-                                                    fillStyle: datasets[0].backgroundColor[i],
-                                                    hidden: false,
-                                                    index: i
-                                                }};
-                                            }});
+                                            var chartType = chart.config.type;
+
+                                            // For bar charts, use dataset labels; for pie/doughnut, use category labels
+                                            if (chartType === 'bar' || chartType === 'horizontalBar') {{
+                                                return datasets.map((dataset, i) => {{
+                                                    return {{
+                                                        text: dataset.label,
+                                                        fillStyle: dataset.backgroundColor[0],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }} else {{
+                                                var labels = chart.data.labels;
+                                                return labels.map((label, i) => {{
+                                                    return {{
+                                                        text: label,
+                                                        fillStyle: datasets[0].backgroundColor[i],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }}
                                         }}
                                     }},
                                     maxHeight: 200,

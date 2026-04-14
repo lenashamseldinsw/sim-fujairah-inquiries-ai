@@ -1589,6 +1589,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
 
         # Simulate processing with stages from analyzer
         total_duration = random.randint(30, 60)  # Random 30-60 seconds
+        # total_duration = 1
         update_interval = 0.5
         total_steps = int(total_duration / update_interval)
 
