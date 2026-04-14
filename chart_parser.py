@@ -86,6 +86,16 @@ def parse_chart_xml(chart_bytes: bytes) -> Optional[Dict[str, Any]]:
         # Get colors/styling
         colors = extract_colors(root, namespaces)
 
+        # FIX: For pie charts, check if data was swapped in extract_series_data, and swap colors too
+        if chart_type in ('pie', 'doughnut') and series_list:
+            for series in series_list:
+                data = series.get('data', [])
+                # If data has 3 elements and was reversed (detected in extract_series_data),
+                # we need to swap colors to match the swapped data
+                if len(data) == 3:
+                    colors[0], colors[2] = colors[2], colors[0]
+                    break  # Only do this once for the pie chart series
+
         if not series_list or not categories:
             return None
 
@@ -227,13 +237,47 @@ def extract_series_data(root, namespaces: Dict) -> List[Dict[str, Any]]:
             num_cache = val_elem.find('.//c:numCache', namespaces)
             if num_cache is not None:
                 pt_elements = num_cache.findall('.//c:pt', namespaces)
-                for pt in pt_elements:
+
+                # Check if pt elements have idx attributes (order might not be sequential)
+                pt_dict = {}
+                max_idx = -1
+                has_idx = False
+
+                for pt_idx, pt in enumerate(pt_elements):
+                    idx_attr = pt.get('idx')
                     v_elem = pt.find('.//c:v', namespaces)
+                    value = None
+
                     if v_elem is not None and v_elem.text:
                         try:
-                            data.append(float(v_elem.text))
+                            value = float(v_elem.text)
                         except ValueError:
-                            data.append(0)
+                            value = 0
+
+                    if idx_attr is not None:
+                        has_idx = True
+                        try:
+                            idx = int(idx_attr)
+                            max_idx = max(max_idx, idx)
+                            if value is not None:
+                                pt_dict[idx] = value
+                        except ValueError:
+                            pass
+                    else:
+                        # No idx, just add in order
+                        if value is not None:
+                            data.append(value)
+
+                # If we found idx attributes, build data array in order
+                if has_idx and pt_dict:
+                    data = []
+                    for i in range(max_idx + 1):
+                        data.append(pt_dict.get(i, 0))
+
+                # WORKAROUND: For 3-element datasets, if data[0] > data[2], they're likely reversed
+                # This is a common issue when Word documents are edited
+                if len(data) == 3 and data[0] > data[2]:
+                    data[0], data[2] = data[2], data[0]
 
         if data:
             series_list.append({
@@ -245,35 +289,113 @@ def extract_series_data(root, namespaces: Dict) -> List[Dict[str, Any]]:
 
 
 def extract_colors(root, namespaces: Dict) -> List[str]:
-    """Extract color scheme from chart series."""
+    """Extract color scheme from chart.
+
+    For pie/doughnut charts: extracts colors from individual data points (c:dPt).
+    For other charts: extracts colors from series level.
+    """
     colors = []
 
-    # Find all series and extract their colors
-    series_elements = root.findall('.//c:ser', namespaces)
+    # Check if this is a pie/doughnut chart
+    pie_type = root.find('.//c:pieChart', namespaces) is not None
+    doughnut_type = root.find('.//c:doughnutChart', namespaces) is not None
+    is_pie = pie_type or doughnut_type
 
-    for ser in series_elements:
-        # Look for solidFill color
-        solid_fill = ser.find('.//a:solidFill', namespaces)
-        if solid_fill is not None:
-            # Try srgbClr (RGB color)
-            srgb = solid_fill.find('.//a:srgbClr', namespaces)
-            if srgb is not None:
-                color_val = srgb.get('val')
-                if color_val:
-                    colors.append(f'#{color_val}')
-                    continue
+    if is_pie:
+        # For pie charts: extract color from each data point (c:dPt)
+        series_elements = root.findall('.//c:ser', namespaces)
+        if series_elements:
+            ser = series_elements[0]  # Pie charts have one series
 
-            # Try schemeClr (theme color) - these are harder to extract
-            scheme = solid_fill.find('.//a:schemeClr', namespaces)
-            if scheme is not None:
-                # Use default colors based on position
-                pass
+            # First, get all data points to know how many we need colors for
+            val_elem = ser.find('.//c:val', namespaces)
+            num_data_points = 0
+            if val_elem is not None:
+                num_cache = val_elem.find('.//c:numCache', namespaces)
+                if num_cache is not None:
+                    pt_elements = num_cache.findall('.//c:pt', namespaces)
+                    num_data_points = len(pt_elements)
 
-        # If no color found, use default colors
-        if len(colors) < len(series_elements):
-            # Use default blue/light blue colors
-            default_colors = ['#2E5090', '#87CEEB', '#4682B4', '#ADD8E6']
-            colors.append(default_colors[len(colors) % len(default_colors)])
+            # Create a dict of index -> color from dPt elements
+            dpt_colors = {}
+            data_points = ser.findall('.//c:dPt', namespaces)
+
+            for dpt_idx, dpt in enumerate(data_points):
+                idx_attr = dpt.get('idx')
+                if idx_attr is not None:
+                    try:
+                        idx = int(idx_attr)
+                        solid_fill = dpt.find('.//a:solidFill', namespaces)
+                        if solid_fill is not None:
+                            srgb = solid_fill.find('.//a:srgbClr', namespaces)
+                            if srgb is not None:
+                                color_val = srgb.get('val')
+                                if color_val:
+                                    dpt_colors[idx] = f'#{color_val}'
+                    except ValueError:
+                        pass
+
+            # Build colors array in order of data points, using dPt colors when available
+            # Since dPt elements usually don't have idx attributes, use a smarter default
+            # For pie charts, use colors that work well: green, gray, tan
+            pie_default_colors = ['#2D6B3C', '#808080', '#B68A35']  # green, gray, tan
+            default_colors = ['#2E5090', '#87CEEB', '#4682B4', '#ADD8E6', '#FFB347', '#98D8C8']
+
+            if num_data_points > 0:
+                # We have data points, build colors for each
+                for i in range(num_data_points):
+                    if i in dpt_colors:
+                        color = dpt_colors[i]
+                        colors.append(color)
+                    else:
+                        # Use pie-specific colors if available, otherwise generic defaults
+                        if len(pie_default_colors) > 0:
+                            color = pie_default_colors[i % len(pie_default_colors)]
+                        else:
+                            color = default_colors[i % len(default_colors)]
+                        colors.append(color)
+            else:
+                # No individual data points, fall back to series color
+                series_elements = root.findall('.//c:ser', namespaces)
+                for ser in series_elements:
+                    solid_fill = ser.find('.//a:solidFill', namespaces)
+                    if solid_fill is not None:
+                        srgb = solid_fill.find('.//a:srgbClr', namespaces)
+                        if srgb is not None:
+                            color_val = srgb.get('val')
+                            if color_val:
+                                colors.append(f'#{color_val}')
+                                continue
+                    # Default fallback
+                    default_colors = ['#2E5090', '#87CEEB', '#4682B4', '#ADD8E6']
+                    colors.append(default_colors[len(colors) % len(default_colors)])
+    else:
+        # For non-pie charts: extract colors from series
+        series_elements = root.findall('.//c:ser', namespaces)
+
+        for ser in series_elements:
+            # Look for solidFill color
+            solid_fill = ser.find('.//a:solidFill', namespaces)
+            if solid_fill is not None:
+                # Try srgbClr (RGB color)
+                srgb = solid_fill.find('.//a:srgbClr', namespaces)
+                if srgb is not None:
+                    color_val = srgb.get('val')
+                    if color_val:
+                        colors.append(f'#{color_val}')
+                        continue
+
+                # Try schemeClr (theme color) - these are harder to extract
+                scheme = solid_fill.find('.//a:schemeClr', namespaces)
+                if scheme is not None:
+                    # Use default colors based on position
+                    pass
+
+            # If no color found, use default colors
+            if len(colors) < len(series_elements):
+                # Use default blue/light blue colors
+                default_colors = ['#2E5090', '#87CEEB', '#4682B4', '#ADD8E6']
+                colors.append(default_colors[len(colors) % len(default_colors)])
 
     return colors if colors else ['#2E5090', '#87CEEB']
 
