@@ -76,7 +76,7 @@ HTML_STYLES = """
         white-space: normal;
         word-wrap: break-word;
         overflow-wrap: break-word;
-        word-break: break-word;
+        word-break: keep-all;
         line-height: 1.6;
         min-height: 80px;
         vertical-align: middle;
@@ -84,8 +84,10 @@ HTML_STYLES = """
     }
 
     .report-table td .cell-content {
-        display: inline-block;
-        max-width: 100%;
+        display: block;
+        width: 100%;
+        text-align: center !important;
+        box-sizing: border-box;
     }
 
     .report-table tr:nth-child(even) {
