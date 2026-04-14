@@ -8,24 +8,24 @@ from typing import Dict, Any, List
 from analysis.demo.adaptive_extractor import AdaptiveReportExtractor
 
 
-# Neutral color palette: Gold/Bronze, Light Gray, Dark Green, and additional grays
+# Neutral color palette: Gold/Bronze, Medium Gray, Dark Green, and additional grays
 CHART_COLORS = [
     '#B68A35',  # Gold/Bronze
-    '#E5E5E5',  # Light Gray
-    '#3D5941',  # Dark Green
-    '#808080',  # Gray
-    '#999999',  # Medium Gray
+    '#808080',  # Medium Gray
+    '#2D6B3C',  # Dark Green
+    '#999999',  # Medium-Light Gray
+    '#707070',  # Steel Gray
     '#666666',  # Dark Gray
     '#A0A0A0',  # Light Medium Gray
     '#5A5A5A',  # Darker Gray
     '#C0C0C0',  # Silver Gray
-    '#707070',  # Steel Gray
-    '#606060',  # Dark Steel Gray
     '#8B8B8B',  # Dim Gray
+    '#606060',  # Dark Steel Gray
     '#696969',  # Very Dim Gray
     '#787878',  # Slate Gray
     '#7F7F7F',  # Gray 50%
     '#737373',  # Dark Slate Gray
+    '#909090',  # Light Steel Gray
 ]
 
 # HTML table styling (unchanged from original)
@@ -272,8 +272,11 @@ class DynamicReportDisplay:
                 bar_colors = ['#B68A35', '#E5E5E5']  # Gold and Light Gray
                 return [bar_colors[i % len(bar_colors)] for i in range(num_items)]
         elif chart_type in ('pie', 'doughnut'):
-            # For pie/doughnut charts, cycle through custom palette
-            return [CHART_COLORS[i % len(CHART_COLORS)] for i in range(num_items)]
+            # For pie/doughnut charts, use extracted colors if provided, otherwise use custom palette
+            if provided_colors and len(provided_colors) >= num_items:
+                return provided_colors[:num_items]
+            else:
+                return [CHART_COLORS[i % len(CHART_COLORS)] for i in range(num_items)]
         elif provided_colors:
             return provided_colors
         else:
@@ -610,7 +613,305 @@ class DynamicReportDisplay:
         # Determine if scales should be displayed (not for pie/doughnut charts)
         show_scales = chart_type not in ('pie', 'doughnut')
 
-        html = f"""<!DOCTYPE html>
+        # Build tooltip and plugin configuration for pie/doughnut charts
+        tooltip_config = ""
+        plugin_config = ""
+        if chart_type in ('pie', 'doughnut'):
+            tooltip_config = """
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                padding: 12,
+                                titleFont: { size: 12, weight: 'bold' },
+                                bodyFont: { size: 12 },
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        var value = context.raw;
+                                        return 'Value: ' + value.toLocaleString();
+                                    }
+                                }
+                            },"""
+            plugin_config = """
+                            // Empty plugin - percentages are rendered via HTML overlays
+                            {
+                                id: 'piePercentages'
+                            }"""
+
+        # For pie/doughnut charts, use floating labels with lines
+        if chart_type in ('pie', 'doughnut'):
+            html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .chart-container {{ position: relative; display: flex; justify-content: center; margin: 2rem 0; width: 100%; }}
+        .chart-wrapper {{ position: relative; width: 95%; max-width: 900px; height: 450px; }}
+        #dynamic_chart_{hash(title)} {{ position: relative; }}
+        .pie-labels {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }}
+        .pie-label {{ position: absolute; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; white-space: nowrap; transform: translate(-50%, -50%); text-shadow: 0 0 3px rgba(0, 0, 0, 0.5); }}
+        .pie-lines {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+    </style>
+</head>
+<body style="background: transparent; margin: 0; padding: 0;">
+    <div class="chart-container">
+        <div class="chart-wrapper">
+            <canvas id="dynamic_chart_{hash(title)}"></canvas>
+            <svg class="pie-lines" id="pie_lines_{hash(title)}"></svg>
+            <div class="pie-labels" id="pie_labels_{hash(title)}"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            setTimeout(function() {{
+                var canvas = document.getElementById('dynamic_chart_{hash(title)}');
+                if (canvas) {{
+                    var chart = new Chart(canvas, {{
+                        type: '{chart_type}',
+                        data: {{
+                            labels: {categories_json},
+                            datasets: {datasets_json}
+                        }},
+                        plugins: [{plugin_config}],
+                        options: {{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {{
+                                title: {{
+                                    display: true,
+                                    text: {title_json},
+                                    color: '#FFFFFF',
+                                    font: {{ size: 14, weight: 'bold' }},
+                                    padding: {{ top: 10, bottom: 50 }}
+                                }},
+                                {tooltip_config}
+                                legend: {{
+                                    display: true,
+                                    position: 'bottom',
+                                    labels: {{
+                                        padding: 20,
+                                        font: {{ size: 12, weight: 'bold' }},
+                                        color: '#FFFFFF',
+                                        boxWidth: 18,
+                                        boxHeight: 18,
+                                        usePointStyle: {str(chart_type in ('pie', 'doughnut')).lower()},
+                                        borderRadius: 4,
+                                        generateLabels: function(chart) {{
+                                            var datasets = chart.data.datasets;
+                                            var chartType = chart.config.type;
+                                            if (chartType === 'bar' || chartType === 'horizontalBar') {{
+                                                return datasets.map((dataset, i) => {{
+                                                    return {{
+                                                        text: dataset.label,
+                                                        fillStyle: dataset.backgroundColor[0],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }} else {{
+                                                var labels = chart.data.labels;
+                                                return labels.map((label, i) => {{
+                                                    return {{
+                                                        text: label,
+                                                        fillStyle: datasets[0].backgroundColor[i],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }}
+                                        }}
+                                    }},
+                                    maxHeight: 200,
+                                    fullSize: true
+                                }}
+                            }},
+                            scales: {{
+                                y: {{
+                                    display: {str(show_scales).lower()},
+                                    beginAtZero: true,
+                                    ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
+                                    grid: {{ color: 'rgba(0,0,0,0.05)' }}
+                                }},
+                                x: {{
+                                    display: {str(show_scales).lower()},
+                                    ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
+                                    grid: {{ display: false }}
+                                }}
+                            }}
+                        }}
+                    }});
+
+                    // Draw leader lines and floating labels after chart renders
+                    setTimeout(function() {{
+                        var chartArea = chart.chartArea;
+                        var centerX = (chartArea.left + chartArea.right) / 2;
+                        var centerY = (chartArea.top + chartArea.bottom) / 2;
+                        var radius = Math.min(chartArea.right - chartArea.left, chartArea.bottom - chartArea.top) / 2;
+                        var labelRadius = radius * 1.3;
+
+                        var svg = document.getElementById('pie_lines_{hash(title)}');
+                        var labelsContainer = document.getElementById('pie_labels_{hash(title)}');
+
+                        var dataset = chart.data.datasets[0];
+                        var total = dataset.data.reduce((a, b) => a + b, 0);
+                        var meta = chart.getDatasetMeta(0);
+
+                        // Store label data for collision detection
+                        var labelData = [];
+                        var usedDataIndices = {{}};
+
+                        // For pie charts, match each metadata element with its corresponding data value
+                        // Chart.js renders pie slices in data array order, so metaIndex = dataIndex
+                        console.log('=== PIE CHART LABEL RENDERING START ===');
+                        console.log('Dataset:', dataset);
+                        console.log('Meta:', meta);
+                        console.log('Metadata elements count:', meta.data.length);
+                        console.log('Data values:', dataset.data);
+                        console.log('Colors:', dataset.backgroundColor);
+
+                        meta.data.forEach(function(element, metaIndex) {{
+                            console.log('--- Processing metadata element', metaIndex);
+
+                            // Chart.js pie slices are in the same order as data array
+                            var dataIndex = metaIndex;
+                            var value = dataset.data[dataIndex];
+
+                            console.log('Data index:', dataIndex, 'value:', value);
+
+                            if (typeof value === 'number' && !isNaN(value) && value > 0) {{
+                                console.log('✓ Valid data, processing...');
+
+                                var percentage = ((value / total) * 100).toFixed(1) + '%';
+                                console.log('Percentage:', percentage);
+
+                                // Get slice color from the dataset background colors
+                                var sliceColor = dataset.backgroundColor[dataIndex] || 'rgba(255, 255, 255, 0.6)';
+                                console.log('Data index:', dataIndex, 'Slice color assigned:', sliceColor, 'from backgroundColor array:', dataset.backgroundColor);
+
+                                // Get slice angle from Chart.js element
+                                var startAngle = element.startAngle;
+                                var endAngle = element.endAngle;
+                                var sliceAngle = (startAngle + endAngle) / 2;
+
+                                // Calculate direction vector from center outward
+                                var cosAngle = Math.cos(sliceAngle);
+                                var sinAngle = Math.sin(sliceAngle);
+
+                                console.log('Angle - start:', (startAngle * 180 / Math.PI).toFixed(1) + '°, end:', (endAngle * 180 / Math.PI).toFixed(1) + '°, mid:', (sliceAngle * 180 / Math.PI).toFixed(1) + '°, cos:', cosAngle.toFixed(3), 'sin:', sinAngle.toFixed(3));
+
+                                // Line start (near edge of pie)
+                                var lineStartRadius = radius * 0.90;
+                                var lineStartX = centerX + lineStartRadius * cosAngle;
+                                var lineStartY = centerY + lineStartRadius * sinAngle;
+
+                                // Line end (far outside pie)
+                                var lineEndRadius = radius * 1.5;
+                                var lineEndX = centerX + lineEndRadius * cosAngle;
+                                var lineEndY = centerY + lineEndRadius * sinAngle;
+
+                                console.log('Label position - X:', lineEndX.toFixed(0), 'Y:', lineEndY.toFixed(0), '(centerX:', centerX.toFixed(0), 'centerY:', centerY.toFixed(0) + ')');
+
+                                // For pie charts, maintain radial alignment while avoiding overlap with title
+                                // Only extend radius if label would overlap title area (top area)
+                                if (lineEndY < chartArea.top + 80) {{
+                                    // Label would overlap title, move it further out along radial line
+                                    var currentDist = Math.sqrt(Math.pow(lineEndX - centerX, 2) + Math.pow(lineEndY - centerY, 2));
+                                    var minY = chartArea.top + 80;
+                                    var newDist = currentDist + 40;  // Extend radius
+                                    lineEndX = centerX + newDist * cosAngle;
+                                    lineEndY = centerY + newDist * sinAngle;
+                                    // If still too high, push it down but maintain angle
+                                    if (lineEndY < minY && Math.abs(sinAngle) > 0.1) {{
+                                        lineEndY = minY;
+                                    }}
+                                }}
+
+                                // Verify line points outward
+                                var startDist = Math.sqrt(Math.pow(lineStartX - centerX, 2) + Math.pow(lineStartY - centerY, 2));
+                                var endDist = Math.sqrt(Math.pow(lineEndX - centerX, 2) + Math.pow(lineEndY - centerY, 2));
+
+                                // If not pointing outward, fix it
+                                if (endDist <= startDist) {{
+                                    lineEndX = centerX + (startDist + 40) * cosAngle;
+                                    lineEndY = centerY + (startDist + 40) * sinAngle;
+                                }}
+
+                                // Store label data for later collision detection
+                                console.log('Pushing label, totalBefore:', labelData.length);
+                                labelData.push({{
+                                    angle: sliceAngle,
+                                    percentage: percentage,
+                                    lineStartX: lineStartX,
+                                    lineStartY: lineStartY,
+                                    lineEndX: lineEndX,
+                                    lineEndY: lineEndY,
+                                    cosAngle: cosAngle,
+                                    sinAngle: sinAngle,
+                                    sliceColor: sliceColor,
+                                    dataIndex: dataIndex,
+                                    centerX: centerX,
+                                    centerY: centerY
+                                }});
+                                console.log('Label pushed. New total:', labelData.length);
+                            }} else {{
+                                console.log('SKIP: Invalid value');
+                            }}
+                        }});
+
+                        console.log('=== AFTER FOREACH: Total labels =', labelData.length);
+
+                        // NO collision detection. Just position labels at fixed distances along radial lines.
+                        // This guarantees correct angle alignment with slices.
+                        var labelDistances = {{
+                            small: radius * 1.3,   // For slices < 10%
+                            medium: radius * 1.5,  // For slices 10-50%
+                            large: radius * 1.2    // For large slices
+                        }};
+
+                        // Draw lines and labels - position based on slice size
+                        labelData.forEach(function(label) {{
+                            // Determine distance based on percentage
+                            var labelDist = labelDistances.medium;
+                            var percentVal = parseFloat(label.percentage);
+                            if (percentVal < 10) labelDist = labelDistances.small;
+                            else if (percentVal > 50) labelDist = labelDistances.large;
+
+                            // Position label at fixed distance along radial line
+                            var labelEndX = label.centerX + labelDist * label.cosAngle;
+                            var labelEndY = label.centerY + labelDist * label.sinAngle;
+
+                            console.log('FINAL position for', label.percentage, '- X:', labelEndX.toFixed(0), 'Y:', labelEndY.toFixed(0), 'angle:', (Math.atan2(labelEndY - label.centerY, labelEndX - label.centerX) * 180 / Math.PI).toFixed(1) + '°');
+
+                            // Draw line in SVG from slice edge to label
+                            var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', label.lineStartX);
+                            line.setAttribute('y1', label.lineStartY);
+                            line.setAttribute('x2', labelEndX);
+                            line.setAttribute('y2', labelEndY);
+                            line.setAttribute('stroke', label.sliceColor);
+                            line.setAttribute('stroke-width', '2');
+                            line.setAttribute('opacity', '0.8');
+                            svg.appendChild(line);
+
+                            // Create label element at final position
+                            var label_elem = document.createElement('div');
+                            label_elem.className = 'pie-label';
+                            label_elem.textContent = label.percentage;
+                            label_elem.style.left = labelEndX + 'px';
+                            label_elem.style.top = labelEndY + 'px';
+                            label_elem.style.backgroundColor = label.sliceColor;
+                            label_elem.style.opacity = '0.9';
+                            labelsContainer.appendChild(label_elem);
+                        }});
+                    }}, 300);
+                }}
+            }}, 100);
+        }});
+    </script>
+</body>
+</html>"""
+        else:
+            html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -633,6 +934,7 @@ class DynamicReportDisplay:
                             labels: {categories_json},
                             datasets: {datasets_json}
                         }},
+                        plugins: [{plugin_config}],
                         options: {{
                             responsive: true,
                             maintainAspectRatio: false,
@@ -642,8 +944,9 @@ class DynamicReportDisplay:
                                     text: {title_json},
                                     color: '#FFFFFF',
                                     font: {{ size: 14, weight: 'bold' }},
-                                    padding: {{ top: 10, bottom: 20 }}
+                                    padding: {{ top: 10, bottom: 50 }}
                                 }},
+                                {tooltip_config}
                                 legend: {{
                                     display: true,
                                     position: 'bottom',
@@ -717,6 +1020,7 @@ class DynamicReportDisplay:
         - Y-axis positioned on the right
         - X-axis categories reversed (right to left)
         - Dataset values reversed to match axis direction
+        - Pie charts show percentages directly on slices
         """
         chart_type = chart_data.get('type', 'bar')
         title = chart_data.get('title', '')
@@ -783,7 +1087,306 @@ class DynamicReportDisplay:
         # Determine if scales should be displayed (not for pie/doughnut charts)
         show_scales = chart_type not in ('pie', 'doughnut')
 
-        html = f"""<!DOCTYPE html>
+        # Build tooltip and plugin configuration for pie/doughnut charts
+        tooltip_config = ""
+        plugin_config = ""
+        if chart_type in ('pie', 'doughnut'):
+            tooltip_config = """
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                padding: 12,
+                                titleFont: { size: 12, weight: 'bold' },
+                                bodyFont: { size: 12 },
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        var value = context.raw;
+                                        return 'القيمة: ' + value.toLocaleString();
+                                    }
+                                }
+                            },"""
+            plugin_config = """
+                            // Empty plugin - percentages are rendered via HTML overlays
+                            {
+                                id: 'piePercentages'
+                            }"""
+
+        # For pie/doughnut charts, use floating labels with lines (RTL)
+        if chart_type in ('pie', 'doughnut'):
+            html = f"""<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .chart-container {{ position: relative; display: flex; justify-content: center; margin: 2rem 0; width: 100%; }}
+        .chart-wrapper {{ position: relative; width: 95%; max-width: 900px; height: 450px; }}
+        #dynamic_chart_{hash(title)} {{ position: relative; }}
+        .pie-labels {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }}
+        .pie-label {{ position: absolute; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; white-space: nowrap; transform: translate(-50%, -50%); text-shadow: 0 0 3px rgba(0, 0, 0, 0.5); }}
+        .pie-lines {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+    </style>
+</head>
+<body style="background: transparent; margin: 0; padding: 0; direction: rtl;">
+    <div class="chart-container">
+        <div class="chart-wrapper">
+            <canvas id="dynamic_chart_{hash(title)}"></canvas>
+            <svg class="pie-lines" id="pie_lines_{hash(title)}"></svg>
+            <div class="pie-labels" id="pie_labels_{hash(title)}"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            setTimeout(function() {{
+                var canvas = document.getElementById('dynamic_chart_{hash(title)}');
+                if (canvas) {{
+                    var chart = new Chart(canvas, {{
+                        type: '{chart_type}',
+                        data: {{
+                            labels: {categories_json},
+                            datasets: {datasets_json}
+                        }},
+                        plugins: [{plugin_config}],
+                        options: {{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {{
+                                title: {{
+                                    display: true,
+                                    text: {title_json},
+                                    color: '#FFFFFF',
+                                    font: {{ size: 14, weight: 'bold' }},
+                                    padding: {{ top: 10, bottom: 50 }}
+                                }},
+                                {tooltip_config}
+                                legend: {{
+                                    display: true,
+                                    position: 'bottom',
+                                    labels: {{
+                                        padding: 20,
+                                        font: {{ size: 12, weight: 'bold' }},
+                                        color: '#FFFFFF',
+                                        boxWidth: 18,
+                                        boxHeight: 18,
+                                        usePointStyle: {str(chart_type in ('pie', 'doughnut')).lower()},
+                                        borderRadius: 4,
+                                        generateLabels: function(chart) {{
+                                            var datasets = chart.data.datasets;
+                                            var chartType = chart.config.type;
+                                            if (chartType === 'bar' || chartType === 'horizontalBar') {{
+                                                return datasets.map((dataset, i) => {{
+                                                    return {{
+                                                        text: dataset.label,
+                                                        fillStyle: dataset.backgroundColor[0],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }} else {{
+                                                var labels = chart.data.labels;
+                                                return labels.map((label, i) => {{
+                                                    return {{
+                                                        text: label,
+                                                        fillStyle: datasets[0].backgroundColor[i],
+                                                        hidden: false,
+                                                        index: i
+                                                    }};
+                                                }});
+                                            }}
+                                        }}
+                                    }},
+                                    maxHeight: 200,
+                                    fullSize: true
+                                }}
+                            }},
+                            scales: {{
+                                y: {{
+                                    display: {str(show_scales).lower()},
+                                    beginAtZero: true,
+                                    position: 'right',
+                                    ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
+                                    grid: {{ color: 'rgba(0,0,0,0.05)' }}
+                                }},
+                                x: {{
+                                    display: {str(show_scales).lower()},
+                                    ticks: {{ color: '#FFFFFF', font: {{ size: 11 }} }},
+                                    grid: {{ display: false }}
+                                }}
+                            }}
+                        }}
+                    }});
+
+                    // Draw leader lines and floating labels after chart renders
+                    setTimeout(function() {{
+                        var chartArea = chart.chartArea;
+                        var centerX = (chartArea.left + chartArea.right) / 2;
+                        var centerY = (chartArea.top + chartArea.bottom) / 2;
+                        var radius = Math.min(chartArea.right - chartArea.left, chartArea.bottom - chartArea.top) / 2;
+                        var labelRadius = radius * 1.3;
+
+                        var svg = document.getElementById('pie_lines_{hash(title)}');
+                        var labelsContainer = document.getElementById('pie_labels_{hash(title)}');
+
+                        var dataset = chart.data.datasets[0];
+                        var total = dataset.data.reduce((a, b) => a + b, 0);
+                        var meta = chart.getDatasetMeta(0);
+
+                        // Store label data for collision detection
+                        var labelData = [];
+                        var usedDataIndices = {{}};
+
+                        // For pie charts, match each metadata element with its corresponding data value
+                        // Chart.js renders pie slices in data array order, so metaIndex = dataIndex
+                        console.log('=== PIE CHART LABEL RENDERING START ===');
+                        console.log('Dataset:', dataset);
+                        console.log('Meta:', meta);
+                        console.log('Metadata elements count:', meta.data.length);
+                        console.log('Data values:', dataset.data);
+                        console.log('Colors:', dataset.backgroundColor);
+
+                        meta.data.forEach(function(element, metaIndex) {{
+                            console.log('--- Processing metadata element', metaIndex);
+
+                            // Chart.js pie slices are in the same order as data array
+                            var dataIndex = metaIndex;
+                            var value = dataset.data[dataIndex];
+
+                            console.log('Data index:', dataIndex, 'value:', value);
+
+                            if (typeof value === 'number' && !isNaN(value) && value > 0) {{
+                                console.log('✓ Valid data, processing...');
+
+                                var percentage = ((value / total) * 100).toFixed(1) + '%';
+                                console.log('Percentage:', percentage);
+
+                                // Get slice color from the dataset background colors
+                                var sliceColor = dataset.backgroundColor[dataIndex] || 'rgba(255, 255, 255, 0.6)';
+                                console.log('Data index:', dataIndex, 'Slice color assigned:', sliceColor, 'from backgroundColor array:', dataset.backgroundColor);
+
+                                // Get slice angle from Chart.js element
+                                var startAngle = element.startAngle;
+                                var endAngle = element.endAngle;
+                                var sliceAngle = (startAngle + endAngle) / 2;
+
+                                // Calculate direction vector from center outward
+                                var cosAngle = Math.cos(sliceAngle);
+                                var sinAngle = Math.sin(sliceAngle);
+
+                                console.log('Angle - start:', (startAngle * 180 / Math.PI).toFixed(1) + '°, end:', (endAngle * 180 / Math.PI).toFixed(1) + '°, mid:', (sliceAngle * 180 / Math.PI).toFixed(1) + '°, cos:', cosAngle.toFixed(3), 'sin:', sinAngle.toFixed(3));
+
+                                // Line start (near edge of pie)
+                                var lineStartRadius = radius * 0.90;
+                                var lineStartX = centerX + lineStartRadius * cosAngle;
+                                var lineStartY = centerY + lineStartRadius * sinAngle;
+
+                                // Line end (far outside pie)
+                                var lineEndRadius = radius * 1.5;
+                                var lineEndX = centerX + lineEndRadius * cosAngle;
+                                var lineEndY = centerY + lineEndRadius * sinAngle;
+
+                                console.log('Label position - X:', lineEndX.toFixed(0), 'Y:', lineEndY.toFixed(0), '(centerX:', centerX.toFixed(0), 'centerY:', centerY.toFixed(0) + ')');
+
+                                // For pie charts, maintain radial alignment while avoiding overlap with title
+                                // Only extend radius if label would overlap title area (top area)
+                                if (lineEndY < chartArea.top + 80) {{
+                                    // Label would overlap title, move it further out along radial line
+                                    var currentDist = Math.sqrt(Math.pow(lineEndX - centerX, 2) + Math.pow(lineEndY - centerY, 2));
+                                    var minY = chartArea.top + 80;
+                                    var newDist = currentDist + 40;  // Extend radius
+                                    lineEndX = centerX + newDist * cosAngle;
+                                    lineEndY = centerY + newDist * sinAngle;
+                                    // If still too high, push it down but maintain angle
+                                    if (lineEndY < minY && Math.abs(sinAngle) > 0.1) {{
+                                        lineEndY = minY;
+                                    }}
+                                }}
+
+                                // Verify line points outward
+                                var startDist = Math.sqrt(Math.pow(lineStartX - centerX, 2) + Math.pow(lineStartY - centerY, 2));
+                                var endDist = Math.sqrt(Math.pow(lineEndX - centerX, 2) + Math.pow(lineEndY - centerY, 2));
+
+                                // If not pointing outward, fix it
+                                if (endDist <= startDist) {{
+                                    lineEndX = centerX + (startDist + 40) * cosAngle;
+                                    lineEndY = centerY + (startDist + 40) * sinAngle;
+                                }}
+
+                                // Store label data for later collision detection
+                                console.log('Pushing label, totalBefore:', labelData.length);
+                                labelData.push({{
+                                    angle: sliceAngle,
+                                    percentage: percentage,
+                                    lineStartX: lineStartX,
+                                    lineStartY: lineStartY,
+                                    lineEndX: lineEndX,
+                                    lineEndY: lineEndY,
+                                    cosAngle: cosAngle,
+                                    sinAngle: sinAngle,
+                                    sliceColor: sliceColor,
+                                    dataIndex: dataIndex,
+                                    centerX: centerX,
+                                    centerY: centerY
+                                }});
+                                console.log('Label pushed. New total:', labelData.length);
+                            }} else {{
+                                console.log('SKIP: Invalid value');
+                            }}
+                        }});
+
+                        console.log('=== AFTER FOREACH: Total labels =', labelData.length);
+
+                        // NO collision detection. Just position labels at fixed distances along radial lines.
+                        // This guarantees correct angle alignment with slices.
+                        var labelDistances = {{
+                            small: radius * 1.3,   // For slices < 10%
+                            medium: radius * 1.5,  // For slices 10-50%
+                            large: radius * 1.2    // For large slices
+                        }};
+
+                        // Draw lines and labels - position based on slice size
+                        labelData.forEach(function(label) {{
+                            // Determine distance based on percentage
+                            var labelDist = labelDistances.medium;
+                            var percentVal = parseFloat(label.percentage);
+                            if (percentVal < 10) labelDist = labelDistances.small;
+                            else if (percentVal > 50) labelDist = labelDistances.large;
+
+                            // Position label at fixed distance along radial line
+                            var labelEndX = label.centerX + labelDist * label.cosAngle;
+                            var labelEndY = label.centerY + labelDist * label.sinAngle;
+
+                            console.log('FINAL position for', label.percentage, '- X:', labelEndX.toFixed(0), 'Y:', labelEndY.toFixed(0), 'angle:', (Math.atan2(labelEndY - label.centerY, labelEndX - label.centerX) * 180 / Math.PI).toFixed(1) + '°');
+
+                            // Draw line in SVG from slice edge to label
+                            var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', label.lineStartX);
+                            line.setAttribute('y1', label.lineStartY);
+                            line.setAttribute('x2', labelEndX);
+                            line.setAttribute('y2', labelEndY);
+                            line.setAttribute('stroke', label.sliceColor);
+                            line.setAttribute('stroke-width', '2');
+                            line.setAttribute('opacity', '0.8');
+                            svg.appendChild(line);
+
+                            // Create label element at final position
+                            var label_elem = document.createElement('div');
+                            label_elem.className = 'pie-label';
+                            label_elem.textContent = label.percentage;
+                            label_elem.style.left = labelEndX + 'px';
+                            label_elem.style.top = labelEndY + 'px';
+                            label_elem.style.backgroundColor = label.sliceColor;
+                            label_elem.style.opacity = '0.9';
+                            labelsContainer.appendChild(label_elem);
+                        }});
+                    }}, 300);
+                }}
+            }}, 100);
+        }});
+    </script>
+</body>
+</html>"""
+        else:
+            html = f"""<!DOCTYPE html>
 <html dir="rtl">
 <head>
     <meta charset="utf-8">
@@ -806,6 +1409,7 @@ class DynamicReportDisplay:
                             labels: {categories_json},
                             datasets: {datasets_json}
                         }},
+                        plugins: [{plugin_config}],
                         options: {{
                             responsive: true,
                             maintainAspectRatio: false,
@@ -815,8 +1419,9 @@ class DynamicReportDisplay:
                                     text: {title_json},
                                     color: '#FFFFFF',
                                     font: {{ size: 14, weight: 'bold' }},
-                                    padding: {{ top: 10, bottom: 20 }}
+                                    padding: {{ top: 10, bottom: 50 }}
                                 }},
+                                {tooltip_config}
                                 legend: {{
                                     display: true,
                                     position: 'bottom',
