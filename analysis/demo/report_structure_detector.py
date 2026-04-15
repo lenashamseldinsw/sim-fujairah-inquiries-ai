@@ -177,10 +177,14 @@ class ReportStructureDetector:
             pStyle = pPr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pStyle')
             if pStyle is not None:
                 style_val = pStyle.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val', '')
-                if 'Heading 1' in style_val:
-                    return 'main'
-                elif 'Heading 2' in style_val or 'Heading 3' in style_val:
-                    return 'sub'
+                # Handle both "Heading 1"/"Heading1" and "Heading 2"/"Heading2" formats
+                if 'Heading' in style_val:
+                    # Remove spaces for comparison (Heading 1 vs Heading1)
+                    normalized = style_val.replace(' ', '')
+                    if 'Heading1' in normalized:
+                        return 'main'
+                    else:
+                        return 'sub'
 
         # Pattern matching
         import re
@@ -955,9 +959,11 @@ class ReportStructureDetector:
 
         # PRIMARY METHOD: Check Word heading styles (most reliable)
         if para.style and 'Heading' in para.style.name:
-            if 'Heading 1' in para.style.name:
+            # Remove spaces for comparison (handles both "Heading 1" and "Heading1")
+            normalized = para.style.name.replace(' ', '')
+            if 'Heading1' in normalized:
                 return 'main'
-            elif 'Heading 2' in para.style.name or 'Heading 3' in para.style.name:
+            elif 'Heading' in normalized:
                 return 'sub'
 
         # FALLBACK: Check for main section patterns (Arabic ordinals with colon)
