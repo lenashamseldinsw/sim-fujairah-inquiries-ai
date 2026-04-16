@@ -3,8 +3,8 @@
 import time
 from typing import Dict, Any
 from pathlib import Path
-from analysis.shared.base import Analyzer
-from analysis.demo.adaptive_extractor import AdaptiveReportExtractor
+from .base import Analyzer
+from .adaptive_extractor import AdaptiveReportExtractor
 
 
 class DemoAnalyzer(Analyzer):
@@ -83,15 +83,18 @@ class DemoAnalyzer(Analyzer):
         except:
             flow_type = 'inquiries'
 
+        # Get the parent directory (app folder) containing this module
+        app_dir = Path(__file__).parent.parent
+
         # Select output folder and cache directory based on flow type
         if flow_type == 'complaints':
-            outputs_dir = Path("complaints-output").resolve()
+            outputs_dir = app_dir / "complaints-output"
             search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints
-            cache_dir = "complaints-output/cache"
+            cache_dir = str(app_dir / "complaints-output" / "cache")
         else:
-            outputs_dir = Path("inquiries-output").resolve()
+            outputs_dir = app_dir / "inquiries-output"
             search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries
-            cache_dir = "inquiries-output/cache"
+            cache_dir = str(app_dir / "inquiries-output" / "cache")
 
         # Find the report file
         docx_files = [f for f in outputs_dir.glob("*.docx") if not f.name.startswith("~$")]

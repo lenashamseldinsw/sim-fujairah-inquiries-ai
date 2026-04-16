@@ -5,7 +5,7 @@ It will be developed on the 'real' branch while the 'main' branch remains demo-o
 """
 
 from typing import Dict, Any
-from analysis.shared.base import Analyzer
+from .base import Analyzer
 
 
 class RealAnalyzer(Analyzer):

@@ -1,11 +1,13 @@
-"""Dynamic report display that adapts to any report structure."""
+"""Dynamic report display that adapts to any report structure.
+
+Note: The real version uses AI-based analysis instead of extraction,
+so this display component works with analyzed data structures directly.
+"""
 
 import streamlit as st
 import json
 from pathlib import Path
-from typing import Dict, Any, List
-
-from analysis.demo.adaptive_extractor import AdaptiveReportExtractor
+from typing import Dict, Any, List, Optional
 
 
 # Neutral color palette: Gold/Bronze, Medium Gray, Dark Green, and additional grays
@@ -238,10 +240,11 @@ class DynamicReportDisplay:
 
         Args:
             lang: Language preference ('ar' or 'en')
-            cache_dir: Cache directory for report extraction (default: inquiries-output/cache)
+            cache_dir: Not used in real version (AI provides analysis directly)
         """
         self.lang = lang
-        self.extractor = AdaptiveReportExtractor(cache_dir=cache_dir)
+        # Real version uses AI-based analysis, not extraction
+        self.extractor = None
 
     def _get_colors_for_chart(self, chart_type: str, num_items: int, provided_colors: list = None, num_series: int = None) -> list:
         """
@@ -299,6 +302,15 @@ class DynamicReportDisplay:
                 f"❌ لم يتم العثور على ملف التقرير: {docx_path}"
                 if self.lang == 'ar'
                 else f"❌ Report file not found: {docx_path}"
+            )
+            return
+
+        # Real version uses AI analysis instead of extraction
+        if self.extractor is None:
+            st.error(
+                "❌ لم يتم تطبيق عرض التقارير للإصدار الحقيقي بعد."
+                if self.lang == 'ar'
+                else "❌ Report display not yet implemented for real analyzer. Implementation in progress..."
             )
             return
 
@@ -1232,12 +1244,15 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries'):
         lang: Language preference ('ar' or 'en')
         flow_type: Type of flow ('inquiries' or 'complaints')
     """
+    # Get the parent directory (app folder) containing this module
+    app_dir = Path(__file__).parent.parent
+
     if flow_type == 'complaints':
-        report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين .docx")
-        cache_dir = "complaints-output/cache"
+        report_path = app_dir / "complaints-output" / "تقرير تحليل شكاوى المتعاملين .docx"
+        cache_dir = str(app_dir / "complaints-output" / "cache")
     else:
-        report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين.docx")
-        cache_dir = "inquiries-output/cache"
+        report_path = app_dir / "inquiries-output" / "تقرير تحليل استفسارات المتعاملين.docx"
+        cache_dir = str(app_dir / "inquiries-output" / "cache")
 
     display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
     display.display_report(str(report_path))

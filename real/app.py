@@ -4,15 +4,14 @@ import os
 import json
 import random
 from pathlib import Path
-from report_display import display_report_tabs
-from analysis import DemoAnalyzer, RealAnalyzer
+from analysis import RealAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
 import zipfile
 import io
 
 # Load environment variables
 load_dotenv()
-APP_MODE = os.getenv('APP_MODE', 'demo').lower()
+APP_MODE = os.getenv('APP_MODE', 'real').lower()
 
 # Page configuration - must be first Streamlit command
 st.set_page_config(
@@ -1433,6 +1432,7 @@ def init_session_state():
         'authenticated': False,
         'show_login': False,
         'pending_page': None,
+        'current_user_center': None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1445,46 +1445,63 @@ def load_credentials():
     try:
         if hasattr(st, 'secrets') and 'users' in st.secrets:
             users = []
+            # Load admin user
             if 'admin_username' in st.secrets.users:
                 users.append({
                     "username": st.secrets.users.admin_username,
-                    "password": st.secrets.users.admin_password
+                    "password": st.secrets.users.admin_password,
+                    "center": st.secrets.users.get('admin_center', 'مركز الإدارة المركزية')
                 })
+            # Load demo user
             if 'demo_username' in st.secrets.users:
                 users.append({
                     "username": st.secrets.users.demo_username,
-                    "password": st.secrets.users.demo_password
+                    "password": st.secrets.users.demo_password,
+                    "center": st.secrets.users.get('demo_center', 'مركز التجريب والعروض التوضيحية')
                 })
+            # Load fujairah-user
             if 'fujairah_username' in st.secrets.users:
                 users.append({
                     "username": st.secrets.users.fujairah_username,
-                    "password": st.secrets.users.fujairah_password
+                    "password": st.secrets.users.fujairah_password,
+                    "center": st.secrets.users.get('fujairah_center', 'مركز الفجيرة الرئيسي')
                 })
+            # Load Fujairah Police Center users
+            user_configs = [
+                ('myaalali_email', 'myaalali_password', 'myaalali_center'),
+                ('umahmed_email', 'umahmed_password', 'umahmed_center'),
+                ('kh17878_email', 'kh17878_password', 'kh17878_center'),
+                ('meznar_email', 'meznar_password', 'meznar_center'),
+                ('alkendi_email', 'alkendi_password', 'alkendi_center'),
+                ('alhyah_email', 'alhyah_password', 'alhyah_center'),
+                ('shaheen_email', 'shaheen_password', 'shaheen_center'),
+                ('fatima_email', 'fatima_password', 'fatima_center'),
+            ]
+            for email_key, password_key, center_key in user_configs:
+                if email_key in st.secrets.users and password_key in st.secrets.users:
+                    users.append({
+                        "username": st.secrets.users[email_key],
+                        "password": st.secrets.users[password_key],
+                        "center": st.secrets.users.get(center_key, "Unknown Center")
+                    })
             return {"users": users}
     except Exception:
         pass
-    
-    # Fallback to local credentials.json for local development
-    creds_path = Path("credentials.json")
-    if creds_path.exists():
-        with open(creds_path, 'r') as f:
-            return json.load(f)
+
+    # No local fallback - credentials must be in Streamlit secrets
     return {"users": []}
 
 def verify_credentials(username, password):
     creds = load_credentials()
     for user in creds.get("users", []):
         if user["username"] == username and user["password"] == password:
-            return True
-    return False
+            return user  # Return the full user object with center name
+    return None
 
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
 def get_analyzer():
-    """Get the appropriate analyzer based on APP_MODE environment variable."""
-    if APP_MODE == 'real':
-        return RealAnalyzer()
-    else:
-        return DemoAnalyzer()
+    """Get the real analyzer."""
+    return RealAnalyzer()
 
 ANALYZER = get_analyzer()
 
@@ -1495,6 +1512,58 @@ def validate_file(uploaded_file, lang='ar'):
     if not is_valid:
         return False, error_msg or tx['err_bad_type']
     return True, ""
+
+
+# ── Display Report ─────────────────────────────────────────────────────────────
+def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries'):
+    """Display report tabs dynamically based on detected structure.
+
+    Args:
+        lang: Language preference ('ar' or 'en')
+        flow_type: 'inquiries' or 'complaints' - determines which output folder to use
+    """
+    try:
+        # Get the script directory (where app.py is located)
+        script_dir = Path(__file__).parent
+
+        # Determine output folder and search keywords based on flow type
+        if flow_type == 'complaints':
+            outputs_path = script_dir / "complaints-output"
+            search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints
+            cache_dir = str(script_dir / "complaints-output" / "cache")
+        else:  # default to inquiries
+            outputs_path = script_dir / "inquiries-output"
+            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries
+            cache_dir = str(script_dir / "inquiries-output" / "cache")
+
+        if not outputs_path.exists():
+            st.error(f"❌ {outputs_path.name} folder not found at {outputs_path}")
+            return
+
+        # Find all .docx files (excluding temp files starting with ~$)
+        docx_files = [f for f in outputs_path.glob("*.docx") if not f.name.startswith("~$")]
+
+        if not docx_files:
+            st.error(f"❌ No .docx files found in {outputs_path.name}/")
+            return
+
+        # Try to find the report file with the appropriate keywords
+        report_path = None
+        for docx_file in docx_files:
+            if all(keyword in docx_file.name for keyword in search_keywords):
+                report_path = docx_file
+                break
+
+        if report_path is None:
+            st.error(f"❌ Report file not found. Files: {', '.join([f.name for f in docx_files])}")
+            return
+
+        display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
+        display.display_report(str(report_path))
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
@@ -1766,10 +1835,12 @@ def show_login_modal(lang):
             
             if submit:
                 if username and password:
-                    if verify_credentials(username, password):
+                    user = verify_credentials(username, password)
+                    if user:
                         st.session_state.authenticated = True
                         st.session_state.show_login = False
                         st.session_state.login_error = False
+                        st.session_state.current_user_center = user.get("center", "")
                         if st.session_state.pending_page:
                             st.session_state.page = st.session_state.pending_page
                             st.session_state.pending_page = None
@@ -2239,10 +2310,10 @@ def main():
             """,
             unsafe_allow_html=True
         )
-        
+
         # Wrap toggle in a div to force LTR
         st.markdown('<div style="direction: ltr; display: flex; justify-content: center;">', unsafe_allow_html=True)
-        
+
         # Toggle switch for language
         is_arabic = st.toggle(
             "عربي" if lang == "ar" else "Arabic",
@@ -2250,9 +2321,24 @@ def main():
             key="lang_toggle",
             help="Toggle to switch between English and Arabic"
         )
-        
+
         st.markdown('</div>', unsafe_allow_html=True)
-        
+
+        # Display user's center name if authenticated
+        if st.session_state.authenticated and st.session_state.current_user_center:
+            st.markdown(
+                f"""
+                <div style='
+                    font-size: 0.7rem;
+                    color: #B68A35;
+                    text-align: center;
+                    margin-top: 0.4rem;
+                    font-weight: 500;
+                '>{st.session_state.current_user_center}</div>
+                """,
+                unsafe_allow_html=True
+            )
+
         new_lang_code = "ar" if is_arabic else "en"
         if new_lang_code != st.session_state.get("language", "en"):
             st.session_state.language = new_lang_code

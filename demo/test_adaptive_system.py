@@ -11,25 +11,25 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-import glob
 
-# Add project root to path
+# Add parent directory to path (to run from demo folder)
 sys.path.insert(0, str(Path(__file__).parent))
 
-from analysis.adaptive_extractor import AdaptiveReportExtractor
-from analysis.report_structure_detector import ReportStructureDetector
+from analysis import AdaptiveReportExtractor, ReportStructureDetector
 
 
 def find_default_report():
     """Find the default report in inquiries-output directory."""
-    docx_files = glob.glob('inquiries-output/*.docx')
+    script_dir = Path(__file__).parent
+    output_dir = script_dir / "inquiries-output"
+    docx_files = list(output_dir.glob('*.docx'))
     # Filter out temp files (starting with ~$)
-    docx_files = [f for f in docx_files if not f.split('/')[-1].startswith('~$')]
-    
+    docx_files = [f for f in docx_files if not f.name.startswith('~$')]
+
     if not docx_files:
         print("❌ No .docx files found in outputs directory")
         return None
-    return docx_files[0]
+    return str(docx_files[0])
 
 
 def test_extraction(report_path: str, force_refresh: bool = False):

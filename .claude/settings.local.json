@@ -37,7 +37,11 @@
       "Bash(pkill -f \"streamlit run app.py\")",
       "Bash(python /tmp/demo_placement.py)",
       "Bash(ls -la inquiries-output/*.docx)",
-      "Bash(python3 -c ':*)"
+      "Bash(python3 -c ':*)",
+      "Bash(python3 -c \"from analysis import RealAnalyzer, DynamicReportDisplay; print\\('✓ Real imports work'\\)\")",
+      "Bash(python3 -c \"from analysis import DemoAnalyzer, DynamicReportDisplay, AdaptiveReportExtractor; print\\('✓ Demo imports work'\\); print\\('✓ Can import all demo components'\\)\")",
+      "Bash(python -m py_compile /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/demo/app.py)",
+      "Bash(python -m py_compile analysis/dynamic_display.py analysis/report_structure_detector.py analysis/adaptive_extractor.py)"
     ],
     "additionalDirectories": [
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/outputs",

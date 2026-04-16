@@ -5,8 +5,8 @@ help:
 	@echo "Fujairah Pulse - AI Analysis Platform"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  make demo      - Run the demo version with simulated outputs (main branch)"
-	@echo "  make real      - Run the real version with agentic AI (real branch)"
+	@echo "  make demo      - Run the demo version with simulated outputs"
+	@echo "  make real      - Run the real version with agentic AI (in development)"
 	@echo "  make install   - Install dependencies from requirements.txt"
 	@echo "  make clean     - Clean up cache and temporary files"
 	@echo ""
@@ -17,17 +17,16 @@ help:
 install:
 	pip install -r requirements.txt
 
-# Run demo version (main branch)
+# Run demo version
 demo:
 	@echo "Starting Fujairah Pulse in DEMO mode..."
-	cp .env.demo .env
-	streamlit run app.py
+	cd demo && streamlit run app.py --logger.level=warning
 
-# Run real version (real branch)
+# Run real version (development)
 real:
 	@echo "Starting Fujairah Pulse in REAL mode..."
-	cp .env.real .env
-	streamlit run app.py
+	@echo "Note: Real analyzer is still in development."
+	cd real && streamlit run app.py --logger.level=warning
 
 # Clean up
 clean:

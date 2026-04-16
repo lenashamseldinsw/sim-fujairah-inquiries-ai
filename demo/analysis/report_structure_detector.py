@@ -124,7 +124,12 @@ class ReportStructureDetector:
         return headings
 
     def _classify_heading_from_text(self, text: str, element) -> str:
-        """Classify heading from text and element style."""
+        """
+        Classify heading from text and element style.
+
+        Detects main sections and subsections while avoiding false positives from
+        regular content paragraphs.
+        """
         if not text:
             return None
 
@@ -139,22 +144,27 @@ class ReportStructureDetector:
             ('خلال' in text and ('ساعة' in text or 'أيام' in text or 'يوم' in text))):
             return None
 
+        # Question paragraphs (starting with لماذا, هل, ما, etc.) are content, not headings
+        if any(text.startswith(q) for q in ['لماذا', 'هل', 'ما ', 'من ', 'أين ', 'متى ', 'كيف ']):
+            return None
+
         # Check for bold ending FIRST (before length checks that would discard long paragraphs)
         # This allows us to detect hidden headings at the end of long paragraphs
         bold_ending = self._extract_bold_ending(element)
         if bold_ending:
             # Debug: log what we found
-            if 'حل الشكاوى' in bold_ending:
+            if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
                 print(f"  🔍 DEBUG: Found potential heading: '{bold_ending}' (len={len(bold_ending)}, ends_with_period={bold_ending.endswith('.')})")
 
             if len(bold_ending) < 100:
                 # Bold ending is short - check if it looks like a heading (not a sentence)
                 if not bold_ending.endswith('.'):
-                    if 'حل الشكاوى' in bold_ending:
+                    if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
                         print(f"  ✓ DEBUG: Classified as heading!")
                     return 'sub'
 
         # Now check full text (reject if too long for standard headings)
+        # Question paragraphs and explanation text are usually longer
         if len(text) > 300:
             return None
 
@@ -188,11 +198,31 @@ class ReportStructureDetector:
 
         # Pattern matching
         import re
+        # Arabic ordinals at start with colon (main sections)
         if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً):', text):
             return 'main'
 
+        # Also check for ordinals WITHOUT colon (style variation)
+        if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً)\s', text):
+            return 'main'
+
+        # Numbered subsections: "X.Y " format (must have space after)
         if re.search(r'^\d+\.\d+\s', text):
             return 'sub'
+
+        # Also catch "X.Y:" format (colon instead of space)
+        if re.search(r'^\d+\.\d+:', text):
+            return 'sub'
+
+        # Catch "X. " format for numbered sections (like "1. ", "2. ", etc. for first-level items)
+        # But be careful not to catch paragraphs that happen to start with numbers
+        # Only if the number is 1-10 (typical for main section numbers) and followed by space/colon
+        if re.search(r'^[1-9]\.\s+[A-Z\u0600-\u06FF]', text) or re.search(r'^[1-9]:\s+[A-Z\u0600-\u06FF]', text):
+            return 'sub'
+
+        # Check for Arabic section marker patterns (e.g., "الجزء الخامس:", "الفصل 5:")
+        if re.search(r'^(الجزء|الفصل|الباب|القسم)\s+(أول|ثاني|ثالث|رابع|خامس|سادس|سابع|ثامن|تاسع|عاشر|\d+)[:\s]', text):
+            return 'main'
 
         return None
 
@@ -317,16 +347,46 @@ class ReportStructureDetector:
 
         Main sections contain their subsections, matched by section number.
         Removes duplicate main sections (e.g., from table of contents).
+        Automatically skips cover page and table of contents before first main section.
 
         Returns:
             List of main sections with nested subsections
         """
+        if not headings:
+            return []
+
+        # Find the position of the first "real" main section (skip TOC)
+        # Real main sections start with "أولاً:" or similar Arabic ordinals
+        first_real_main_pos = None
+        for i, heading in enumerate(headings):
+            if heading['type'] == 'main':
+                # Check if it matches the main section pattern (Arabic ordinal with colon)
+                import re
+                if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً):', heading['title_ar']):
+                    first_real_main_pos = i
+                    break
+
+        # If no real main section found, use first heading
+        if first_real_main_pos is None:
+            first_real_main_pos = 0
+
+        # Filter out cover page / TOC - everything before first real main section
+        filtered_headings = headings[first_real_main_pos:]
+
+        # Also store the position where main content starts (for skipping cover/TOC in content extraction)
+        if filtered_headings:
+            self._main_content_start_pos = filtered_headings[0]['position']
+            if first_real_main_pos > 0:
+                print(f"\n  🔖 Skipping cover/TOC: {first_real_main_pos} headings before first main section")
+        else:
+            self._main_content_start_pos = 0
+
         # First, collect all main sections and subsections separately
         main_sections_by_title = {}
         main_sections_order = []
         subsections = []
 
-        for heading in headings:
+        for heading in filtered_headings:
             if heading['type'] == 'main':
                 title_key = heading['title_ar'].strip()
 
@@ -441,81 +501,128 @@ class ReportStructureDetector:
 
     def _extract_content_for_hierarchy(self, main_sections: List[Dict]) -> None:
         """
-        Extract content for main sections and subsections.
+        Extract content for main sections and subsections using dynamic proximity-based assignment.
 
-        Content is text between heading and next heading, using consistent element body coordinates.
-        All text (including text before tables) is consolidated and placed in the correct section.
-
-        Special handling: if a paragraph ends with bold text that looks like a heading,
-        that bold part is treated as a heading, not content.
+        Each paragraph is assigned to the closest preceding section (main or subsection).
+        This handles edge cases and orphaned content automatically without position ranges.
         """
         # Create a mapping of element body positions to paragraphs
-        # This ensures we extract content using the same coordinate system as positions
         element_pos_to_para = {}
+        all_para_positions = []  # All paragraph positions in order
         element_position = 0
 
         for element in self.doc.element.body:
             if element.tag.endswith('p'):
-                # Store which paragraph object is at this element position
+                # Store paragraph element and track its position
                 element_pos_to_para[element_position] = element
+                all_para_positions.append(element_position)
             element_position += 1
 
-        # Create a flat list of all section positions
-        all_positions = []
+        # Build a position map: position -> (section, is_main)
+        # This maps each section's position to the section object
+        position_to_section = {}
+        section_positions = []  # Sorted list of section positions
 
         for main_sec in main_sections:
-            all_positions.append((main_sec['position'], main_sec))
+            pos = main_sec['position']
+            position_to_section[pos] = (main_sec, True)  # is_main=True
+            section_positions.append(pos)
+
             for subsec in main_sec['subsections']:
-                all_positions.append((subsec['position'], subsec))
+                pos = subsec['position']
+                position_to_section[pos] = (subsec, False)  # is_main=False
+                section_positions.append(pos)
 
-        # Sort by position
-        all_positions.sort(key=lambda x: x[0])
+        # Sort section positions
+        section_positions.sort()
 
-        # Extract content between element body positions
-        for i, (pos, section) in enumerate(all_positions):
-            start_pos = pos + 1
-            end_pos = all_positions[i + 1][0] if i + 1 < len(all_positions) else element_position
+        # Initialize content for all sections
+        for main_sec in main_sections:
+            main_sec['content'] = ''
+            for subsec in main_sec['subsections']:
+                subsec['content'] = ''
 
-            content_paras = []
+        # Get main content start position (for skipping cover/TOC)
+        main_content_start = getattr(self, '_main_content_start_pos', 0)
 
-            # Iterate through element body positions between start and end
-            for elem_pos in range(start_pos, end_pos):
-                if elem_pos in element_pos_to_para:
-                    # Get the paragraph element at this position
-                    para_element = element_pos_to_para[elem_pos]
+        # Process each paragraph and assign to closest preceding section
+        for para_pos in all_para_positions:
+            # Skip paragraphs before main content (cover page, TOC)
+            if para_pos < main_content_start:
+                continue
 
-                    # Get text from element
-                    text_elems = para_element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
-                    full_text = ''.join([t.text for t in text_elems if t.text]).strip()
+            if para_pos not in element_pos_to_para:
+                continue
 
-                    # Include if non-empty and not a heading
-                    if full_text:
-                        # Quick check: not a heading if doesn't match heading patterns
-                        is_heading = self._classify_heading_from_text(full_text, para_element)
-                        if not is_heading:
-                            # Bullet points (starting with arrow/dash) should ALWAYS include full text
-                            # Don't strip bold text from them
-                            if full_text.startswith('←') or full_text.startswith('-') or full_text.startswith('•'):
-                                content_paras.append(full_text)
-                            else:
-                                # For regular paragraphs, check if they end with bold text (potential hidden heading)
-                                text_without_bold_ending = self._extract_non_bold_prefix(para_element)
+            para_element = element_pos_to_para[para_pos]
 
-                                if text_without_bold_ending and len(text_without_bold_ending) < len(full_text):
-                                    # Paragraph contains bold ending - only include non-bold part as content
-                                    if text_without_bold_ending.strip():
-                                        content_paras.append(text_without_bold_ending.strip())
-                                else:
-                                    # No bold ending, include full text
-                                    content_paras.append(full_text)
+            # Get text from paragraph
+            text_elems = para_element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
+            full_text = ''.join([t.text for t in text_elems if t.text]).strip()
 
-            section['content'] = '\n'.join(content_paras)
+            if not full_text:
+                continue  # Skip empty paragraphs
 
-            # Debug: Log content extraction
-            if 'ثامناً' in section.get('title_ar', '') or section.get('title_ar', '').startswith('8'):
-                print(f"  📝 Section '{section.get('title_ar', 'Unknown')}': extracted {len(content_paras)} paragraphs, {len(section['content'])} chars")
-                if not content_paras:
-                    print(f"     ⚠️  WARNING: No content found for section! Position range: {start_pos}-{end_pos}")
+            # Check if this paragraph is itself a heading (shouldn't be assigned as content)
+            is_heading = self._classify_heading_from_text(full_text, para_element)
+            if is_heading:
+                continue  # Skip headings
+
+            # Find the closest preceding section
+            closest_section_pos = None
+            for sec_pos in section_positions:
+                if sec_pos < para_pos:
+                    closest_section_pos = sec_pos
+                else:
+                    break  # Stop at first section at or after this paragraph
+
+            if closest_section_pos is None:
+                # No section before this paragraph, assign to first section
+                if main_sections:
+                    closest_section_pos = main_sections[0]['position']
+                else:
+                    continue  # No sections at all, skip
+
+            # Get the section object
+            section, is_main = position_to_section[closest_section_pos]
+
+            # Process paragraph content
+            para_content = self._process_paragraph_content(full_text, para_element)
+
+            if para_content:
+                # Append to section's content
+                if section['content']:
+                    section['content'] += '\n' + para_content
+                else:
+                    section['content'] = para_content
+
+    def _process_paragraph_content(self, full_text: str, para_element) -> str:
+        """
+        Process paragraph content, handling bullet points and bold text appropriately.
+
+        Returns the content to include in section (may strip bold endings that look like headings).
+        """
+        # Bullet points should always include full text
+        if full_text.startswith('←') or full_text.startswith('-') or full_text.startswith('•'):
+            return full_text
+
+        # For regular paragraphs, check if they end with bold text that might be a heading
+        text_without_bold_ending = self._extract_non_bold_prefix(para_element)
+
+        if text_without_bold_ending and len(text_without_bold_ending) < len(full_text):
+            # Paragraph contains bold ending
+            bold_ending = self._extract_bold_ending(para_element)
+
+            # If bold ending is short and doesn't end with period, it might be a heading for next section
+            if bold_ending and len(bold_ending) < 100 and not bold_ending.endswith('.'):
+                # Only include non-bold part
+                return text_without_bold_ending.strip() if text_without_bold_ending.strip() else ""
+            else:
+                # Bold ending is not a heading, include full text
+                return full_text
+        else:
+            # No bold ending, include full text
+            return full_text
 
     def _detect_tables(self) -> List[Dict[str, Any]]:
         """
@@ -523,6 +630,7 @@ class ReportStructureDetector:
 
         Dynamically detects table captions by looking at text immediately preceding each table.
         Captions are descriptive text (not section headings) that appear right before a table.
+        Automatically skips tables that appear before main content (cover/TOC pages).
 
         Returns:
             List of table metadata with position, data, and optional captions
@@ -532,6 +640,11 @@ class ReportStructureDetector:
         for table_idx, table in enumerate(self.doc.tables):
             # Find table position by looking at surrounding elements
             table_position = self._find_table_position(table, table_idx)
+
+            # Skip tables before main content starts (cover page, TOC)
+            if hasattr(self, '_main_content_start_pos') and table_position < self._main_content_start_pos:
+                print(f"  📋 Table {table_idx} at position {table_position} SKIPPED (before main content)")
+                continue
 
             # Extract table data
             table_data = self._extract_table_data(table)
@@ -694,6 +807,8 @@ class ReportStructureDetector:
         Handles multiple charts in the same paragraph by counting all inline
         and anchored shapes.
 
+        Automatically skips charts that appear before main content (cover/TOC pages).
+
         Returns:
             List of chart positions with proper positioning
         """
@@ -716,6 +831,12 @@ class ReportStructureDetector:
 
             # Record a position for EACH visual element found
             for i in range(visual_count):
+                # Skip charts before main content starts (cover page, TOC)
+                if hasattr(self, '_main_content_start_pos') and element_position < self._main_content_start_pos:
+                    print(f"  📊 Chart {chart_count} at position {element_position} SKIPPED (before main content)")
+                    chart_count += 1
+                    continue
+
                 chart_positions.append({
                     'position': element_position,  # Position of this element
                     'index': chart_count,
@@ -816,100 +937,58 @@ class ReportStructureDetector:
         charts: List[Dict]
     ) -> None:
         """
-        Assign tables and charts to sections/subsections using multi-strategy approach.
+        Assign tables and charts to sections/subsections using proximity-based assignment.
 
-        Strategy:
-        1. Find the section that starts BEFORE the element
-        2. Check if there's another section that starts AFTER the element
-        3. Prefer the section that comes immediately before the element
-        4. For boundary cases, use context distance: prefer sections that are closer
-
-        This handles edge cases where elements are between section headings.
+        Each element (table/chart) is assigned to the closest preceding section (main or subsection).
+        No complex scoring — just find what comes immediately before.
         """
         if not main_sections:
             return
 
-        # Build a flat list of all section/subsection positions for proximity matching
-        position_map = []
+        # Build sorted list of all section positions
+        section_positions = []
+        position_to_section = {}
 
         for main_sec in main_sections:
-            position_map.append({
-                'position': main_sec['position'],
-                'section': main_sec,
-                'is_main': True,
-                'title': main_sec['title_ar']
-            })
+            pos = main_sec['position']
+            section_positions.append(pos)
+            position_to_section[pos] = (main_sec, True)  # (section, is_main)
 
             for subsec in main_sec['subsections']:
-                position_map.append({
-                    'position': subsec['position'],
-                    'section': subsec,
-                    'is_main': False,
-                    'parent': main_sec,
-                    'title': subsec['title_ar']
-                })
+                pos = subsec['position']
+                section_positions.append(pos)
+                position_to_section[pos] = (subsec, False)
 
-        # Sort by position
-        position_map.sort(key=lambda x: x['position'])
+        section_positions.sort()
 
-        # Helper function to find best section for an element
-        def find_best_section(element_pos):
-            """Find the best section for an element using multi-strategy approach."""
-            candidates = []
+        def find_closest_preceding_section(element_pos):
+            """Find the section closest before this element position."""
+            closest_pos = None
 
-            # Strategy 1: Find sections that come BEFORE this element
-            for pos_info in position_map:
-                if pos_info['position'] < element_pos:
-                    # Distance from this section to the element
-                    distance_before = element_pos - pos_info['position']
+            for sec_pos in section_positions:
+                if sec_pos < element_pos:
+                    closest_pos = sec_pos
+                else:
+                    break  # Stop at first section at or after element
 
-                    # Find next section after this one
-                    next_section_pos = float('inf')
-                    for other_info in position_map:
-                        if other_info['position'] > pos_info['position']:
-                            next_section_pos = min(next_section_pos, other_info['position'])
-
-                    # If element is between this section and the next, this is the owner
-                    if element_pos <= next_section_pos:
-                        # Weight: subsections are much better matches
-                        weight = 0 if not pos_info['is_main'] else 1000
-                        candidates.append({
-                            'section': pos_info,
-                            'score': weight + distance_before,
-                            'reason': 'Between section headings'
-                        })
-
-            # If no candidates found using strict rule, find closest preceding section
-            if not candidates:
-                for pos_info in position_map:
-                    if pos_info['position'] < element_pos:
-                        distance = element_pos - pos_info['position']
-                        weight = 0 if not pos_info['is_main'] else 1000
-                        candidates.append({
-                            'section': pos_info,
-                            'score': weight + distance,
-                            'reason': 'Closest preceding'
-                        })
-
-            # Sort by score and return best match
-            if candidates:
-                best = min(candidates, key=lambda x: x['score'])
-                return best['section'], best['reason']
+            if closest_pos is not None:
+                section, is_main = position_to_section[closest_pos]
+                return section, is_main
 
             return None, None
 
         # Assign tables
         for table_info in tables:
             table_pos = table_info['position']
-            section_info, reason = find_best_section(table_pos)
+            section, is_main = find_closest_preceding_section(table_pos)
 
-            if section_info:
-                assigned_to = section_info['section']
-                assigned_to['tables'].append(table_info)
-                table_info['assigned_section'] = assigned_to['id']
-                level_type = "Sub" if not section_info['is_main'] else "Main"
-                print(f"  📋 Table {table_info['index']} at pos {table_pos} → {section_info['title']} ({level_type}) [{reason}]")
+            if section:
+                section['tables'].append(table_info)
+                table_info['assigned_section'] = section['id']
+                level_type = "Sub" if not is_main else "Main"
+                print(f"  📋 Table {table_info['index']} at pos {table_pos} → {section['title_ar']} ({level_type})")
             elif main_sections:
+                # Fallback: assign to first section if nothing precedes
                 main_sections[0]['tables'].append(table_info)
                 table_info['assigned_section'] = main_sections[0]['id']
                 print(f"  📋 Table {table_info['index']} at pos {table_pos} → {main_sections[0]['title_ar']} (FALLBACK)")
@@ -917,18 +996,18 @@ class ReportStructureDetector:
         # Assign charts using same approach
         for chart_info in charts:
             chart_pos = chart_info['position']
-            section_info, reason = find_best_section(chart_pos)
+            section, is_main = find_closest_preceding_section(chart_pos)
 
-            if section_info:
-                assigned_to = section_info['section']
-                assigned_to['charts'].append(chart_info)
-                chart_info['assigned_section'] = assigned_to['id']
-                level_type = "Sub" if not section_info['is_main'] else "Main"
-                print(f"  📊 Chart at pos {chart_pos} → {section_info['title']} ({level_type}) [{reason}]")
+            if section:
+                section['charts'].append(chart_info)
+                chart_info['assigned_section'] = section['id']
+                level_type = "Sub" if not is_main else "Main"
+                print(f"  📊 Chart {chart_info['index']} at pos {chart_pos} → {section['title_ar']} ({level_type})")
             elif main_sections:
+                # Fallback: assign to first section if nothing precedes
                 main_sections[0]['charts'].append(chart_info)
                 chart_info['assigned_section'] = main_sections[0]['id']
-                print(f"  📊 Chart at pos {chart_pos} → {main_sections[0]['title_ar']} (FALLBACK)")
+                print(f"  📊 Chart {chart_info['index']} at pos {chart_pos} → {main_sections[0]['title_ar']} (FALLBACK)")
 
     def _classify_heading(self, para) -> str:
         """
@@ -1078,7 +1157,8 @@ class ReportStructureDetector:
 
         Returns: The cumulative position of the table in the document
         """
-        # Count all elements (paragraphs and tables) up to and including this table
+        # Count ALL elements in document body (matches _detect_all_headings counting)
+        # This is critical for consistent position tracking across all elements
         element_count = 0
         table_count = 0
 
@@ -1090,10 +1170,10 @@ class ReportStructureDetector:
                     # This gives us the position in the overall document flow
                     return element_count
                 table_count += 1
-                element_count += 1
-            # Check if this is a paragraph
-            elif element.tag.endswith('p'):
-                element_count += 1
+
+            # ALWAYS increment position for EVERY element, not just p and tbl
+            # This matches heading position counting and ensures consistency
+            element_count += 1
 
         # If table not found, return approximate position
         # This should rarely happen

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from docx import Document
 
-from analysis.demo.report_structure_detector import ReportStructureDetector
+from .report_structure_detector import ReportStructureDetector
 from chart_parser import extract_charts_from_docx
 
 
@@ -22,17 +22,19 @@ class AdaptiveReportExtractor:
     """
 
     # Increment this when extraction logic changes to invalidate old cache
-    EXTRACTION_VERSION = 9
+    EXTRACTION_VERSION = 13
 
     def __init__(self, cache_dir: str = None):
         """
         Initialize extractor and ensure cache directory exists.
 
         Args:
-            cache_dir: Directory to store cache files (default: inquiries-output/cache for backward compat)
+            cache_dir: Directory to store cache files (default: app folder's inquiries-output/cache)
         """
         if cache_dir is None:
-            cache_dir = "inquiries-output/cache"
+            # Default to inquiries-output/cache relative to app directory
+            app_dir = Path(__file__).parent.parent
+            cache_dir = str(app_dir / "inquiries-output" / "cache")
         self.CACHE_DIR = Path(cache_dir)
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
