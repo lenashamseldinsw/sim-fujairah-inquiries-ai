@@ -402,6 +402,11 @@ class DynamicReportDisplay:
                     in_list = False
                 continue
 
+            # Skip decorative lines (only dashes, underscores, etc.)
+            decorative_chars = {'─', '—', '–', '_', '-', '=', '━', '═', '▬', '▭', ' ', '\t'}
+            if all(c in decorative_chars for c in stripped):
+                continue  # Skip this line entirely
+
             # Check if this line is a bullet point with marker
             if stripped.startswith('←') or stripped.startswith('-') or \
                stripped.startswith('•') or stripped.startswith('▪'):

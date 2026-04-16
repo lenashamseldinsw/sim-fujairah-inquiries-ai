@@ -86,16 +86,6 @@ def parse_chart_xml(chart_bytes: bytes) -> Optional[Dict[str, Any]]:
         # Get colors/styling
         colors = extract_colors(root, namespaces)
 
-        # FIX: For pie charts, check if data was swapped in extract_series_data, and swap colors too
-        if chart_type in ('pie', 'doughnut') and series_list:
-            for series in series_list:
-                data = series.get('data', [])
-                # If data has 3 elements and was reversed (detected in extract_series_data),
-                # we need to swap colors to match the swapped data
-                if len(data) == 3:
-                    colors[0], colors[2] = colors[2], colors[0]
-                    break  # Only do this once for the pie chart series
-
         if not series_list or not categories:
             return None
 
@@ -273,11 +263,6 @@ def extract_series_data(root, namespaces: Dict) -> List[Dict[str, Any]]:
                     data = []
                     for i in range(max_idx + 1):
                         data.append(pt_dict.get(i, 0))
-
-                # WORKAROUND: For 3-element datasets, if data[0] > data[2], they're likely reversed
-                # This is a common issue when Word documents are edited
-                if len(data) == 3 and data[0] > data[2]:
-                    data[0], data[2] = data[2], data[0]
 
         if data:
             series_list.append({

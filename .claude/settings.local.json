@@ -48,7 +48,8 @@
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/inquiries-output/cache",
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/complaints-output/cache",
       "/private/tmp",
-      "/Users/lena/.streamlit"
+      "/Users/lena/.streamlit",
+      "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/demo/complaints-output/cache"
     ]
   }
 }

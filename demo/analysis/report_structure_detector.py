@@ -402,7 +402,7 @@ class ReportStructureDetector:
                 subsections.append(heading)
 
         # Now assign subsections to their parent main section by matching section numbers
-        # E.g., "2.1" belongs to "ثانياً", "3.2" belongs to "ثالثاً", etc.
+        # E.g., subsection "2.1" belongs to "ثانياً", subsection "3.2" belongs to "ثالثاً"
         # Include variations with and without diacritics
         arabic_ordinals = {
             'أولاً': 1, 'أولا': 1,
@@ -503,6 +503,12 @@ class ReportStructureDetector:
         # Extract content for each section and subsection
         self._extract_content_for_hierarchy(final_sections)
 
+        # Clean up content: remove multiple consecutive newlines
+        for section in final_sections:
+            section['content'] = self._clean_content(section['content'])
+            for subsec in section.get('subsections', []):
+                subsec['content'] = self._clean_content(subsec['content'])
+
         return final_sections
 
     def _extract_content_for_hierarchy(self, main_sections: List[Dict]) -> None:
@@ -519,6 +525,10 @@ class ReportStructureDetector:
 
         for element in self.doc.element.body:
             if element.tag.endswith('p'):
+                # Skip decorative line/border paragraphs (lines with no text)
+                if self._is_decorative_line(element):
+                    element_position += 1
+                    continue
                 # Store paragraph element and track its position
                 element_pos_to_para[element_position] = element
                 all_para_positions.append(element_position)
@@ -595,12 +605,12 @@ class ReportStructureDetector:
             # Process paragraph content
             para_content = self._process_paragraph_content(full_text, para_element)
 
-            if para_content:
-                # Append to section's content
+            if para_content and para_content.strip():
+                # Append to section's content (only if non-empty after stripping)
                 if section['content']:
-                    section['content'] += '\n' + para_content
+                    section['content'] += '\n' + para_content.strip()
                 else:
-                    section['content'] = para_content
+                    section['content'] = para_content.strip()
 
     def _process_paragraph_content(self, full_text: str, para_element) -> str:
         """
@@ -608,7 +618,11 @@ class ReportStructureDetector:
 
         Returns the content to include in section (may strip bold endings that look like headings).
         """
-        # Bullet points should always include full text
+        # Filter out decorative lines before processing
+        if self._is_decorative_line(para_element):
+            return ""
+
+        # Bullet points should always include full text (but not if they're decorative)
         if full_text.startswith('←') or full_text.startswith('-') or full_text.startswith('•'):
             return full_text
 
@@ -629,6 +643,70 @@ class ReportStructureDetector:
         else:
             # No bold ending, include full text
             return full_text
+
+    def _is_decorative_line(self, para_element) -> bool:
+        """
+        Detect if a paragraph is a decorative line/border with no meaningful content.
+
+        Returns True if paragraph should be skipped (is a decorative line).
+        """
+        ns_main = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+        # Get text from paragraph
+        text_elems = para_element.findall(f'.//{ns_main}t')
+        full_text = ''.join([t.text for t in text_elems if t.text]).strip()
+
+        # Check if paragraph has border/line styling (most common for decorative lines)
+        pPr = para_element.find(f'.//{ns_main}pPr')
+        has_border = False
+        has_shading = False
+        if pPr is not None:
+            # Check for any paragraph borders
+            pBdr = pPr.find(f'.//{ns_main}pBdr')
+            if pBdr is not None:
+                has_border = True
+
+            # Check for paragraph shading (sometimes used for decorative elements)
+            shd = pPr.find(f'.//{ns_main}shd')
+            if shd is not None:
+                has_shading = True
+
+        # Rule 1: Empty or near-empty with styling = decorative
+        if not full_text and (has_border or has_shading):
+            return True
+
+        # Rule 2: Skip paragraphs with only line-like characters
+        if full_text:
+            # Check if text is only line-like characters
+            line_chars = {'-', '—', '–', '_', '━', '═', '▬', '▭', '│', '┃', '║', ' ', '\t', '·', '•'}
+            if len(full_text) > 0 and all(c in line_chars for c in full_text):
+                return True
+
+            # Rule 3: Very short text (1-2 chars) with styling is likely decorative
+            if len(full_text) <= 2 and (has_border or has_shading):
+                return True
+
+            # Rule 4: Very short with no actual letters/numbers
+            if len(full_text) <= 3:
+                # Check if it has any actual word characters
+                import re
+                if not re.search(r'[\u0600-\u06FFa-zA-Z0-9]', full_text):
+                    return True
+
+            # If paragraph has meaningful text (more than just symbols), keep it
+            if len(full_text) > 2:
+                return False
+
+        # Rule 5: Paragraph with no text and border styling
+        if not full_text and has_border:
+            return True
+
+        # Rule 6: Paragraph with no runs at all (empty structure)
+        runs = para_element.findall(f'.//{ns_main}r')
+        if len(runs) == 0 and not full_text:
+            return True
+
+        return False
 
     def _detect_tables(self) -> List[Dict[str, Any]]:
         """
@@ -1220,6 +1298,41 @@ class ReportStructureDetector:
             'row_count': len(rows),
             'col_count': len(columns)
         }
+
+    def _clean_content(self, content: str) -> str:
+        """
+        Clean up content by removing multiple consecutive newlines, decorative lines, and extra whitespace.
+
+        Returns cleaned content string.
+        """
+        if not content:
+            return content
+
+        import re
+
+        # Split into lines
+        lines = content.split('\n')
+
+        # Filter out decorative lines (lines that are only dashes, underscores, etc.)
+        decorative_chars = {'─', '—', '–', '_', '-', '=', '━', '═', '▬', '▭', ' ', '\t'}
+        filtered_lines = []
+
+        for line in lines:
+            stripped = line.strip()
+            # Skip if line is empty or only contains decorative characters
+            if stripped and not all(c in decorative_chars for c in stripped):
+                filtered_lines.append(line)
+
+        # Rejoin lines
+        cleaned = '\n'.join(filtered_lines)
+
+        # Replace multiple newlines with single newline
+        cleaned = re.sub(r'\n\s*\n+', '\n', cleaned)
+
+        # Strip leading/trailing whitespace
+        cleaned = cleaned.strip()
+
+        return cleaned
 
     def _extract_metadata(self) -> Dict[str, Any]:
         """Extract document metadata."""
