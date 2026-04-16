@@ -22,7 +22,7 @@ class AdaptiveReportExtractor:
     """
 
     # Increment this when extraction logic changes to invalidate old cache
-    EXTRACTION_VERSION = 13
+    EXTRACTION_VERSION = 14
 
     def __init__(self, cache_dir: str = None, docx_path: str = None):
         """

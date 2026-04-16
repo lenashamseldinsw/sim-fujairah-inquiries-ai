@@ -199,11 +199,12 @@ class ReportStructureDetector:
         # Pattern matching
         import re
         # Arabic ordinals at start with colon (main sections)
-        if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً):', text):
+        # Handle variations: with/without diacritics, with/without space before colon
+        if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s*:', text):
             return 'main'
 
         # Also check for ordinals WITHOUT colon (style variation)
-        if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً)\s', text):
+        if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s', text):
             return 'main'
 
         # Numbered subsections: "X.Y " format (must have space after)
@@ -361,8 +362,9 @@ class ReportStructureDetector:
         for i, heading in enumerate(headings):
             if heading['type'] == 'main':
                 # Check if it matches the main section pattern (Arabic ordinal with colon)
+                # Handle variations: with/without diacritics, with/without space before colon
                 import re
-                if re.search(r'^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً|تاسعاً|عاشراً):', heading['title_ar']):
+                if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s*:', heading['title_ar']):
                     first_real_main_pos = i
                     break
 
@@ -401,17 +403,18 @@ class ReportStructureDetector:
 
         # Now assign subsections to their parent main section by matching section numbers
         # E.g., "2.1" belongs to "ثانياً", "3.2" belongs to "ثالثاً", etc.
+        # Include variations with and without diacritics
         arabic_ordinals = {
-            'أولاً': 1,
-            'ثانياً': 2,
-            'ثالثاً': 3,
-            'رابعاً': 4,
-            'خامساً': 5,
-            'سادساً': 6,
-            'سابعاً': 7,
-            'ثامناً': 8,
-            'تاسعاً': 9,
-            'عاشراً': 10,
+            'أولاً': 1, 'أولا': 1,
+            'ثانياً': 2, 'ثانيا': 2,
+            'ثالثاً': 3, 'ثالثا': 3,
+            'رابعاً': 4, 'رابعا': 4,
+            'خامساً': 5, 'خامسا': 5,
+            'سادساً': 6, 'سادسا': 6,
+            'سابعاً': 7, 'سابعا': 7,
+            'ثامناً': 8, 'ثامنا': 8,
+            'تاسعاً': 9, 'تاسعا': 9,
+            'عاشراً': 10, 'عاشرا': 10,
         }
 
         # Create mapping from section number to main section
@@ -467,8 +470,11 @@ class ReportStructureDetector:
         final_sections = []
         seen_numbers = set()  # Track by Arabic ordinal number
 
-        arabic_ordinals_list = ['أولاً', 'ثانياً', 'ثالثاً', 'رابعاً', 'خامساً',
-                                'سادساً', 'سابعاً', 'ثامناً', 'تاسعاً', 'عاشراً']
+        # Include both diacritic variants when checking for ordinals
+        arabic_ordinals_list = ['أولاً', 'أولا', 'ثانياً', 'ثانيا', 'ثالثاً', 'ثالثا',
+                                'رابعاً', 'رابعا', 'خامساً', 'خامسا',
+                                'سادساً', 'سادسا', 'سابعاً', 'سابعا',
+                                'ثامناً', 'ثامنا', 'تاسعاً', 'تاسعا', 'عاشراً', 'عاشرا']
 
         for main_sec in main_sections_order:
             # Check if this section has an Arabic ordinal
