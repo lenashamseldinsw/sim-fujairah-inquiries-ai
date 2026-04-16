@@ -1716,84 +1716,12 @@ def create_custom_progress_bar(current_pct=0, lang='ar'):
     return progress_html
 
 # ── Processing ───────────────────────────────────────────────────────────────
-def process_with_analyzer(uploaded_files, lang='ar'):
-    """Process files using the analyzer and display progress."""
-    tx = T[lang]
-    DIR = 'rtl' if lang == 'ar' else 'ltr'
-
-    # Display custom progress bar
-    progress_container = st.empty()
-    pct_container = st.empty()
-
-    try:
-        # For now, just process the first file (can be extended to handle multiple)
-        uploaded_file = uploaded_files[0] if uploaded_files else None
-        if not uploaded_file:
-            st.error(tx['err_no_file'])
-            return None
-
-        # Get analyzer's processing stages
-        analyzer_stages = ANALYZER.get_processing_stages()
-
-        # Simulate processing with stages from analyzer
-        total_duration = random.randint(30, 60)  # Random 30-60 seconds
-        # total_duration = 1
-        update_interval = 0.5
-        total_steps = int(total_duration / update_interval)
-
-        for step in range(total_steps + 1):
-            elapsed = step * update_interval
-            # Find current stage based on elapsed time
-            current_pct = min(1.0, elapsed / total_duration)
-
-            # Update custom progress bar
-            progress_container.markdown(
-                create_custom_progress_bar(current_pct, lang),
-                unsafe_allow_html=True,
-            )
-
-            # Update stage display
-            current_stage = next(
-                (s for s in analyzer_stages
-                 if s.get('percent_start', 0) <= current_pct * 100 < s.get('percent_end', 100)),
-                analyzer_stages[0] if analyzer_stages else None
-            )
-
-            if current_stage:
-                # Use language-specific label
-                stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
-                pct_container.markdown(
-                    f"<div class='{tx.get('pct_class', 'pct-display')}'>"
-                    f"{int(current_pct * 100)}% — {stage_label}"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-            time.sleep(update_interval)
-
-        # Final progress bar at 100%
-        progress_container.markdown(
-            create_custom_progress_bar(1.0, lang),
-            unsafe_allow_html=True,
-        )
-        pct_container.empty()
-
-        # Now call the actual analyzer
-        report = ANALYZER.analyze(uploaded_file)
-        return report
-
-    except Exception as e:
-        st.error(f"Error during processing: {str(e)}")
-        progress_container.empty()
-        pct_container.empty()
-        return None
-
-
 def simulate_period_processing(lang='ar'):
     """Simulate processing for a selected period (no file upload)."""
     progress_container = st.empty()
     pct_container = st.empty()
 
+    # total_duration = random.randint(30, 60)  # Random 30-60 seconds
     total_duration = 1
     update_interval = 0.5
     total_steps = int(total_duration / update_interval)

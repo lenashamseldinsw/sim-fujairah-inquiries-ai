@@ -41,7 +41,13 @@
       "Bash(python3 -c \"from analysis import RealAnalyzer, DynamicReportDisplay; print\\('✓ Real imports work'\\)\")",
       "Bash(python3 -c \"from analysis import DemoAnalyzer, DynamicReportDisplay, AdaptiveReportExtractor; print\\('✓ Demo imports work'\\); print\\('✓ Can import all demo components'\\)\")",
       "Bash(python -m py_compile /Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/demo/app.py)",
-      "Bash(python -m py_compile analysis/dynamic_display.py analysis/report_structure_detector.py analysis/adaptive_extractor.py)"
+      "Bash(python -m py_compile analysis/dynamic_display.py analysis/report_structure_detector.py analysis/adaptive_extractor.py)",
+      "Bash(python inspect_q1_structure.py)",
+      "Bash(python test_q1_extraction.py)",
+      "Bash(python debug_heading_classification.py)",
+      "Bash(python debug_bold_ending.py)",
+      "Bash(ls -la *.py)",
+      "Bash(python verify_q1_extraction.py)"
     ],
     "additionalDirectories": [
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/outputs",

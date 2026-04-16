@@ -148,20 +148,21 @@ class ReportStructureDetector:
         if any(text.startswith(q) for q in ['لماذا', 'هل', 'ما ', 'من ', 'أين ', 'متى ', 'كيف ']):
             return None
 
-        # Check for bold ending FIRST (before length checks that would discard long paragraphs)
-        # This allows us to detect hidden headings at the end of long paragraphs
-        bold_ending = self._extract_bold_ending(element)
-        if bold_ending:
-            # Debug: log what we found
-            if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
-                print(f"  🔍 DEBUG: Found potential heading: '{bold_ending}' (len={len(bold_ending)}, ends_with_period={bold_ending.endswith('.')})")
-
-            if len(bold_ending) < 100:
-                # Bold ending is short - check if it looks like a heading (not a sentence)
-                if not bold_ending.endswith('.'):
-                    if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
-                        print(f"  ✓ DEBUG: Classified as heading!")
-                    return 'sub'
+        # CHECK STYLE FIRST (most reliable)
+        # Word heading styles are explicit and unambiguous
+        pPr = element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pPr')
+        if pPr is not None:
+            pStyle = pPr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pStyle')
+            if pStyle is not None:
+                style_val = pStyle.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val', '')
+                # Handle both "Heading 1"/"Heading1" and "Heading 2"/"Heading2" formats
+                if 'Heading' in style_val:
+                    # Remove spaces for comparison (Heading 1 vs Heading1)
+                    normalized = style_val.replace(' ', '')
+                    if 'Heading1' in normalized:
+                        return 'main'
+                    else:
+                        return 'sub'
 
         # Now check full text (reject if too long for standard headings)
         # Question paragraphs and explanation text are usually longer
@@ -181,49 +182,20 @@ class ReportStructureDetector:
                     except:
                         pass
 
-        # Check style
-        pPr = element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pPr')
-        if pPr is not None:
-            pStyle = pPr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pStyle')
-            if pStyle is not None:
-                style_val = pStyle.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val', '')
-                # Handle both "Heading 1"/"Heading1" and "Heading 2"/"Heading2" formats
-                if 'Heading' in style_val:
-                    # Remove spaces for comparison (Heading 1 vs Heading1)
-                    normalized = style_val.replace(' ', '')
-                    if 'Heading1' in normalized:
-                        return 'main'
-                    else:
-                        return 'sub'
+        # Check for bold ending (fallback for documents without explicit heading styles)
+        # This allows us to detect hidden headings at the end of long paragraphs
+        bold_ending = self._extract_bold_ending(element)
+        if bold_ending:
+            # Debug: log what we found
+            if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
+                print(f"  🔍 DEBUG: Found potential heading: '{bold_ending}' (len={len(bold_ending)}, ends_with_period={bold_ending.endswith('.')})")
 
-        # Pattern matching
-        import re
-        # Arabic ordinals at start with colon (main sections)
-        # Handle variations: with/without diacritics, with/without space before colon
-        if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s*:', text):
-            return 'main'
-
-        # Also check for ordinals WITHOUT colon (style variation)
-        if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s', text):
-            return 'main'
-
-        # Numbered subsections: "X.Y " format (must have space after)
-        if re.search(r'^\d+\.\d+\s', text):
-            return 'sub'
-
-        # Also catch "X.Y:" format (colon instead of space)
-        if re.search(r'^\d+\.\d+:', text):
-            return 'sub'
-
-        # Catch "X. " format for numbered sections (like "1. ", "2. ", etc. for first-level items)
-        # But be careful not to catch paragraphs that happen to start with numbers
-        # Only if the number is 1-10 (typical for main section numbers) and followed by space/colon
-        if re.search(r'^[1-9]\.\s+[A-Z\u0600-\u06FF]', text) or re.search(r'^[1-9]:\s+[A-Z\u0600-\u06FF]', text):
-            return 'sub'
-
-        # Check for Arabic section marker patterns (e.g., "الجزء الخامس:", "الفصل 5:")
-        if re.search(r'^(الجزء|الفصل|الباب|القسم)\s+(أول|ثاني|ثالث|رابع|خامس|سادس|سابع|ثامن|تاسع|عاشر|\d+)[:\s]', text):
-            return 'main'
+            if len(bold_ending) < 100:
+                # Bold ending is short - check if it looks like a heading (not a sentence)
+                if not bold_ending.endswith('.'):
+                    if 'حل الشكاوى' in bold_ending or 'الاكتشاف' in bold_ending:
+                        print(f"  ✓ DEBUG: Classified as heading!")
+                    return 'sub'
 
         return None
 
@@ -363,7 +335,6 @@ class ReportStructureDetector:
             if heading['type'] == 'main':
                 # Check if it matches the main section pattern (Arabic ordinal with colon)
                 # Handle variations: with/without diacritics, with/without space before colon
-                import re
                 if re.search(r'^(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا|سادساً|سادسا|سابعاً|سابعا|ثامناً|ثامنا|تاسعاً|تاسعا|عاشراً|عاشرا)\s*:', heading['title_ar']):
                     first_real_main_pos = i
                     break
@@ -1269,20 +1240,36 @@ class ReportStructureDetector:
         """
         Extract complete table data with columns and rows.
 
+        For tables without bidiVisual (LTR), reverses column order to account for
+        CSS dir:rtl rendering, ensuring the visual display matches the Word document.
+
         Returns:
             Dictionary with columns, rows, and metadata
         """
         if len(table.rows) == 0:
             return {'columns': [], 'rows': []}
 
-        # Get column headers from first row
-        columns = [cell.text.strip() for cell in table.rows[0].cells]
+        # Check if table is bidiVisual (RTL). For non-bidi tables, we need to reverse
+        # the column order because the HTML will apply dir:rtl CSS which reverses the
+        # visual column order. By reversing here, the final display matches the Word doc.
+        NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        tblPr = table._tbl.find(f'{{{NS}}}tblPr')
+        is_bidi = tblPr is not None and tblPr.find(f'{{{NS}}}bidiVisual') is not None
 
-        # Get data rows
+        # Get column headers from first row
+        cell_list = list(table.rows[0].cells)
+        if not is_bidi:
+            cell_list = list(reversed(cell_list))
+        columns = [cell.text.strip() for cell in cell_list]
+
+        # Get data rows - reverse cells for LTR tables too
         rows = []
         for row in table.rows[1:]:
             row_data = {}
-            cells = [cell.text.strip() for cell in row.cells]
+            cells = list(row.cells)
+            if not is_bidi:
+                cells = list(reversed(cells))
+            cells = [cell.text.strip() for cell in cells]
 
             for col_idx, col_name in enumerate(columns):
                 if col_idx < len(cells):
