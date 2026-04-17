@@ -135,7 +135,7 @@ T = {
         'nav_back':          '← Back to Home',
         'hero_eyebrow':      'Fujairah Police · Smart Services',
         'hero_title':        'Fujairah Pulse',
-        'hero_subtitle':     'Advanced AI platform for analyzing citizen complaints and extracting insights and recommendations to improve government service quality.',
+        'hero_subtitle':     'Advanced AI platform for analyzing citizen complaints and extracting insights and recommendations to improve government service quality',
         'badge_speed':       '⚡ Instant Processing',
         'badge_accuracy':    '🎯 High Accuracy',
         'badge_security':    '🔒 Secure Data',
