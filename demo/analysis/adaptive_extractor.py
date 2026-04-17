@@ -44,6 +44,7 @@ class AdaptiveReportExtractor:
         Auto-detect cache directory based on document path.
 
         Each output folder (inquiries-output, complaints-output) has its own cache subdirectory.
+        English documents use english-cache subfolder.
 
         Args:
             docx_path: Path to the document
@@ -53,11 +54,16 @@ class AdaptiveReportExtractor:
         """
         app_dir = Path(__file__).parent.parent
 
-        # Detect report type from path
+        # Detect report type and language from path
         if docx_path:
             path_str = str(docx_path).lower()
+            is_english = 'english-output' in path_str
+
             if 'complaints' in path_str:
-                return str(app_dir / "complaints-output" / "cache")
+                cache_path = app_dir / "complaints-output" / "cache"
+                if is_english:
+                    return str(cache_path / "english-cache")
+                return str(cache_path)
             elif 'inquiries' in path_str:
                 return str(app_dir / "inquiries-output" / "cache")
 
@@ -81,19 +87,40 @@ class AdaptiveReportExtractor:
         self.CACHE_DIR = Path(self._detect_cache_dir(docx_path))
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Generate cache key based on file name and modification time
-        cache_key = self._generate_cache_key(doc_path)
-        cache_file = self.CACHE_DIR / f"{cache_key}.json"
-
         # Check cache first (unless force refresh)
-        if not force_refresh and cache_file.exists():
-            cached_report = self._load_from_cache(cache_file)
-            # Verify cache version matches current extraction logic
-            if cached_report.get('extraction_version') == self.EXTRACTION_VERSION:
-                print(f"✓ Loading cached report structure from: {cache_file.name}")
-                return cached_report
+        if not force_refresh:
+            is_english = 'english-output' in str(docx_path).lower()
+
+            if is_english:
+                # English flow: Use hardcoded period-to-JSON mapping
+                docx_path_str = str(docx_path).lower()
+                json_filename = None
+
+                # Map periods to their English JSON files
+                if 'q1-2026' in docx_path_str or 'q1_2026' in docx_path_str:
+                    json_filename = 'Q1_2026_complaints_analysis_en.json'
+                elif '2025' in docx_path_str:
+                    json_filename = 'complaints_analysis_2025_en.json'
+
+                if json_filename:
+                    cache_file = self.CACHE_DIR / json_filename
+                    if cache_file.exists():
+                        cached_report = self._load_from_cache(cache_file)
+                        print(f"✓ Loading cached report structure from: {cache_file.name}")
+                        return cached_report
             else:
-                print(f"✓ Cache invalidated (extraction logic updated). Re-extracting from: {doc_path.name}")
+                # Arabic flow: Use hash-based cache key (original behavior)
+                cache_key = self._generate_cache_key(doc_path)
+                cache_file = self.CACHE_DIR / f"{cache_key}.json"
+
+                if cache_file.exists():
+                    cached_report = self._load_from_cache(cache_file)
+                    # Verify cache version matches current extraction logic
+                    if cached_report.get('extraction_version') == self.EXTRACTION_VERSION:
+                        print(f"✓ Loading cached report structure from: {cache_file.name}")
+                        return cached_report
+                    else:
+                        print(f"✓ Cache invalidated (extraction logic updated). Re-extracting from: {doc_path.name}")
 
         print(f"✓ Extracting report structure from: {doc_path.name}")
 

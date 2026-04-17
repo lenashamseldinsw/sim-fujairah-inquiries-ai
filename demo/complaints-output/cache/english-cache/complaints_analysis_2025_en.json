@@ -1,0 +1,1265 @@
+{
+  "extraction_version": 16,
+  "document_name": "complaints_report_en_2025.docx",
+  "document_path": "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/demo/complaints-output/2025/english-output/complaints_report_en_2025.docx",
+  "metadata": {
+    "title": "",
+    "author": "Un-named",
+    "created": "2026-03-05 23:38:00",
+    "modified": "2026-04-17 10:32:00",
+    "total_paragraphs": 124,
+    "total_tables": 16
+  },
+  "charts": [
+    {
+      "type": "pie",
+      "title": "Request Severity",
+      "categories": [
+        "Urgent Complaint",
+        "Regular Complaint",
+        "Complex Complaint"
+      ],
+      "series": [
+        {
+          "name": "Original Classification",
+          "data": [
+            17.0,
+            222.0,
+            2.0
+          ]
+        }
+      ],
+      "colors": [
+        "#2D6B3C",
+        "#808080",
+        "#B68A35"
+      ]
+    },
+    {
+      "type": "bar",
+      "title": "Distribution of Complaints by Service",
+      "categories": [
+        "Filing Criminal Reports",
+        "Filing Traffic Reports",
+        "Objection to Traffic Violations",
+        "Good Conduct Certificate - Criminal Background Check",
+        "Complaint Status Inquiry",
+        "Filing a Report to Establish a Situation",
+        "Organizing Visits (Family, Lawyers, Embassies) to Inmates",
+        "Personal Data Update - ICP",
+        "Financial Transaction Verification",
+        "Weapon License Request",
+        "Traffic File Data Update",
+        "Vehicle Ownership Renewal",
+        "Change of Statement on Vehicle Ownership Card",
+        "Request to Transfer Violations to Driving License",
+        "Receiving Social Cases",
+        "Obstruction of Traffic",
+        "Driving License Delivery",
+        "Request Status Verification",
+        "Payment of Traffic Violations",
+        "Review by Competent Authority",
+        "Verification of Traffic Violations",
+        "Traffic Code Update"
+      ],
+      "series": [
+        {
+          "name": "Original Classification",
+          "data": [
+            44.0,
+            9.0,
+            5.0,
+            4.0,
+            3.0,
+            2.0,
+            2.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "colors": [
+        "#B68A35"
+      ]
+    },
+    {
+      "type": "bar",
+      "title": "Classification of Complaint Types",
+      "categories": [
+        "Security and Criminal Complaints",
+        "Unclassified Service Complaints (\"Other\")",
+        "Traffic Service Complaints",
+        "Correctional Facility Complaints (Visits)",
+        "Certificates and Permits Complaints",
+        "Duplicate Complaints (Rejected)",
+        "Out-of-Jurisdiction and Other Complaints"
+      ],
+      "series": [
+        {
+          "name": "Original Classification",
+          "data": [
+            60.0,
+            103.0,
+            17.0,
+            5.0,
+            7.0,
+            39.0,
+            10.0
+          ]
+        }
+      ],
+      "colors": [
+        "#B68A35"
+      ]
+    },
+    {
+      "type": "pie",
+      "title": "Request Closure Within Specified Time",
+      "categories": [
+        "Within Specified Time",
+        "Outside Specified Time"
+      ],
+      "series": [
+        {
+          "name": "Original Classification",
+          "data": [
+            234.0,
+            5.0
+          ]
+        }
+      ],
+      "colors": [
+        "#2D6B3C",
+        "#808080"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "id": "section_5_executive_summary",
+      "title": "First: Executive Summary — Key Analyses",
+      "title_en": "Executive Summary",
+      "level": 2,
+      "content": "This report analyzes 241 complaints recorded in the Customer Relationship Management system of the Fujairah General Police Command throughout the year 2025. These complaints represent genuine communications from customers regarding their experience with police, security, traffic, and correctional facility services. They form an organizational memory that has not yet been utilized to develop services and improve the customer journey.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_6_key_findings",
+          "title": "Key Findings",
+          "title_en": "Key Findings",
+          "level": 2,
+          "content": "Core Message: The complaints data reveals that the challenge is not the absence of digital channels — both the Ministry of Interior app and the Fujairah Police app are available for most services — but rather three obstacles: lack of proactive confirmation and updates on complaint status, weak digital guidance that causes customers to use the wrong channel, and a genuine service gap in objecting to traffic violations which requires physical presence. Addressing these three areas alone is capable of reducing complaint volume by more than 35%.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Finding",
+                "Description",
+                "Importance Level"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Finding": "43% of complaints have no specific service classification",
+                  "Description": "The system recorded 103 complaints under \"Other\", which hinders root-cause analysis and indicates a gap in the classification structure",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "2",
+                  "Finding": "39% of rejected cases are duplicate complaints",
+                  "Description": "Customers resubmit the same complaint multiple times due to the absence of confirmation and updates",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "3",
+                  "Finding": "18% of rejections are reports submitted through the wrong channel",
+                  "Description": "16 cases were rejected because the customer used the complaints system to file a criminal report instead of the smart app — an awareness gap",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "4",
+                  "Finding": "Traffic violation objections have no digital channel",
+                  "Description": "The service is only available at the service center between 7:30–15:30, forcing customers to travel physically with no digital alternative",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "5",
+                  "Finding": "98% SLA compliance rate",
+                  "Description": "234 out of 241 complaints are closed within the specified timeframe according to the complaints management methodology, confirming processing efficiency after correct registration",
+                  "Importance Level": "✅ Positive"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_7_methodology_sources",
+      "title": "Second: Methodology and Nature of Sources",
+      "title_en": "Second: Methodology and Nature of Sources",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_8_21_analyzed_sources",
+          "title": "2.1  Analyzed Sources",
+          "title_en": "2.1  Analyzed Sources",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Source",
+                "Nature",
+                "Volume",
+                "Period"
+              ],
+              "rows": [
+                {
+                  "Source": "CRM Data — 2025 Complaints",
+                  "Nature": "Documented Excel file from the Customer Relationship Management system",
+                  "Volume": "241 records",
+                  "Period": "January–December 2025"
+                },
+                {
+                  "Source": "Fujairah General Police Command Service Directory",
+                  "Nature": "Official service directory — 116 services distributed across 4 departments",
+                  "Volume": "160 pages",
+                  "Period": "2024/2025"
+                },
+                {
+                  "Source": "Complaints Management Methodology",
+                  "Nature": "Official methodology document defining complaint types, processing standards, and KPIs",
+                  "Volume": "6 pages",
+                  "Period": "-"
+                }
+              ],
+              "row_count": 3,
+              "col_count": 4,
+              "original_index": 1
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_9_22_classification_methodology",
+          "title": "2.2  Classification Methodology",
+          "title_en": "2.2  Classification Methodology",
+          "level": 2,
+          "content": "The analysis relies on two primary references: the official complaints management methodology issued by the Fujairah General Police Command and the official service directory documenting the channels and requirements of each service. The official methodology classified complaints into three types based on complexity:\n← Urgent/Critical Complaint: With clear procedures — closed within 24 hours\n← Regular/Routine Complaint: Involving more than one department — closed within 5 working days\n← Complex Complaint: Lengthy procedures or multiple entities — closed within 15 working days",
+          "tables": [],
+          "charts": []
+        },
+        {
+          "id": "section_10_23_analyzed_fields",
+          "title": "2.3  Analyzed Fields",
+          "title_en": "2.3  Analyzed Fields",
+          "level": 2,
+          "content": "The analysis included structured fields: service, main service, request severity, submission channel, status, department, nationality, and creation and closure dates. In-depth analysis required reading unstructured text fields: request details and resolution text — as these fields reveal root causes that do not appear in the structural classification, such as actual reasons for rejection and repetition patterns.",
+          "tables": [],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_11_analysis_first",
+      "title": "Third: First Analysis — Request Classification Map",
+      "title_en": "Analysis First",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_12_31_actual_distribution",
+          "title": "3.1  Actual Distribution of Customer Complaints",
+          "title_en": "3.1  Actual Distribution of Customer Complaints",
+          "level": 2,
+          "content": "241 complaints were received during 2025, all through digital channels, distributed across three main departments. Deep data analysis reveals that the official picture recorded in the system conceals two systemic problems: the size of the unspecified classification (\"Other\"), and inflated numbers due to duplicate complaints.",
+          "tables": [
+            {
+              "columns": [
+                "Complaint Type",
+                "Count",
+                "Percentage",
+                "Description",
+                "Digital Transferability"
+              ],
+              "rows": [
+                {
+                  "Complaint Type": "Security and Criminal Complaints",
+                  "Count": "60",
+                  "Percentage": "25.00%",
+                  "Description": "Security reports — criminal and traffic",
+                  "Digital Transferability": "Dedicated digital channel — complaints portal / report tracking"
+                },
+                {
+                  "Complaint Type": "Unclassified Service Complaints (\"Other\")",
+                  "Count": "103",
+                  "Percentage": "43.00%",
+                  "Description": "Varied — root-cause analysis is difficult without precise classification",
+                  "Digital Transferability": "Requires reclassification — AI-based suggestion system"
+                },
+                {
+                  "Complaint Type": "Traffic Service Complaints",
+                  "Count": "17",
+                  "Percentage": "7.00%",
+                  "Description": "Violations, objections, traffic codes",
+                  "Digital Transferability": "Partial — objection requires physical presence"
+                },
+                {
+                  "Complaint Type": "Correctional Facility Complaints (Visits)",
+                  "Count": "5",
+                  "Percentage": "2.00%",
+                  "Description": "Visit requests, contact with inmates",
+                  "Digital Transferability": "Fujairah Police app available"
+                },
+                {
+                  "Complaint Type": "Certificates and Permits Complaints",
+                  "Count": "7",
+                  "Percentage": "3.00%",
+                  "Description": "Good conduct, report status verification, weapons permits",
+                  "Digital Transferability": "Digital — available via MOI App"
+                },
+                {
+                  "Complaint Type": "Duplicate Complaints (Rejected)",
+                  "Count": "39",
+                  "Percentage": "16.00%",
+                  "Description": "Same customer resubmitting, indicating post-handling communication problems",
+                  "Digital Transferability": "Proactive notification channel — complete elimination of duplication"
+                },
+                {
+                  "Complaint Type": "Out-of-Jurisdiction and Other Complaints",
+                  "Count": "10",
+                  "Percentage": "4.00%",
+                  "Description": "Other emirates, public prosecution, consumer protection",
+                  "Digital Transferability": "Automatic redirection — chatbot"
+                }
+              ],
+              "row_count": 7,
+              "col_count": 5,
+              "original_index": 2
+            }
+          ],
+          "charts": [
+            {
+              "type": "pie",
+              "title": "Request Severity",
+              "categories": [
+                "Urgent Complaint",
+                "Regular Complaint",
+                "Complex Complaint"
+              ],
+              "series": [
+                {
+                  "name": "Original Classification",
+                  "data": [
+                    17.0,
+                    222.0,
+                    2.0
+                  ]
+                }
+              ],
+              "colors": [
+                "#2D6B3C",
+                "#808080",
+                "#B68A35"
+              ]
+            },
+            {
+              "type": "bar",
+              "title": "Distribution of Complaints by Service",
+              "categories": [
+                "Filing Criminal Reports",
+                "Filing Traffic Reports",
+                "Objection to Traffic Violations",
+                "Good Conduct Certificate - Criminal Background Check",
+                "Complaint Status Inquiry",
+                "Filing a Report to Establish a Situation",
+                "Organizing Visits (Family, Lawyers, Embassies) to Inmates",
+                "Personal Data Update - ICP",
+                "Financial Transaction Verification",
+                "Weapon License Request",
+                "Traffic File Data Update",
+                "Vehicle Ownership Renewal",
+                "Change of Statement on Vehicle Ownership Card",
+                "Request to Transfer Violations to Driving License",
+                "Receiving Social Cases",
+                "Obstruction of Traffic",
+                "Driving License Delivery",
+                "Request Status Verification",
+                "Payment of Traffic Violations",
+                "Review by Competent Authority",
+                "Verification of Traffic Violations",
+                "Traffic Code Update"
+              ],
+              "series": [
+                {
+                  "name": "Original Classification",
+                  "data": [
+                    44.0,
+                    9.0,
+                    5.0,
+                    4.0,
+                    3.0,
+                    2.0,
+                    2.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                  ]
+                }
+              ],
+              "colors": [
+                "#B68A35"
+              ]
+            },
+            {
+              "type": "bar",
+              "title": "Classification of Complaint Types",
+              "categories": [
+                "Security and Criminal Complaints",
+                "Unclassified Service Complaints (\"Other\")",
+                "Traffic Service Complaints",
+                "Correctional Facility Complaints (Visits)",
+                "Certificates and Permits Complaints",
+                "Duplicate Complaints (Rejected)",
+                "Out-of-Jurisdiction and Other Complaints"
+              ],
+              "series": [
+                {
+                  "name": "Original Classification",
+                  "data": [
+                    60.0,
+                    103.0,
+                    17.0,
+                    5.0,
+                    7.0,
+                    39.0,
+                    10.0
+                  ]
+                }
+              ],
+              "colors": [
+                "#B68A35"
+              ]
+            },
+            {
+              "type": "pie",
+              "title": "Request Closure Within Specified Time",
+              "categories": [
+                "Within Specified Time",
+                "Outside Specified Time"
+              ],
+              "series": [
+                {
+                  "name": "Original Classification",
+                  "data": [
+                    234.0,
+                    5.0
+                  ]
+                }
+              ],
+              "colors": [
+                "#2D6B3C",
+                "#808080"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "section_13_32_submission_channel_analysis",
+          "title": "3.2  Submission Channel Analysis — 91% of Requests Arrive via Digital Channels",
+          "title_en": "Analysis 3",
+          "level": 2,
+          "content": "Notably, 91% of complaints arrived via digital channels (64% mobile app, 27% website), proving that customers are digitally engaged and ready to interact through smart channels. However, digital arrival does not mean digital resolution — as most friction points center on the post-submission stage.",
+          "tables": [
+            {
+              "columns": [
+                "Channel",
+                "Count",
+                "Percentage",
+                "Note"
+              ],
+              "rows": [
+                {
+                  "Channel": "Mobile App (MOI/Fujairah Police)",
+                  "Count": "155",
+                  "Percentage": "64.00%",
+                  "Note": "Primary channel — reflects high digital engagement"
+                },
+                {
+                  "Channel": "Website",
+                  "Count": "66",
+                  "Percentage": "27.00%",
+                  "Note": "Second highest channel after the app"
+                },
+                {
+                  "Channel": "Phone Call",
+                  "Count": "10",
+                  "Percentage": "4.00%",
+                  "Note": "Segment that prefers voice channel"
+                },
+                {
+                  "Channel": "NCRM (National System)",
+                  "Count": "8",
+                  "Percentage": "3.00%",
+                  "Note": "Complaints transferred from the federal system"
+                },
+                {
+                  "Channel": "Email",
+                  "Count": "2",
+                  "Percentage": "1.00%",
+                  "Note": "Minimum usage — reflects app penetration"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 3
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_14_33_processing_response_analysis",
+          "title": "3.3  Processing Response Analysis — Rejection, Acceptance, and Duplication",
+          "title_en": "Analysis 3",
+          "level": 2,
+          "content": "The overall rejection rate reached 37% (90 complaints), a number that appears high at first glance, but an in-depth reading of decision texts reveals that 61% of this rejection is systemic in nature and does not reflect a service failure:",
+          "tables": [
+            {
+              "columns": [
+                "Rejection Reason",
+                "Count",
+                "% of Rejections",
+                "Diagnosis"
+              ],
+              "rows": [
+                {
+                  "Rejection Reason": "Duplicate complaint",
+                  "Count": "39",
+                  "% of Rejections": "43.00%",
+                  "Diagnosis": "Customer resubmits due to not receiving a response — Solution: immediate receipt notification and update upon closure"
+                },
+                {
+                  "Rejection Reason": "Report submitted via wrong channel",
+                  "Count": "16",
+                  "% of Rejections": "18.00%",
+                  "Diagnosis": "Using the complaints system to file a criminal report — Solution: smart guidance and service awareness"
+                },
+                {
+                  "Rejection Reason": "Internal employment grievance",
+                  "Count": "4",
+                  "% of Rejections": "4.00%",
+                  "Diagnosis": "Employee complaints not related to public services — redirect to HR channel"
+                },
+                {
+                  "Rejection Reason": "Outside Fujairah Police jurisdiction",
+                  "Count": "7",
+                  "% of Rejections": "8.00%",
+                  "Diagnosis": "Sharjah / Oman / Abu Dhabi violations or jurisdiction of prosecution and municipality"
+                },
+                {
+                  "Rejection Reason": "System malfunction",
+                  "Count": "3",
+                  "% of Rejections": "3.00%",
+                  "Diagnosis": "Complaint not received due to technical failure — affects customer trust"
+                },
+                {
+                  "Rejection Reason": "Complainant withdrew / unable to contact",
+                  "Count": "5",
+                  "% of Rejections": "6.00%",
+                  "Diagnosis": "Found their identity / cancelled complaint / phone number unreachable"
+                },
+                {
+                  "Rejection Reason": "Other",
+                  "Count": "16",
+                  "% of Rejections": "18.00%",
+                  "Diagnosis": "Accidental praise/compliment, internal cancellation request, undocumented restrictions"
+                }
+              ],
+              "row_count": 7,
+              "col_count": 4,
+              "original_index": 4,
+              "caption": "The overall rejection rate reached 37% (90 complaints), a number that appears high at first glance, but an in-depth reading of decision texts reveals that 61% of this rejection is systemic in nature and does not reflect a service failure:"
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_15_34_distribution_by_department",
+          "title": "3.4  Distribution of Incoming Requests by Department",
+          "title_en": "3.4  Distribution of Incoming Requests by Department",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Department",
+                "Count",
+                "Percentage",
+                "Predominant Complaint Type"
+              ],
+              "rows": [
+                {
+                  "Department": "General Directorate of Police Operations",
+                  "Count": "185",
+                  "Percentage": "77.00%",
+                  "Predominant Complaint Type": "Criminal, security, and social reports"
+                },
+                {
+                  "Department": "Traffic and Vehicle Licensing Department",
+                  "Count": "32",
+                  "Percentage": "13.00%",
+                  "Predominant Complaint Type": "Violations, objections, traffic certificates"
+                },
+                {
+                  "Department": "Correctional and Rehabilitation Facilities",
+                  "Count": "23",
+                  "Percentage": "10.00%",
+                  "Predominant Complaint Type": "Visit requests, money transfers, inquiries"
+                }
+              ],
+              "row_count": 3,
+              "col_count": 4,
+              "original_index": 5
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_16_analysis_second",
+      "title": "Fourth: Second Analysis — Challenges in the Customer Journey",
+      "title_en": "Analysis Second",
+      "level": 2,
+      "content": "In-depth analysis of unstructured texts — request details and decision texts — reveals 7 critical friction points driving the majority of complaint volume. Most center around a single stage: post-submission. The customer arrives digitally with ease, but loses follow-up thereafter.\nCritical Discovery: 39 duplicate complaints — representing 16% of total complaints — could have been entirely prevented with a single action: sending an automatic text message with a reference number upon receiving the complaint and when updating the request status with clear resolution reasons for the customer. The customer does not repeat because they are unhappy, but because they do not know whether their complaint was received. This single action alone would immediately reduce the apparent volume of complaints by more than 16%.",
+      "tables": [
+        {
+          "columns": [
+            "Friction Point",
+            "Cases",
+            "Root Cause",
+            "Improvement Action"
+          ],
+          "rows": [
+            {
+              "Friction Point": "Absence of immediate confirmation after complaint submission in some cases",
+              "Cases": "39",
+              "Root Cause": "Customer is unsure whether their complaint was received in some cases — resubmits multiple times",
+              "Improvement Action": "Review automated notification system and ensure that a notification with a reference number is sent upon receipt (within 60 seconds)"
+            },
+            {
+              "Friction Point": "Submitting a criminal report via the complaints system",
+              "Cases": "16",
+              "Root Cause": "Customer does not distinguish between a report and a complaint — uses whichever is nearest",
+              "Improvement Action": "Smart guidance window: \"Do you want to file a report? Click here\""
+            },
+            {
+              "Friction Point": "Reports archived without action",
+              "Cases": "21",
+              "Root Cause": "Customer is surprised by their report being closed without prior notification",
+              "Improvement Action": "Mandatory notification upon report archiving with a brief explanation of the reason"
+            },
+            {
+              "Friction Point": "Non-enforcement of arrest warrants and court rulings",
+              "Cases": "12",
+              "Root Cause": "Customer files a complaint to pressure enforcement instead of using an official channel, due to not being informed of the reason for case closure",
+              "Improvement Action": "Create a portal or system to track request status with clear explanation of the status and reason for request closure"
+            },
+            {
+              "Friction Point": "Issues with organizing visits to correctional facilities",
+              "Cases": "24",
+              "Root Cause": "Lack of clarity regarding the steps for submitting a request via the app and scheduling appointments",
+              "Improvement Action": "Improve UX for the visit service in the Fujairah Police app + FAQ"
+            },
+            {
+              "Friction Point": "Traffic violation objections with no digital channel",
+              "Cases": "5",
+              "Root Cause": "The service requires physical presence during working hours only",
+              "Improvement Action": "Develop a digital service in accordance with terms and regulations (roadmap priority)"
+            },
+            {
+              "Friction Point": "Using complaints to inquire about the status of a previous request",
+              "Cases": "3",
+              "Root Cause": "No easy complaint tracking portal — customer files a complaint instead of making an inquiry",
+              "Improvement Action": "Unified tracking portal: \"Where is my complaint?\" by simply entering the reference number"
+            }
+          ],
+          "row_count": 7,
+          "col_count": 4,
+          "original_index": 6,
+          "caption": "In-depth analysis of unstructured texts — request details and decision texts — reveals 7 critical friction points driving the majority of complaint volume. Most center around a single stage: post-submission. The customer arrives digitally with ease, but loses follow-up thereafter."
+        }
+      ],
+      "charts": [],
+      "subsections": []
+    },
+    {
+      "id": "section_17_analysis_third",
+      "title": "Fifth: Third Analysis — Digital Gap Analysis",
+      "title_en": "Analysis Third",
+      "level": 2,
+      "content": "Why do complaints persist despite the availability of the Ministry of Interior smart app and the Fujairah Police app? This section answers with a scientific approach built on the official service directory: for each service that is the subject of a complaint, its profile in the directory is examined to determine whether the gap is a genuine digital gap or an awareness gap.\nCore Discovery: Most services leading in complaint volume — such as filing criminal reports, good conduct certificates, and organizing visits — have actual digital channels documented in the service directory. The gap therefore is not in building new channels, but in raising customer awareness about using what already exists — with the exception of one service that has no digital alternative yet: objection to traffic violations.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_18_51_integrated_gap_table",
+          "title": "5.1  Integrated Gap Table — Linking Complaints to Official Channels",
+          "title_en": "5.1  Integrated Gap Table — Linking Complaints to Official Channels",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Service",
+                "Complaints",
+                "Official Channel in Service Directory",
+                "Gap Type",
+                "Recommendation"
+              ],
+              "rows": [
+                {
+                  "Service": "Filing Criminal Reports",
+                  "Complaints": "44",
+                  "Official Channel in Service Directory": "MOI App + Ministry Website (24/7) + Service Center",
+                  "Gap Type": "🟡 Awareness and Usage Gap",
+                  "Recommendation": "Digital awareness campaign + in-app guidance"
+                },
+                {
+                  "Service": "Other (Unclassified)",
+                  "Complaints": "103",
+                  "Official Channel in Service Directory": "Multiple — requires classification first",
+                  "Gap Type": "⚪ Unspecified",
+                  "Recommendation": "Activate smart classification at point of submission"
+                },
+                {
+                  "Service": "Filing Traffic Reports",
+                  "Complaints": "9",
+                  "Official Channel in Service Directory": "MOI App + Ministry Website (24/7) + Service Center",
+                  "Gap Type": "🟡 Awareness and Usage Gap",
+                  "Recommendation": "Awareness of available digital service"
+                },
+                {
+                  "Service": "Objection to Traffic Violations",
+                  "Complaints": "5",
+                  "Official Channel in Service Directory": "Service Center only (7:30–15:30)",
+                  "Gap Type": "🔴 Genuine Digital Gap",
+                  "Recommendation": "Develop digital service via MOI App — top priority"
+                },
+                {
+                  "Service": "Good Conduct Certificate",
+                  "Complaints": "4",
+                  "Official Channel in Service Directory": "MOI App + Ministry Website (24/7)",
+                  "Gap Type": "🟡 Awareness and Usage Gap",
+                  "Recommendation": "FAQ + guidance at submission channel"
+                },
+                {
+                  "Service": "Organizing Visits (Correctional Facilities)",
+                  "Complaints": "5",
+                  "Official Channel in Service Directory": "Fujairah Police App (7:30–15:30)",
+                  "Gap Type": "🟡 Awareness Gap + Time Restriction",
+                  "Recommendation": "Improve app UX + extend reception hours if possible"
+                },
+                {
+                  "Service": "Report Status Verification Certificate",
+                  "Complaints": "2",
+                  "Official Channel in Service Directory": "MOI App (24/7) + Service Center — AED 20 fee",
+                  "Gap Type": "🟡 Awareness and Usage Gap",
+                  "Recommendation": "Include in FAQ section"
+                }
+              ],
+              "row_count": 7,
+              "col_count": 5,
+              "original_index": 7
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_19_52_root_causes",
+          "title": "5.2  Root Causes of Persistent Problems",
+          "title_en": "5.2  Root Causes of Persistent Problems",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Root Cause",
+                "Data Example",
+                "Proposed Solution"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Root Cause": "Weak customer guidance at the point of submission",
+                  "Data Example": "Customer opens the complaints channel to file a criminal report because they could not find guidance on how to submit this type of service",
+                  "Proposed Solution": "Smart guidance window \"What do you want?\" with direct links to the correct channels"
+                },
+                {
+                  "#": "2",
+                  "Root Cause": "Problems confirming complaint receipt status after submission",
+                  "Data Example": "Customer repeats the complaint 4 times because they received no response",
+                  "Proposed Solution": "Ensure the SMS/Push notification mechanism works instantly with a reference number and expected resolution timeframe"
+                },
+                {
+                  "#": "3",
+                  "Root Cause": "Insufficient awareness of app usage",
+                  "Data Example": "44 complaints about criminal reports despite a full digital channel being available 24/7",
+                  "Proposed Solution": "Targeted awareness campaigns + improved service discoverability in the app"
+                },
+                {
+                  "#": "4",
+                  "Root Cause": "Genuine digital gap in traffic objections",
+                  "Data Example": "The objection service is not offered electronically — requires physical presence during specified hours",
+                  "Proposed Solution": "Build a digital objection form on the Ministry of Interior platform in accordance with applicable laws and policies"
+                },
+                {
+                  "#": "5",
+                  "Root Cause": "Lack of transparency in complaint and report closure",
+                  "Data Example": "Customers file complaints to inquire about the status of their archived reports",
+                  "Proposed Solution": "Comprehensive tracking portal displaying both report and complaint status together"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 8
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_20_analysis_fourth",
+      "title": "Sixth: Fourth Analysis — Digital Transformation Plan",
+      "title_en": "Analysis Fourth",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_21_61_priority_faqs",
+          "title": "6.1  Priority FAQs (Extracted from Actual Complaints Data)",
+          "title_en": "6.1  Priority FAQs (Extracted from Actual Complaints Data)",
+          "level": 2,
+          "content": "These questions are extracted from the most frequently contacted services in the complaints data. The answers are based on service cards in the official service directory of the Fujairah General Police Command — not on staff procedural practice. The objective is to provide the customer with the correct path before submitting a complaint.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Question",
+                "Official Channel",
+                "Correct Answer",
+                "Frequency"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Question": "How do I file a criminal report?",
+                  "Official Channel": "MOI App or Ministry of Interior website (24/7) or Service Center",
+                  "Correct Answer": "Via the Ministry of Interior app (MOI): select \"Criminal Reports\", enter your ID and UAE PASS, and fill in the incident details. The service is free and available 24 hours, 7 days a week.",
+                  "Frequency": "44"
+                },
+                {
+                  "#": "2",
+                  "Question": "How do I object to a traffic violation?",
+                  "Official Channel": "Service Center only (7:30–15:30) — no digital option currently available",
+                  "Correct Answer": "Visit the Traffic Services Center in person between 7:30–15:30 with your ID, driving license, vehicle ownership card, and violations statement. The service is free and takes 5 minutes.",
+                  "Frequency": "5"
+                },
+                {
+                  "#": "3",
+                  "Question": "How do I request a visit for an inmate at a correctional facility?",
+                  "Official Channel": "Fujairah General Police Command app (7:30–15:30)",
+                  "Correct Answer": "Via the Fujairah Police app: select \"Organize Visits\", enter the ID number, specify the visit type (family / lawyer / embassy). The service is free.",
+                  "Frequency": "5"
+                },
+                {
+                  "#": "4",
+                  "Question": "How do I obtain a good conduct certificate?",
+                  "Official Channel": "MOI App + Ministry website (24/7) — 5 minutes only",
+                  "Correct Answer": "Via the Ministry of Interior app (MOI): select \"Good Conduct Certificate\", enter your ID. The service is fully electronic and takes 5 minutes. Check fees upon submission.",
+                  "Frequency": "4"
+                },
+                {
+                  "#": "5",
+                  "Question": "How do I file a complaint about an employee or procedure at a police station?",
+                  "Official Channel": "MOI App / Website / Call Center",
+                  "Correct Answer": "Submit your complaint via the Ministry of Interior and Fujairah Police app or website under the \"Contact Us\" tab. You will receive a reference number immediately upon submission, and the standard response period is 5 working days.",
+                  "Frequency": "15"
+                },
+                {
+                  "#": "6",
+                  "Question": "What should I do if I have not received a response to an old complaint?",
+                  "Official Channel": "Do not resubmit — contact using the reference number",
+                  "Correct Answer": "Do not resubmit the complaint — use the reference number to inquire via the Ministry app or call the unified call center. Resubmission is classified as a \"duplicate complaint\" and is closed automatically.",
+                  "Frequency": "39"
+                }
+              ],
+              "row_count": 6,
+              "col_count": 5,
+              "original_index": 9,
+              "caption": "These questions are extracted from the most frequently contacted services in the complaints data. The answers are based on service cards in the official service directory of the Fujairah General Police Command — not on staff procedural practice. The objective is to provide the customer with the correct path before submitting a complaint."
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_22_62_elimination_path",
+          "title": "6.2  Path to Eliminating 55+ Complaint Cases via Proactive Notifications",
+          "title_en": "6.2  Path to Eliminating 55+ Complaint Cases via Proactive Notifications",
+          "level": 2,
+          "content": "The analysis estimates that at least 55 complaints — representing 23% of the total — could have been entirely avoided with a simple proactive notification system. This is not complex technology: a single SMS upon receipt, a brief update upon transfer, and a notification upon closure with the reason — and that is sufficient to remove the motivation for repetition.",
+          "tables": [
+            {
+              "columns": [
+                "Notification Type",
+                "Cases Eliminated",
+                "Notification Content",
+                "Channel",
+                "Expected Impact"
+              ],
+              "rows": [
+                {
+                  "Notification Type": "Immediate receipt notification",
+                  "Cases Eliminated": "39",
+                  "Notification Content": "Your complaint [XXX] has been received — expected timeframe [N] days",
+                  "Channel": "Automatic SMS + Push",
+                  "Expected Impact": "Substantial reduction in duplicate complaints — eliminates the main motivation for repetition"
+                },
+                {
+                  "Notification Type": "Route update notification",
+                  "Cases Eliminated": "10",
+                  "Notification Content": "Your complaint [XXX] has been transferred to [Entity] — to be resolved within [N] days",
+                  "Channel": "SMS + App notification",
+                  "Expected Impact": "40% reduction in inquiry requests"
+                },
+                {
+                  "Notification Type": "Closure notification with reason",
+                  "Cases Eliminated": "21",
+                  "Notification Content": "Your complaint [XXX] has been closed. Reason: [Report archived / Referred to prosecution / …]",
+                  "Channel": "SMS + Email",
+                  "Expected Impact": "Improved customer satisfaction — reduction in re-submitted complaints"
+                },
+                {
+                  "Notification Type": "Guidance to correct channel notification",
+                  "Cases Eliminated": "16",
+                  "Notification Content": "Your request appears to be a criminal report — click here to submit it via the app",
+                  "Channel": "Interactive message at point of submission",
+                  "Expected Impact": "100% elimination of wrong-channel cases"
+                }
+              ],
+              "row_count": 4,
+              "col_count": 5,
+              "original_index": 10
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_23_use_cases",
+      "title": "Seventh: AI-Powered Use Cases",
+      "title_en": "Use Cases",
+      "level": 2,
+      "content": "The Fujairah General Police Command has more than 241 documented complaint records with detailed texts and processing decisions — a training dataset ready for building customized AI models. The analysis estimates that 40%+ of complaint volume is eligible for partial or full automated processing.\nKey Note: The AI training data already exists in the CRM system — 241 documented complaints with their texts and decisions form a genuine starting point, expanding daily as work continues. Automated classification alone solves the most pressing problems.",
+      "tables": [
+        {
+          "columns": [
+            "Tool",
+            "Function",
+            "Expected Impact",
+            "Implementation Assessment"
+          ],
+          "rows": [
+            {
+              "Tool": "Automated Complaint Classifier",
+              "Function": "Classifies the complaint at the moment of submission: service complaint / criminal report / employment grievance / out-of-jurisdiction",
+              "Expected Impact": "Elimination of 90% of rejection cases due to misclassification",
+              "Implementation Assessment": "🟢 Ready for implementation — training data available"
+            },
+            {
+              "Tool": "Smart Customer Guide (chatbot)",
+              "Function": "Answers frequently asked questions and directs to the correct service channel before submission",
+              "Expected Impact": "30% reduction in complaints resulting from confusion",
+              "Implementation Assessment": "🟢 Ready — questions documented in this report"
+            },
+            {
+              "Tool": "Smart Staff Assistant (agent assist)",
+              "Function": "Suggests a standard response to the staff member based on complaint type and service",
+              "Expected Impact": "40% acceleration in processing and standardization of response quality",
+              "Implementation Assessment": "🟡 Requires development of CRM interface integration"
+            },
+            {
+              "Tool": "Critical Pattern Detection System",
+              "Function": "Monitors repeat complaints from a specific department or service before the issue escalates",
+              "Expected Impact": "Early warning preventing silent service crises",
+              "Implementation Assessment": "🔵 Long-term — requires accumulated data"
+            }
+          ],
+          "row_count": 4,
+          "col_count": 4,
+          "original_index": 11,
+          "caption": "The Fujairah General Police Command has more than 241 documented complaint records with detailed texts and processing decisions — a training dataset ready for building customized AI models. The analysis estimates that 40%+ of complaint volume is eligible for partial or full automated processing."
+        }
+      ],
+      "charts": [],
+      "subsections": []
+    },
+    {
+      "id": "section_24_roadmap",
+      "title": "Eighth: Proposed Improvement Roadmap",
+      "title_en": "Roadmap",
+      "level": 2,
+      "content": "This roadmap consolidates the recommendations from all four analyses into a prioritized system according to impact and ease of implementation. Immediate items do not require new technologies — they are procedural improvements and configuration of existing systems. Medium and long-term items represent the real investment in digital transformation.",
+      "tables": [
+        {
+          "columns": [
+            "Time Horizon",
+            "#",
+            "Recommendation",
+            "Source",
+            "Expected Impact",
+            "Effort"
+          ],
+          "rows": [
+            {
+              "Time Horizon": "🚨 Immediate (weeks)",
+              "#": "1",
+              "Recommendation": "Improve SMS notifications upon complaint receipt, status update, and closure with a reference number",
+              "Source": "Analysis",
+              "Expected Impact": "Elimination of 39+ duplicate complaints annually",
+              "Effort": "Low"
+            },
+            {
+              "Time Horizon": "🚨 Immediate (weeks)",
+              "#": "2",
+              "Recommendation": "Activate a smart guidance window upon complaint submission: \"Do you want to file a report?\"",
+              "Source": "Analysis",
+              "Expected Impact": "Elimination of 16+ wrong-channel cases annually",
+              "Effort": "Low"
+            },
+            {
+              "Time Horizon": "🚨 Immediate (weeks)",
+              "#": "3",
+              "Recommendation": "Add 6 additional core FAQ questions",
+              "Source": "Analysis",
+              "Expected Impact": "30% reduction in inquiry complaints",
+              "Effort": "Low"
+            },
+            {
+              "Time Horizon": "📅 Short-term (1–3 months)",
+              "#": "4",
+              "Recommendation": "Develop a service chatbot linked to the official service directory",
+              "Source": "Analysis",
+              "Expected Impact": "Automatic redirection of 25% of guidance complaints",
+              "Effort": "Medium"
+            },
+            {
+              "Time Horizon": "📅 Short-term (1–3 months)",
+              "#": "5",
+              "Recommendation": "Improve user experience of the visits service in the Fujairah Police app + visual FAQ",
+              "Source": "Analysis",
+              "Expected Impact": "50% reduction in correctional facility complaints",
+              "Effort": "Medium"
+            },
+            {
+              "Time Horizon": "🔧 Medium-term (3–6 months)",
+              "#": "6",
+              "Recommendation": "Develop a digital traffic violation objection form (genuine gap)",
+              "Source": "Analysis",
+              "Expected Impact": "100% elimination of mandatory-presence complaints",
+              "Effort": "High"
+            },
+            {
+              "Time Horizon": "🔧 Medium-term (3–6 months)",
+              "#": "7",
+              "Recommendation": "Develop an AI-powered automated complaint classification module",
+              "Source": "Analysis",
+              "Expected Impact": "Elimination of 90% of misclassification cases",
+              "Effort": "High"
+            },
+            {
+              "Time Horizon": "🚀 Long-term (6+ months)",
+              "#": "8",
+              "Recommendation": "Unified tracking portal: \"Where is my complaint? / Where is my report?\" on a single page",
+              "Source": "Analysis",
+              "Expected Impact": "General 40%+ reduction in inquiry-related contact",
+              "Effort": "High"
+            }
+          ],
+          "row_count": 8,
+          "col_count": 6,
+          "original_index": 12,
+          "caption": "This roadmap consolidates the recommendations from all four analyses into a prioritized system according to impact and ease of implementation. Immediate items do not require new technologies — they are procedural improvements and configuration of existing systems. Medium and long-term items represent the real investment in digital transformation."
+        }
+      ],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_25_proactive_complaint_resolution",
+          "title": "Proactive Complaint Resolution",
+          "title_en": "Proactive Complaint Resolution",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Expected Complaint",
+                "Impact",
+                "Proposed Proactive Solution",
+                "Confidence Level"
+              ],
+              "rows": [
+                {
+                  "Expected Complaint": "I have not received any confirmation that my complaint was received",
+                  "Impact": "If the absence of confirmation continues, the number of duplicate complaints will increase cumulatively, burdening the system with redundant requests of no operational value, and causing the customer to lose confidence that their communications are even being received.",
+                  "Proposed Proactive Solution": "• Send an automatic SMS immediately upon complaint registration, including the request number and receipt date\n• Add a confirmation email within 5 minutes of creation",
+                  "Confidence Level": "High — 86%"
+                },
+                {
+                  "Expected Complaint": "Weeks have passed since my report and I do not know its progress",
+                  "Impact": "If updates on security complaints continue to be absent, procedural ambiguity will turn into escalating tension that may push customers toward media escalation or legal channels, bypassing the official process.",
+                  "Proposed Proactive Solution": "• Create a tracking portal allowing customers to view the complaint stage without revealing investigation details\n• Send an automatic notification every 7 days with a status update, even if it only says \"under processing\"\n• Define the average processing duration and publish it to manage customer expectations",
+                  "Confidence Level": "Medium — 71%"
+                },
+                {
+                  "Expected Complaint": "My complaint was rejected because it is not within Fujairah's jurisdiction",
+                  "Impact": "If customers remain without clear guidance, police resources will continue to absorb complaints outside their authority, and customers' sense of being referred from one entity to another without resolution will deepen.",
+                  "Proposed Proactive Solution": "• Publish a digital guide specifying the jurisdiction of each government entity in Fujairah — an awareness initiative\n• Send a referral message including contact information for the competent authority",
+                  "Confidence Level": "Medium — 68%"
+                },
+                {
+                  "Expected Complaint": "My traffic violation objection was rejected without a clear path forward",
+                  "Impact": "If the objection path remains ambiguous, repeated traffic complaints will accumulate and the sense of procedural injustice will become a negative influence on the entity's image in the licensing sector.",
+                  "Proposed Proactive Solution": "• Document objection procedures on a dedicated page with numbered steps\n• Notify the customer of the decision within a specified period with the legal justification stated",
+                  "Confidence Level": "Medium — 65%"
+                },
+                {
+                  "Expected Complaint": "I submitted a request and was not responded to within the specified timeframe",
+                  "Impact": "If SLA violations continue without systemic handling, the compliance rate will gradually decline until the exception becomes the norm, which will negatively impact indicators in supervisory reports.",
+                  "Proposed Proactive Solution": "• Prepare an internal Dashboard alerting officials to any request approaching its deadline\n• Ensure that SLA violations trigger automatic escalation to the direct supervisor\n• Determine whether cases are concentrated in a specific department",
+                  "Confidence Level": "Low-Medium — 58%"
+                },
+                {
+                  "Expected Complaint": "I do not know whether my good conduct certificate is ready or not",
+                  "Impact": "If certificate complaints remain without a clear tracking path, unnecessary personal visits and phone inquiries will increase, forming an operational burden that can be entirely avoided.",
+                  "Proposed Proactive Solution": "• Send an SMS immediately upon completion of certificate or permit preparation\n• Add request status tracking via national ID number on the official app\n• Publish the standard processing duration for each certificate type at communication points",
+                  "Confidence Level": "Medium — 63%"
+                }
+              ],
+              "row_count": 6,
+              "col_count": 4,
+              "original_index": 13
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_26_conclusion",
+      "title": "Ninth: Conclusion — From Data to Decision",
+      "title_en": "Conclusion",
+      "level": 2,
+      "content": "Final Message: The 2025 complaints embody a dual picture: a General Command that closes 97% of its complaints within specified deadlines, while at the same time customers repeat their complaints four times because they have not received a response. The contradiction is not in service quality, but in the gap between what happens internally and what the customer perceives. Closing this gap — through proactive notification, smart guidance, and automated classification — is the investment with the fastest return and deepest impact on the customer journey with the Fujairah Police.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_27_three_transformation_pillars",
+          "title": "The Three Pillars of Transformation",
+          "title_en": "The Three Pillars of Transformation",
+          "level": 2,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Pillar One: Precision",
+                "Pillar Two: Accessibility",
+                "Pillar Three: Intelligence"
+              ],
+              "rows": [
+                {
+                  "Pillar One: Precision": "Activate smart classification at submission to distinguish between complaints, reports, and grievances",
+                  "Pillar Two: Accessibility": "Deploy a proactive notification system at every stage: receipt ← transfer ← closure",
+                  "Pillar Three: Intelligence": "Build an automated classifier trained on actual CRM data to classify complaints in real time"
+                },
+                {
+                  "Pillar One: Precision": "Close the genuine digital gap by developing a digital traffic violation objection form",
+                  "Pillar Two: Accessibility": "A unified tracking portal combining complaints and reports in a single interface for the customer",
+                  "Pillar Three: Intelligence": "A chatbot linked to the service directory to automatically redirect guidance complaints (30%+ of volume)"
+                },
+                {
+                  "Pillar One: Precision": "Review the service classification structure to reduce the \"Other\" percentage from 43% to less than 10%",
+                  "Pillar Two: Accessibility": "Extend visit service hours in the Fujairah Police app and improve user experience",
+                  "Pillar Three: Intelligence": "A pattern detection system to proactively monitor repetition of complaints for a specific department or service"
+                }
+              ],
+              "row_count": 3,
+              "col_count": 3,
+              "original_index": 14
+            },
+            {
+              "columns": [
+                "Volume Reduction",
+                "Processing Quality",
+                "Eligible for Elimination"
+              ],
+              "rows": [
+                {
+                  "Volume Reduction": "35%+ reduction in duplicate complaints",
+                  "Processing Quality": "97% SLA compliance rate",
+                  "Eligible for Elimination": "55+ cases eligible for immediate elimination"
+                }
+              ],
+              "row_count": 1,
+              "col_count": 3,
+              "original_index": 15
+            }
+          ],
+          "charts": []
+        }
+      ]
+    }
+  ]
+}

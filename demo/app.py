@@ -1722,19 +1722,24 @@ def get_period_folders(flow_type: str = 'inquiries'):
     return sorted(folders)
 
 
-def get_report_files_in_period(flow_type: str, period: str):
+def get_report_files_in_period(flow_type: str, period: str, lang: str = 'ar'):
     """Get the report and Excel files for a specific period.
 
     Args:
         flow_type: 'inquiries' or 'complaints'
         period: The period folder name
+        lang: Language preference ('ar' or 'en'). For complaints flow in English, looks in english-output folder.
 
     Returns:
         Tuple of (docx_path, xlsx_path) or (None, None) if not found
     """
     script_dir = Path(__file__).parent
     if flow_type == 'complaints':
-        period_path = script_dir / "complaints-output" / period
+        # For English mode in complaints, look in english-output subfolder
+        if lang == 'en':
+            period_path = script_dir / "complaints-output" / period / "english-output"
+        else:
+            period_path = script_dir / "complaints-output" / period
     else:
         period_path = script_dir / "inquiries-output" / period
 
@@ -1781,18 +1786,27 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
 
         # Determine output folder and search keywords based on flow type and period
         if flow_type == 'complaints':
-            if period:
-                outputs_path = script_dir / "complaints-output" / period
+            # For English mode in complaints, look in english-output subfolder
+            if lang == 'en':
+                if period:
+                    outputs_path = script_dir / "complaints-output" / period / "english-output"
+                else:
+                    outputs_path = script_dir / "complaints-output"
+                cache_dir = str(script_dir / "complaints-output" / "cache" / "english-cache")
+                search_keywords = ['complaints']  # English keywords for complaints
             else:
-                outputs_path = script_dir / "complaints-output"
-            search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints
-            cache_dir = str(script_dir / "complaints-output" / "cache")
+                if period:
+                    outputs_path = script_dir / "complaints-output" / period
+                else:
+                    outputs_path = script_dir / "complaints-output"
+                cache_dir = str(script_dir / "complaints-output" / "cache")
+                search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints (Arabic)
         else:  # default to inquiries
             if period:
                 outputs_path = script_dir / "inquiries-output" / period
             else:
                 outputs_path = script_dir / "inquiries-output"
-            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries
+            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries (Arabic)
             cache_dir = str(script_dir / "inquiries-output" / "cache")
 
         if not outputs_path.exists():
@@ -1826,12 +1840,13 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
 
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
-def create_download_zip(flow_type: str = 'inquiries', period: str = None):
+def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: str = 'ar'):
     """Create a ZIP file containing the Word report and Excel file
 
     Args:
         flow_type: 'inquiries' or 'complaints' - determines which output folder to use
         period: The period folder name. If None, uses root folder (legacy behavior).
+        lang: Language preference ('ar' or 'en'). For complaints flow in English, uses english-output folder.
     """
     script_dir = Path(__file__).parent
     zip_buffer = io.BytesIO()
@@ -1839,7 +1854,7 @@ def create_download_zip(flow_type: str = 'inquiries', period: str = None):
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         if flow_type == 'complaints':
             if period:
-                report_path, excel_path = get_report_files_in_period('complaints', period)
+                report_path, excel_path = get_report_files_in_period('complaints', period, lang=lang)
                 if report_path:
                     zip_file.write(report_path, report_path.name)
                 if excel_path:
@@ -1856,7 +1871,7 @@ def create_download_zip(flow_type: str = 'inquiries', period: str = None):
         else:
             # Inquiries flow
             if period:
-                report_path, excel_path = get_report_files_in_period('inquiries', period)
+                report_path, excel_path = get_report_files_in_period('inquiries', period, lang=lang)
                 if report_path:
                     zip_file.write(report_path, report_path.name)
                 if excel_path:
@@ -1916,8 +1931,8 @@ def simulate_period_processing(lang='ar'):
     progress_container = st.empty()
     pct_container = st.empty()
 
-    total_duration = random.randint(30, 60)  # Random 30-60 seconds
-    # total_duration = 1
+    # total_duration = random.randint(30, 60)  # Random 30-60 seconds
+    total_duration = 1
     update_interval = 0.5
     total_steps = int(total_duration / update_interval)
 
@@ -2494,9 +2509,9 @@ def complaints_page(lang):
         st.markdown('</div>', unsafe_allow_html=True)
 
         # Check if files exist in the selected period
-        docx_path, xlsx_path = get_report_files_in_period('complaints', st.session_state.selected_period_cmp)
+        docx_path, xlsx_path = get_report_files_in_period('complaints', st.session_state.selected_period_cmp, lang=lang)
         if docx_path and docx_path.exists():
-            zip_data = create_download_zip(flow_type='complaints', period=st.session_state.selected_period_cmp)
+            zip_data = create_download_zip(flow_type='complaints', period=st.session_state.selected_period_cmp, lang=lang)
             st.markdown('<div class="blue-download" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
