@@ -53,23 +53,39 @@ T = {
         'nav_back':          '← العودة للرئيسية',
         'hero_eyebrow':      'شرطة الفجيرة · الخدمات الذكية',
         'hero_title':        'نبض الفجيرة',
-        'hero_subtitle':     'منصة ذكاء اصطناعي لتحليل استفسارات وشكاوى المتعاملين وتحسين جودة الخدمات الحكومية',
+        'hero_subtitle':     'منصة ذكاء اصطناعي متقدمة لتحليل شكاوى المتعاملين واستخراج الرؤى والتوصيات لتحسين جودة الخدمات الحكومية',
         'badge_speed':       '⚡ معالجة فورية',
         'badge_accuracy':    '🎯 دقة عالية',
         'badge_security':    '🔒 بيانات آمنة',
         'badge_reports':     '📊 تقارير شاملة',
-        'section_label':     'اختر الخدمة',
-        'section_title':     'ماذا تريد أن تحلل؟',
-        'inq_card_title':    'تحليل الاستفسارات',
-        'inq_card_desc':     'حلّل استفسارات المتعاملين واستخرج الأنماط والتوجهات لتحسين مستوى الخدمة وسرعة الاستجابة.',
-        'inq_tag1':          'Excel / PDF',
-        'inq_tag2':          'تقرير Word',
-        'inq_tag3':          'نتائج فورية',
+        'section_label':     'تحليل ذكي للشكاوى',
+        'section_title':     'استخرج الرؤى والتوصيات من شكاوى المتعاملين',
+        'cmp_description':   'حول شكاوى المتعاملين إلى أفكار قابلة للتنفيذ باستخدام الذكاء الاصطناعي',
+        'feat1_title':       '🔍 تصنيف تلقائي',
+        'feat1_desc':        'صنّف الشكاوى حسب النوع والمجال والأولوية تلقائياً',
+        'feat2_title':       '📊 تحليل الأولويات',
+        'feat2_desc':        'حدّد الشكاوى الحرجة والمتكررة والأنماط المهمة',
+        'feat3_title':       '💡 توصيات ذكية',
+        'feat3_desc':        'احصل على توصيات قابلة للتطبيق لمعالجة الأسباب الجذرية',
+        'how_label':         'كيف يعمل',
+        'how_title':         'ثلاث خطوات بسيطة لتحليل شامل',
+        'step1_title':       'ارفع الملف',
+        'step1_sub':         'أرسل ملف الشكاوى (Excel أو PDF)',
+        'step2_title':       'التحليل الفوري',
+        'step2_sub':         'يقوم الذكاء الاصطناعي بالتحليل والتصنيف',
+        'step3_title':       'التقرير الشامل',
+        'step3_sub':         'احصل على تقرير مفصل مع التوصيات',
+        'cta_btn':           'ابدأ تحليل الشكاوى الآن  ←',
         'cmp_card_title':    'تحليل الشكاوى',
         'cmp_card_desc':     'حلّل شكاوى المتعاملين وصنّفها حسب الأولوية والنوع واستخرج توصيات لمعالجة الأسباب الجذرية.',
         'cmp_tag1':          'Excel / PDF',
         'cmp_tag2':          'تقرير Word',
         'cmp_tag3':          'نتائج فورية',
+        'inq_card_title':    'تحليل الاستفسارات',
+        'inq_card_desc':     'حلّل استفسارات المتعاملين واستخرج الأنماط والتوجهات لتحسين مستوى الخدمة وسرعة الاستجابة.',
+        'inq_tag1':          'Excel / PDF',
+        'inq_tag2':          'تقرير Word',
+        'inq_tag3':          'نتائج فورية',
         'btn_inq':           'ابدأ تحليل الاستفسارات  ←',
         'btn_cmp':           'ابدأ تحليل الشكاوى  ←',
         'footer_copy':       '© 2026 شرطة الفجيرة · جميع الحقوق محفوظة',
@@ -119,23 +135,39 @@ T = {
         'nav_back':          '← Back to Home',
         'hero_eyebrow':      'Fujairah Police · Smart Services',
         'hero_title':        'Fujairah Pulse',
-        'hero_subtitle':     'An AI platform for analyzing citizen inquiries and complaints to improve government service quality.',
+        'hero_subtitle':     'Advanced AI platform for analyzing citizen complaints and extracting insights and recommendations to improve government service quality.',
         'badge_speed':       '⚡ Instant Processing',
         'badge_accuracy':    '🎯 High Accuracy',
         'badge_security':    '🔒 Secure Data',
         'badge_reports':     '📊 Comprehensive Reports',
-        'section_label':     'Choose a Service',
-        'section_title':     'What would you like to analyze?',
-        'inq_card_title':    'Inquiries Analysis',
-        'inq_card_desc':     'Analyze citizen inquiries and extract patterns and trends to improve service quality and response speed.',
-        'inq_tag1':          'Excel / PDF',
-        'inq_tag2':          'Word Report',
-        'inq_tag3':          'Instant Results',
+        'section_label':     'Smart Complaints Analysis',
+        'section_title':     'Extract insights and recommendations from citizen complaints',
+        'cmp_description':   'Turn citizen complaints into actionable intelligence using advanced AI',
+        'feat1_title':       '🔍 Automatic Classification',
+        'feat1_desc':        'Classify complaints by type, category, and priority automatically',
+        'feat2_title':       '📊 Priority Analysis',
+        'feat2_desc':        'Identify critical, recurring, and high-impact complaints instantly',
+        'feat3_title':       '💡 Smart Recommendations',
+        'feat3_desc':        'Get actionable recommendations to address root causes',
+        'how_label':         'How it Works',
+        'how_title':         'Three simple steps to comprehensive analysis',
+        'step1_title':       'Upload File',
+        'step1_sub':         'Submit your complaints file (Excel or PDF)',
+        'step2_title':       'Instant Analysis',
+        'step2_sub':         'AI analyzes and classifies complaints',
+        'step3_title':       'Full Report',
+        'step3_sub':         'Get detailed report with recommendations',
+        'cta_btn':           'Start Complaints Analysis Now  →',
         'cmp_card_title':    'Complaints Analysis',
         'cmp_card_desc':     'Analyze citizen complaints, classify by priority and type, and extract recommendations to address root causes.',
         'cmp_tag1':          'Excel / PDF',
         'cmp_tag2':          'Word Report',
         'cmp_tag3':          'Instant Results',
+        'inq_card_title':    'Inquiries Analysis',
+        'inq_card_desc':     'Analyze citizen inquiries and extract patterns and trends to improve service quality and response speed.',
+        'inq_tag1':          'Excel / PDF',
+        'inq_tag2':          'Word Report',
+        'inq_tag3':          'Instant Results',
         'btn_inq':           'Start Inquiries Analysis  →',
         'btn_cmp':           'Start Complaints Analysis  →',
         'footer_copy':       '© 2026 Fujairah Police · All Rights Reserved',
@@ -565,7 +597,7 @@ def load_css(lang='ar'):
         padding: 4rem 0 2.5rem;
     }}
     .section-label {{
-        display: inline-block;
+        display: block;
         font-size: 0.78rem;
         font-weight: 700;
         letter-spacing: 3px;
@@ -579,7 +611,6 @@ def load_css(lang='ar'):
         color: {TEXT};
         margin: 0 0 1rem;
         direction: {DIR} !important;
-        text-align: center !important;
     }}
     .section-ornament {{
         display: flex;
@@ -1206,6 +1237,166 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
     }}
 
+    /* ── COMPLAINTS SHOWCASE SECTION ── */
+    .complaints-showcase {{
+        max-width: 900px;
+        margin: 3rem auto 2rem;
+        padding: 0 1rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+    }}
+    .complaints-feature-card {{
+        background: {BG_CARD};
+        border: 1.5px solid {BORDER_B};
+        border-radius: 24px;
+        padding: 3rem 2.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 3rem;
+    }}
+    .complaints-feature-card::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, {BLUE}, transparent);
+    }}
+    .complaints-feature-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 24px 80px rgba(46,134,171,0.15);
+        transform: translateY(-4px);
+    }}
+    .complaints-feature-card .title {{
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: {BLUE_LIGHT};
+        margin: 0 0 1rem;
+        text-align: center !important;
+    }}
+    .complaints-feature-card .desc {{
+        color: {TEXT_MUTED};
+        font-size: 1.05rem;
+        line-height: 1.8;
+        margin: 0;
+        text-align: center !important;
+    }}
+
+    /* ── BLUE FEATURE CARDS ── */
+    .blue-feature-card {{
+        background: {BG_CARD};
+        border: 1px solid {BORDER_B};
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        direction: {DIR} !important;
+        display: flex;
+        flex-direction: column;
+        text-align: center !important;
+    }}
+    .blue-feature-card::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, {BLUE}, transparent);
+        opacity: 0.6;
+    }}
+    .blue-feature-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 24px 64px rgba(46,134,171,0.09), 0 0 0 1px {BORDER_B};
+        transform: translateY(-4px);
+    }}
+    .blue-feature-card .feature-icon-wrap {{
+        width: 58px; height: 58px;
+        background: linear-gradient(135deg, rgba(46,134,171,0.15), rgba(46,134,171,0.04));
+        border: 1px solid {BORDER_B2};
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        margin: 0 auto 1.4rem;
+    }}
+    .blue-feature-card .feature-title {{
+        color: {BLUE_LIGHT};
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0 0 0.7rem;
+        direction: {DIR} !important;
+        text-align: center !important;
+    }}
+    .blue-feature-card .feature-desc {{
+        color: {TEXT_MUTED};
+        font-size: 1rem;
+        line-height: 1.8;
+        margin: 0;
+        direction: {DIR} !important;
+        flex: 1;
+        text-align: center !important;
+    }}
+
+    /* ── BLUE STEP CARDS ── */
+    .blue-step-card {{
+        background: {BG_CARD};
+        border: 1px solid {BORDER_B};
+        border-radius: 16px;
+        padding: 2rem 1.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+        position: relative;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    }}
+    .blue-step-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 12px 40px rgba(46,134,171,0.07);
+    }}
+    .blue-step-card .step-number {{
+        font-size: 2.6rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, {BORDER_B2}, rgba(46,134,171,0.1));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1;
+        margin-bottom: 0.6rem;
+        text-align: center !important;
+    }}
+    .blue-step-card .step-icon {{
+        font-size: 2rem;
+        margin-bottom: 0.8rem;
+        text-align: center !important;
+    }}
+    .blue-step-card .step-title {{
+        color: {TEXT};
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+    }}
+    .blue-step-card .step-desc {{
+        color: {TEXT_MUTED};
+        font-size: 0.9rem;
+        line-height: 1.7;
+        margin: 0;
+        text-align: center !important;
+        direction: {DIR} !important;
+        flex: 1;
+    }}
+
+    /* ── CTA SECTION ── */
+    .cta-section {{
+        max-width: 480px;
+        margin: 3rem auto 3rem;
+        padding: 0 1rem;
+    }}
+
     /* ── FOOTER ── */
     .footer {{
         border-top: 1px solid {BORDER_G};
@@ -1478,6 +1669,8 @@ def load_credentials():
                 ('alhyah_email', 'alhyah_password', 'alhyah_center'),
                 ('shaheen_email', 'shaheen_password', 'shaheen_center'),
                 ('fatima_email', 'fatima_password', 'fatima_center'),
+                ('saeed_al_soghairi_email', 'saeed_al_soghairi_password', 'saeed_al_soghairi_center'),
+                ('ahmed_al_hammadi_email', 'ahmed_al_hammadi_password', 'ahmed_al_hammadi_center'),
             ]
             for email_key, password_key, center_key in user_configs:
                 if email_key in st.secrets.users and password_key in st.secrets.users:
@@ -1936,9 +2129,9 @@ def landing_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Use-case selection ──
+    # ── Complaints Showcase Section ──
     st.markdown(f"""
-    <div style="text-align:center;padding:2.5rem 0 1rem;direction:{DIR};">
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2.5rem 0 1rem;direction:{DIR};">
         <div class="section-label">{tx['section_label']}</div>
         <h2 class="section-title">{tx['section_title']}</h2>
         <div class="section-ornament">
@@ -1949,23 +2142,13 @@ def landing_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
+    # Main feature card
     st.markdown(f"""
-    <div class="use-case-grid">
-        <div class="use-case-card inquiries-card">
-            <div class="use-case-icon-wrap inquiries-icon-wrap">📋</div>
-            <div class="use-case-title">{tx['inq_card_title']}</div>
-            <p class="use-case-desc">{tx['inq_card_desc']}</p>
-            <div class="use-case-tags">
-                <span class="use-case-tag inquiries-tag">{tx['inq_tag1']}</span>
-                <span class="use-case-tag inquiries-tag">{tx['inq_tag2']}</span>
-                <span class="use-case-tag inquiries-tag">{tx['inq_tag3']}</span>
-            </div>
-        </div>
-        <div class="use-case-card complaints-card">
-            <div class="use-case-icon-wrap complaints-icon-wrap">📣</div>
-            <div class="use-case-title">{tx['cmp_card_title']}</div>
-            <p class="use-case-desc">{tx['cmp_card_desc']}</p>
-            <div class="use-case-tags">
+    <div class="complaints-showcase">
+        <div class="complaints-feature-card">
+            <div class="title">📣 {tx['cmp_card_title']}</div>
+            <div class="desc">{tx['cmp_card_desc']}</div>
+            <div style="margin-top: 1.8rem; display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center;">
                 <span class="use-case-tag complaints-tag">{tx['cmp_tag1']}</span>
                 <span class="use-case-tag complaints-tag">{tx['cmp_tag2']}</span>
                 <span class="use-case-tag complaints-tag">{tx['cmp_tag3']}</span>
@@ -1974,19 +2157,91 @@ def landing_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
-    # Buttons below the cards
-    col1, col2 = st.columns([1, 1], gap="medium")
-    with col1:
-        if st.button(tx['btn_inq'], key="cta_inquiries", use_container_width=True):
-            if st.session_state.authenticated:
-                st.session_state.page = 'inquiries'
-                st.rerun()
-            else:
-                st.session_state.show_login = True
-                st.session_state.pending_page = 'inquiries'
-                st.rerun()
+    # ── Feature Highlights ──
+    st.markdown(f"""
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2rem 0 1rem;direction:{DIR};">
+        <div class="section-label">{tx['how_label']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Feature cards row
+    feat_col1, feat_col2, feat_col3 = st.columns([1, 1, 1], gap="medium")
+    with feat_col1:
+        st.markdown(f"""
+        <div class="blue-feature-card">
+            <div class="feature-icon-wrap">🔍</div>
+            <div class="feature-title">{tx['feat1_title']}</div>
+            <div class="feature-desc">{tx['feat1_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with feat_col2:
+        st.markdown(f"""
+        <div class="blue-feature-card">
+            <div class="feature-icon-wrap">📊</div>
+            <div class="feature-title">{tx['feat2_title']}</div>
+            <div class="feature-desc">{tx['feat2_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with feat_col3:
+        st.markdown(f"""
+        <div class="blue-feature-card">
+            <div class="feature-icon-wrap">💡</div>
+            <div class="feature-title">{tx['feat3_title']}</div>
+            <div class="feature-desc">{tx['feat3_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── How It Works ──
+    st.markdown(f"""
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2rem 0 1rem;direction:{DIR};">
+        <h3 style="font-size: 2rem; font-weight: 700; color: {TEXT}; margin: 2rem 0 0.5rem;">{tx['how_title']}</h3>
+        <div class="section-ornament">
+            <span class="ornament-line"></span>
+            <span class="ornament-diamond">◆</span>
+            <span class="ornament-line right"></span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    step_col1, step_col2, step_col3 = st.columns([1, 1, 1], gap="medium")
+    with step_col1:
+        st.markdown(f"""
+        <div class="blue-step-card">
+            <div class="step-number">1</div>
+            <div class="step-icon">📤</div>
+            <div class="step-title">{tx['step1_title']}</div>
+            <div class="step-desc">{tx['step1_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with step_col2:
+        st.markdown(f"""
+        <div class="blue-step-card">
+            <div class="step-number">2</div>
+            <div class="step-icon">⚙️</div>
+            <div class="step-title">{tx['step2_title']}</div>
+            <div class="step-desc">{tx['step2_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with step_col3:
+        st.markdown(f"""
+        <div class="blue-step-card">
+            <div class="step-number">3</div>
+            <div class="step-icon">📥</div>
+            <div class="step-title">{tx['step3_title']}</div>
+            <div class="step-desc">{tx['step3_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── CTA Button ──
+    st.markdown('<div class="cta-section">', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button(tx['btn_cmp'], key="cta_complaints", use_container_width=True):
+        st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
+        if st.button(tx['cta_btn'], key="cta_complaints", use_container_width=True):
             if st.session_state.authenticated:
                 st.session_state.page = 'complaints'
                 st.rerun()
@@ -1994,6 +2249,8 @@ def landing_page(lang):
                 st.session_state.show_login = True
                 st.session_state.pending_page = 'complaints'
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Footer ──
     st.markdown(f"""
@@ -2364,13 +2621,16 @@ def main():
     if st.session_state.show_login:
         show_login_modal(lang)
         st.stop()
-    
+
+    # Route pages
     if st.session_state.page == 'landing':
         landing_page(lang)
-    elif st.session_state.page == 'inquiries':
-        inquiries_page(lang)
-    else:
+    elif st.session_state.page == 'complaints':
         complaints_page(lang)
+    else:
+        # Redirect inquiries or unknown pages to landing (inquiries disabled in demo UI)
+        st.session_state.page = 'landing'
+        st.rerun()
 
 
 if __name__ == "__main__":
