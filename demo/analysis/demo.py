@@ -18,14 +18,6 @@ class DemoAnalyzer(Analyzer):
     - Provides a reference implementation for the Analyzer interface
     """
 
-    # Simulated processing stages
-    PROCESSING_STAGES = [
-        {'stage': '1', 'label': 'جاري رفع الملفات', 'label_en': 'File Upload', 'percent_start': 0, 'percent_end': 25},
-        {'stage': '2', 'label': 'تحليل البيانات', 'label_en': 'Data Analysis', 'percent_start': 25, 'percent_end': 50},
-        {'stage': '3', 'label': 'معالجة الاستفسارات', 'label_en': 'Processing Inquiries', 'percent_start': 50, 'percent_end': 75},
-        {'stage': '4', 'label': 'إنشاء التقرير النهائي', 'label_en': 'Report Generation', 'percent_start': 75, 'percent_end': 100},
-    ]
-
     # Total processing time in seconds (simulated)
     TOTAL_PROCESSING_TIME = 30  # 30 seconds
 
@@ -51,7 +43,27 @@ class DemoAnalyzer(Analyzer):
 
     def get_processing_stages(self) -> list:
         """Return the processing stages for demo mode."""
-        return self.PROCESSING_STAGES
+        # Determine flow type from Streamlit session state
+        try:
+            import streamlit as st
+            flow_type = st.session_state.get('page', 'inquiries')
+        except:
+            flow_type = 'inquiries'
+
+        # Use different label for complaints flow
+        if flow_type == 'complaints':
+            processing_label_ar = 'معالجة الشكاوى'
+            processing_label_en = 'Processing Complaints'
+        else:
+            processing_label_ar = 'معالجة الاستفسارات'
+            processing_label_en = 'Processing Inquiries'
+
+        return [
+            {'stage': '1', 'label': 'جاري رفع الملفات', 'label_en': 'File Upload', 'percent_start': 0, 'percent_end': 25},
+            {'stage': '2', 'label': 'تحليل البيانات', 'label_en': 'Data Analysis', 'percent_start': 25, 'percent_end': 50},
+            {'stage': '3', 'label': processing_label_ar, 'label_en': processing_label_en, 'percent_start': 50, 'percent_end': 75},
+            {'stage': '4', 'label': 'إنشاء التقرير النهائي', 'label_en': 'Report Generation', 'percent_start': 75, 'percent_end': 100},
+        ]
 
     def analyze(self, uploaded_file) -> Dict[str, Any]:
         """

@@ -438,10 +438,11 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
     }}
     .hero-subtitle {{
+        display: block;
         font-size: 1.35rem;
         font-weight: 400;
         color: rgba(228,228,240,0.75);
-        max-width: 640px;
+        max-width: 780px;
         margin: 0 auto 2.5rem;
         line-height: 1.9;
         text-align: center !important;
