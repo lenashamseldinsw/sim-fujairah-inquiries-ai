@@ -1296,6 +1296,7 @@ def load_css(lang='ar'):
         display: flex;
         flex-direction: column;
         text-align: center !important;
+        min-height: 270px;
     }}
     .blue-feature-card::before {{
         content: '';
