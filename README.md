@@ -170,4 +170,4 @@ chmod 644 complaints-output/*.docx
 
 **تم التطوير بواسطة | Developed for:** حكومة الفجيرة | Fujairah Government  
 **التاريخ | Date:** أبريل 2026 | April 2026  
-**الإصدار | Version:** 1.0.0
+**الإصدار | Version:** 1.0.1
