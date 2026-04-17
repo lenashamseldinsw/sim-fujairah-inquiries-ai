@@ -20,7 +20,7 @@ Quickstart::
 """
 
 from .builder import WordBuilder
-from .config import DocumentConfig, TextStyle, TableStyle, ChartStyle, CellStyle, CellLine
+from .config import DocumentConfig, TextStyle, TableStyle, ChartStyle, CellStyle, CellLine, TocStyle
 from ._cover_page import CoverPage
 
 __version__ = "0.1.0"
@@ -33,5 +33,6 @@ __all__ = [
     "ChartStyle",
     "CellStyle",
     "CellLine",
+    "TocStyle",
     "CoverPage",
 ]

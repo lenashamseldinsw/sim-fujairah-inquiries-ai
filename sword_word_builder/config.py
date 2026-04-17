@@ -245,6 +245,23 @@ class TableStyle:
 
 
 # ---------------------------------------------------------------------------
+# TocStyle
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TocStyle:
+    """Styling for a Table of Contents created via WordBuilder.add_toc()."""
+
+    heading_text: str = "المحتويات"
+    heading_bg_color: str = "B68A35"
+    heading_text_color: str = "FFFFFF"
+    heading_font: str = "TheSans"
+    entry_font: str = "Sakkal Majalla"
+    levels: int = 3
+    rtl: bool = True
+
+
+# ---------------------------------------------------------------------------
 # ChartStyle
 # ---------------------------------------------------------------------------
 

@@ -52,3 +52,7 @@ secrets.toml
 
 # Cursor/AI
 .cursor/
+.claude/worktrees/
+
+# Misc
+*.egg-info/

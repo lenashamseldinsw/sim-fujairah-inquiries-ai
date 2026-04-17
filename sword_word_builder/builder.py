@@ -15,7 +15,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_ORIENT
 
 from .config import (
-    DocumentConfig, TextStyle, TableStyle, ChartStyle,
+    DocumentConfig, TextStyle, TableStyle, ChartStyle, TocStyle,
     PAGE_SIZES, hex_to_rgb,
 )
 from ._xml_utils import (
@@ -37,6 +37,7 @@ from ._chart_injector import (
 )
 from ._markdown import MarkdownRenderer
 from ._cover_page import CoverPage
+from ._toc_builder import inject_toc_styles, build_toc_sdt
 
 
 class WordBuilder:
@@ -63,6 +64,10 @@ class WordBuilder:
         self._pending_charts: list[_PendingChart] = []
         self._doc_pr_counter = 1   # unique IDs for drawings (images + charts)
         self._markdown_renderer = MarkdownRenderer(self._config)
+        self._toc_headings: list[tuple[str, int, str]] = []  # (text, level, anchor_id)
+        self._toc_style: TocStyle | None = None
+        self._heading_counter = 0
+        self._bookmark_counter = 0
         self._apply_document_config()
 
     # ------------------------------------------------------------------
@@ -225,6 +230,19 @@ class WordBuilder:
         if should_sep:
             add_paragraph_bottom_border(para)
             set_paragraph_spacing(para, space_after_pt=16)
+
+        # Inject bookmark for TOC PAGEREF fields
+        self._heading_counter += 1
+        self._bookmark_counter += 1
+        anchor_id = f"_Toc{self._heading_counter:09d}"
+        bm_start = OxmlElement("w:bookmarkStart")
+        bm_start.set(qn("w:id"), str(self._bookmark_counter))
+        bm_start.set(qn("w:name"), anchor_id)
+        bm_end = OxmlElement("w:bookmarkEnd")
+        bm_end.set(qn("w:id"), str(self._bookmark_counter))
+        para._p.append(bm_start)
+        para._p.append(bm_end)
+        self._toc_headings.append((text, level, anchor_id))
 
         return self
 
@@ -709,11 +727,81 @@ class WordBuilder:
             set_paragraph_spacing(para, space_before_pt=cfg.footer_spacing_before)
 
     # ------------------------------------------------------------------
+    # Table of Contents
+    # ------------------------------------------------------------------
+
+    _TOC_SENTINEL = "___TOC_SENTINEL_PLACEHOLDER_7f3a9b2c___"
+
+    def add_toc(self, style: TocStyle | None = None) -> Self:
+        """Add a Table of Contents placeholder at the current position.
+
+        The TOC is populated with all headings added via add_heading() and
+        rendered during build()/save().
+        """
+        self._toc_style = style or TocStyle()
+        para = self._doc.add_paragraph()
+        para.text = self._TOC_SENTINEL
+        return self
+
+    def _inject_toc(self) -> None:
+        """Replace the TOC sentinel paragraph with the built SDT element."""
+        body = self._doc.element.body
+        sentinel = None
+        for child in list(body):
+            if child.tag == qn("w:p"):
+                texts = "".join(
+                    t.text or "" for t in child.iter(qn("w:t"))
+                )
+                if texts == self._TOC_SENTINEL:
+                    sentinel = child
+                    break
+        if sentinel is None:
+            return
+
+        # Compute text column width in twips so tab stops fit the page
+        _CM_TO_TWIPS = 1440 / 2.54  # 566.93 twips per cm
+        _EMU_TO_TWIPS = 1440 / 914400
+        page_w_emu, _ = PAGE_SIZES[self._config.page_size]
+        page_w_twips = int(page_w_emu * _EMU_TO_TWIPS)
+        left_twips = int(self._config.margin_left * _CM_TO_TWIPS)
+        right_twips = int(self._config.margin_right * _CM_TO_TWIPS)
+        text_width_twips = page_w_twips - left_twips - right_twips
+
+        inject_toc_styles(self._doc, self._toc_style, text_width_twips)
+        sdt = build_toc_sdt(self._toc_headings, self._toc_style)
+        body.replace(sentinel, sdt)
+
+        # Page break after the TOC so content starts on a new page
+        sdt_idx = list(body).index(sdt)
+        pb_p = OxmlElement("w:p")
+        pb_r = OxmlElement("w:r")
+        pb_br = OxmlElement("w:br")
+        pb_br.set(qn("w:type"), "page")
+        pb_r.append(pb_br)
+        pb_p.append(pb_r)
+        body.insert(sdt_idx + 1, pb_p)
+
+        # Fix python-docx bug: <w:zoom/> missing required w:percent attribute
+        W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        settings = self._doc.settings.element
+        for zoom in settings.findall(f"{{{W}}}zoom"):
+            if zoom.get(f"{{{W}}}percent") is None:
+                zoom.set(f"{{{W}}}percent", "100")
+
+        # Auto-update all fields (PAGEREF) when the document is opened
+        for existing in settings.findall(f"{{{W}}}updateFields"):
+            settings.remove(existing)
+        uf = OxmlElement("w:updateFields")
+        uf.set(qn("w:val"), "1")
+        settings.append(uf)
+
+    # ------------------------------------------------------------------
     # Output
     # ------------------------------------------------------------------
 
     def build(self) -> io.BytesIO:
         """Build and return the document as a BytesIO buffer."""
+        self._inject_toc()
         buf = io.BytesIO()
         self._doc.save(buf)
         buf.seek(0)

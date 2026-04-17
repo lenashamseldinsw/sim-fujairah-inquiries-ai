@@ -156,7 +156,7 @@ def build_table(
                 bold=style.header_bold,
                 font_size=style.header_font_size or config.default_font_size,
                 font_name=config.default_font,
-                alignment="CENTER",
+                alignment=style.text_alignment,
                 rtl=rtl,
                 style=style,
                 is_header=True,

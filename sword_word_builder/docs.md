@@ -37,6 +37,7 @@ builder.save("report.docx")
 | `ChartStyle` | Chart appearance (size, colors, font sizes, legend) |
 | `CellStyle` | Per-cell overrides inside a table |
 | `CellLine` | One styled paragraph inside a multi-paragraph table cell |
+| `TocStyle` | Table of Contents styling (font, colors, RTL) |
 | `CoverPage` | Composable canvas for building cover pages |
 
 ---
@@ -195,7 +196,7 @@ builder.add_heading("Title").add_paragraph("Body text.").save("out.docx")
 
 ### `add_heading(text, level=1, style=None, rtl=None, separator=None)`
 
-Add a heading at levels 1–6.
+Add a heading at levels 1–6. Levels 1–3 have configured sizes and colors from `DocumentConfig`; levels 4–6 fall back to `default_font_size + 2` pt and `accent_color` with no separator support.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
@@ -248,30 +249,33 @@ builder.add_paragraph("Caption text", space_after=2.0)
 
 ### `add_markdown(markdown_text, rtl=None, base_style=None)`
 
-Render a markdown string into the document. Supports headings (`#`), bold (`**`), italic (`*`), bullet lists (`-`), numbered lists, horizontal rules (`---`), and plain paragraphs.
+Render a markdown string into the document. Supports headings (`#` through `######`, capped at level 3 styling), bold (`**`), italic (`*`), bold+italic (`***`), inline links (`[text](url)`), bare URLs, bullet lists (`-`, `*`, `•`), and numbered lists.
+
+> **Note:** `---` is **not** a horizontal rule — it renders as the literal text `---`. Use `add_horizontal_separator()` instead.
+>
+> RTL paragraphs and numbered list items are always `JUSTIFY`-aligned regardless of `base_style`.
+>
+> The `base_style` parameter is accepted but currently has no effect.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
 | `markdown_text` | `str` | — | Markdown source |
 | `rtl` | `bool \| None` | `None` | RTL direction for all rendered elements |
-| `base_style` | `TextStyle \| None` | `None` | Base style applied to all text |
+| `base_style` | `TextStyle \| None` | `None` | Reserved — currently unused |
 
 ```python
 builder.add_markdown("""
 # Section Title
 
-This is a paragraph with **bold text** and *italic text*.
+This is a paragraph with **bold text**, *italic text*, and ***bold italic***.
 
 - First bullet item
 - Second bullet item
-- Third bullet item
 
 1. Numbered first
 2. Numbered second
 
----
-
-Another paragraph after the horizontal rule.
+Visit [our site](https://example.com) or https://example.com
 """)
 ```
 
@@ -301,7 +305,7 @@ Add a table. Accepts multiple data formats.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
-| `data` | `list[dict]` \| `list[list]` \| `list[tuple]` | — | Table data |
+| `data` | `list[dict]` \| `list[list]` \| `list[tuple]` \| `dict` | — | Table data (`dict` supported for `table_type="metrics"`) |
 | `headers` | `list[str] \| None` | `None` | Column header labels; required for `list[list]` |
 | `style` | `TableStyle \| None` | `None` | Table styling |
 | `rtl` | `bool \| None` | `None` | RTL direction |
@@ -318,7 +322,7 @@ builder.add_table([
 ])
 ```
 
-**`list[list]`** — requires `headers=`:
+**`list[list]` or `list[tuple]`** — requires `headers=`:
 ```python
 builder.add_table(
     [["Alice", 95, "A"], ["Bob", 82, "B"]],
@@ -326,7 +330,8 @@ builder.add_table(
 )
 ```
 
-**`"metrics"` table** — label/value pairs:
+**`"metrics"` table** — label/value pairs. The label column (0) is always right-aligned and the value column (1) is always left-aligned; `TableStyle.text_alignment` has no effect on metrics tables.
+
 ```python
 builder.add_table(
     {"Total Cases": 1024, "Resolved": 987, "Pending": 37},
@@ -536,6 +541,15 @@ builder.add_picture("photo.jpg", height_cm=8)
 
 Add a full-width single-row colored banner, typically used as a section separator.
 
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `text` | `str` | — | Banner label text |
+| `bg_color` | `str` | `"2E74B5"` | Background hex color |
+| `text_color` | `str` | `"FFFFFF"` | Text hex color |
+| `font_size` | `int` | `14` | Font size in pt |
+| `bold` | `bool` | `True` | Bold text |
+| `rtl` | `bool \| None` | `None` | RTL direction; `None` inherits `DocumentConfig.default_rtl` |
+
 ```python
 builder.add_banner("Section 1: Demographics")
 builder.add_banner(
@@ -592,6 +606,8 @@ builder.add_page_break()
 
 Add a new section break (useful for mixing portrait and landscape pages).
 
+> **Note:** New sections inherit page margins from `DocumentConfig` but get no header or footer. Neither `DocumentConfig` header/footer settings nor `set_header()`/`set_footer()` apply to sections added here.
+
 ```python
 builder.add_section(orientation="landscape")
 # ... add wide tables or charts ...
@@ -603,6 +619,8 @@ builder.add_section(orientation="portrait")
 ### `set_header(header_type, text="", image_path=None, image_height_cm=1.5, alignment="CENTER", skip_first_page=None)`
 
 Override the header after construction (overrides `DocumentConfig` defaults).
+
+> **Note:** Only configures the first section (`sections[0]`). Headers for additional sections added via `add_section()` are not set and will be blank.
 
 ```python
 builder.set_header(header_type="text", text="Confidential", alignment="RIGHT")
@@ -616,10 +634,47 @@ builder.set_header(header_type="page_number", alignment="CENTER")
 
 Override the footer after construction.
 
+> **Note:** Only configures the first section (`sections[0]`). Footers for additional sections added via `add_section()` are not set and will be blank.
+
 ```python
 builder.set_footer(footer_type="page_number", alignment="CENTER")
 builder.set_footer(footer_type="text_and_page_number", text="Page", alignment="CENTER")
 builder.set_footer(footer_type="text", text="© 2025 My Company")
+```
+
+---
+
+### `add_toc(style=None)`
+
+Add a Table of Contents placeholder at the current position. The TOC is automatically populated with all headings added via `add_heading()` and rendered during `save()` / `build()`. A page break is inserted after the TOC automatically.
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `style` | `TocStyle \| None` | `None` | TOC appearance; `None` uses `TocStyle` defaults |
+
+```python
+from sword_word_builder import TocStyle
+
+builder.add_toc()   # default Arabic RTL style
+
+# Custom style
+builder.add_toc(TocStyle(
+    heading_text="Contents",
+    heading_bg_color="2E74B5",
+    heading_text_color="FFFFFF",
+    heading_font="Calibri",
+    entry_font="Calibri",
+    levels=2,
+    rtl=False,
+))
+```
+
+The TOC is placed wherever `add_toc()` is called. Add it after the cover page and before content headings:
+
+```python
+builder.add_cover_page(cover)
+builder.add_toc()             # appears on its own page before chapter content
+builder.add_heading("Chapter 1", level=1)
 ```
 
 ---
@@ -863,6 +918,49 @@ builder.add_chart(data, chart_type="bar", style=ChartStyle(
     legend_font_size=9,
     show_data_labels=True,
     series_colors=["0D2D5E", "B89A00", "117A65"],
+))
+```
+
+---
+
+## `TocStyle`
+
+Styling for a Table of Contents created via `WordBuilder.add_toc()`.
+
+```python
+from sword_word_builder import TocStyle
+
+style = TocStyle(
+    heading_text="المحتويات",     # TOC heading label
+    heading_bg_color="B68A35",    # heading row background
+    heading_text_color="FFFFFF",  # heading text color
+    heading_font="TheSans",       # font for the TOC heading
+    entry_font="Sakkal Majalla",  # font for TOC entries
+    levels=3,                     # reserved — currently unused
+    rtl=True,                     # RTL layout for Arabic TOCs
+)
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `heading_text` | `str` | `"المحتويات"` | Label displayed as the TOC heading |
+| `heading_bg_color` | `str` | `"B68A35"` | Background hex color for the TOC heading paragraph |
+| `heading_text_color` | `str` | `"FFFFFF"` | Text hex color for the TOC heading |
+| `heading_font` | `str` | `"TheSans"` | Font for the TOC heading |
+| `entry_font` | `str` | `"Sakkal Majalla"` | Font for TOC entry lines |
+| `levels` | `int` | `3` | Reserved — currently unused; the TOC always includes levels 1–3 |
+| `rtl` | `bool` | `True` | RTL direction for the TOC (set `False` for English documents) |
+
+```python
+# English document TOC
+builder.add_toc(TocStyle(
+    heading_text="Table of Contents",
+    heading_bg_color="2E74B5",
+    heading_text_color="FFFFFF",
+    heading_font="Calibri",
+    entry_font="Calibri",
+    levels=3,
+    rtl=False,
 ))
 ```
 
@@ -1214,7 +1312,7 @@ builder.add_table(
 )
 
 # KPI tiles row
-def kpi(value, label, color):
+def kpi(value, label):
     return [
         CellLine(value, font_size=20, bold=True, color="FFFFFF", alignment="CENTER"),
         CellLine(label, font_size=9,  color="CCCCCC",            alignment="CENTER"),
@@ -1224,10 +1322,10 @@ from sword_word_builder import TableStyle
 builder.add_table(
     data=[],
     headers=[[
-        kpi("12,450", "Total Users",    "0D2D5E"),
-        kpi("9,832",  "Active",         "1A5276"),
-        kpi("2.1%",   "Churn Rate",     "117A65"),
-        kpi("72",     "NPS",            "B89A00"),
+        kpi("12,450", "Total Users"),
+        kpi("9,832",  "Active"),
+        kpi("2.1%",   "Churn Rate"),
+        kpi("72",     "NPS"),
     ]],
     style=TableStyle(
         header_bg_colors=["0D2D5E", "1A5276", "117A65", "B89A00"],
@@ -1256,21 +1354,6 @@ builder.save("metrics.docx")
 5. **`CellLine` alignment in RTL cells**: Alignment works correctly regardless of RTL direction. `alignment="CENTER"` always produces a centered paragraph.
 
 6. **Font choice**: Arabic text typically renders best with fonts like `"Arial"`, `"Calibri"`, `"Tahoma"`, or `"Amiri"`.
-
----
-
-## Utility Function
-
-### `hex_to_rgb(hex_color)`
-
-Convert a 6-character hex color string to an `(R, G, B)` tuple. Accepts with or without `#`.
-
-```python
-from sword_word_builder import hex_to_rgb
-
-hex_to_rgb("2E74B5")   # → (46, 116, 181)
-hex_to_rgb("#FF0000")  # → (255, 0, 0)
-```
 
 ---
 
