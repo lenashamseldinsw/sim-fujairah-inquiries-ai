@@ -888,8 +888,7 @@ class ReportStructureDetector:
             for i in range(visual_count):
                 # Skip charts before main content starts (cover page, TOC)
                 if hasattr(self, '_main_content_start_pos') and element_position < self._main_content_start_pos:
-                    print(f"  📊 Chart {chart_count} at position {element_position} SKIPPED (before main content)")
-                    chart_count += 1
+                    print(f"  📊 Chart SKIPPED at position {element_position} (before main content)")
                     continue
 
                 chart_positions.append({

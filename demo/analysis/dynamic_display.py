@@ -515,12 +515,8 @@ class DynamicReportDisplay:
             for idx, chart_data in enumerate(pie_charts):
                 try:
                     with cols[idx % num_cols]:
-                        if chart_data.get('is_image'):
-                            st.info(f"📊 {chart_data.get('title', 'Image')}")
-                            st.markdown("*Image content from document*")
-                        else:
-                            chart_html = self._render_chart(chart_data)
-                            st.components.v1.html(chart_html, height=500)
+                        chart_html = self._render_chart(chart_data)
+                        st.components.v1.html(chart_html, height=500)
                 except Exception as e:
                     st.error(f"Error displaying chart: {str(e)}")
 
@@ -531,12 +527,8 @@ class DynamicReportDisplay:
 
             for chart_data in other_charts:
                 try:
-                    if chart_data.get('is_image'):
-                        st.info(f"📊 {chart_data.get('title', 'Image')}")
-                        st.markdown("*Image content from document*", help="Image extracted from original document")
-                    else:
-                        chart_html = self._render_chart(chart_data)
-                        st.components.v1.html(chart_html, height=500)
+                    chart_html = self._render_chart(chart_data)
+                    st.components.v1.html(chart_html, height=500)
                 except Exception as e:
                     st.error(f"Error displaying chart: {str(e)}")
 

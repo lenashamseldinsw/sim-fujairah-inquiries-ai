@@ -9,47 +9,36 @@ from lxml import etree
 
 
 def extract_charts_from_docx(docx_path: str) -> List[Dict[str, Any]]:
-    """Extract all visual content (charts, images, shapes) from Word document."""
+    """Extract all native Word charts from document."""
     try:
         doc = Document(docx_path)
         charts = []
-        visual_count = 0
+        chart_count = 0
 
-        # 1. Extract native charts
+        print("📊 Extracting native charts from relationships...")
+
+        # Extract native charts only
         for rel_id, rel in doc.part.rels.items():
             if "chart" in rel.target_ref:
+                print(f"  Attempting {rel_id}...", end=" ")
                 try:
                     chart_part = rel.target_part
                     chart_xml = chart_part.blob
 
                     # Parse the chart
-                    chart_data = parse_chart_xml(chart_xml)
+                    chart_data = parse_chart_xml(chart_xml, rel_id=rel_id)
                     if chart_data:
                         charts.append(chart_data)
-                        visual_count += 1
-                        print(f"✓ Extracted chart: {chart_data.get('title', 'Unknown')}")
+                        chart_count += 1
+                        print(f"✓ {chart_data.get('title', 'Unknown')}")
+                    else:
+                        print(f"✗ Parse failed")
                 except Exception as e:
-                    print(f"Error extracting chart {rel_id}: {e}")
+                    print(f"✗ Error: {e}")
+                    import traceback
+                    traceback.print_exc()
 
-        # 2. Also extract images/pictures as visual content
-        for rel_id, rel in doc.part.rels.items():
-            if "image" in rel.target_ref:
-                try:
-                    image_part = rel.target_part
-                    image_data = {
-                        'type': 'image',
-                        'title': f'Image {visual_count}',
-                        'rel_id': rel_id,
-                        'content_type': image_part.content_type,
-                        'is_image': True
-                    }
-                    charts.append(image_data)
-                    visual_count += 1
-                    print(f"✓ Extracted image: {rel_id}")
-                except Exception as e:
-                    print(f"Error extracting image {rel_id}: {e}")
-
-        print(f"✓ Extracted {visual_count} visual elements from document")
+        print(f"✓ Extracted {chart_count} charts from document\n")
         return charts
     except Exception as e:
         print(f"Error in extract_charts_from_docx: {e}")
@@ -58,7 +47,7 @@ def extract_charts_from_docx(docx_path: str) -> List[Dict[str, Any]]:
         return []
 
 
-def parse_chart_xml(chart_bytes: bytes) -> Optional[Dict[str, Any]]:
+def parse_chart_xml(chart_bytes: bytes, rel_id: str = None) -> Optional[Dict[str, Any]]:
     """Parse Office Open XML chart format and extract data."""
     try:
         # Parse XML
@@ -87,6 +76,14 @@ def parse_chart_xml(chart_bytes: bytes) -> Optional[Dict[str, Any]]:
         colors = extract_colors(root, namespaces)
 
         if not series_list or not categories:
+            rel_info = f" ({rel_id})" if rel_id else ""
+            print(f"  ✗ Chart parsing failed{rel_info}: title='{title}', type={chart_type}")
+            print(f"    → {len(series_list)} series, {len(categories)} categories")
+            if series_list:
+                for i, s in enumerate(series_list):
+                    print(f"      Series {i}: {s['name']} with {len(s['data'])} values")
+            if categories:
+                print(f"      Categories: {categories[:3]}{'...' if len(categories) > 3 else ''}")
             return None
 
         return {
@@ -98,7 +95,10 @@ def parse_chart_xml(chart_bytes: bytes) -> Optional[Dict[str, Any]]:
             'raw_xml': chart_bytes
         }
     except Exception as e:
-        print(f"Error parsing chart XML: {e}")
+        rel_info = f" ({rel_id})" if rel_id else ""
+        print(f"  ✗ Exception parsing chart XML{rel_info}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
