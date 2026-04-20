@@ -1661,8 +1661,9 @@ def load_credentials():
                     "password": st.secrets.users.fujairah_password,
                     "center": st.secrets.users.get('fujairah_center', 'مركز الفجيرة الرئيسي')
                 })
-            # Load Fujairah Police Center users
+            # Load Fujairah Police Center users (20 total: 10 existing + 10 new)
             user_configs = [
+                # Existing users
                 ('myaalali_email', 'myaalali_password', 'myaalali_center'),
                 ('umahmed_email', 'umahmed_password', 'umahmed_center'),
                 ('kh17878_email', 'kh17878_password', 'kh17878_center'),
@@ -1673,6 +1674,17 @@ def load_credentials():
                 ('fatima_email', 'fatima_password', 'fatima_center'),
                 ('saeed_al_soghairi_email', 'saeed_al_soghairi_password', 'saeed_al_soghairi_center'),
                 ('ahmed_al_hammadi_email', 'ahmed_al_hammadi_password', 'ahmed_al_hammadi_center'),
+                # New users
+                ('abdul_sief_albadi_email', 'abdul_sief_albadi_password', 'abdul_sief_albadi_center'),
+                ('sulaiman_saeed_email', 'sulaiman_saeed_password', 'sulaiman_saeed_center'),
+                ('fahd_suwaidi_email', 'fahd_suwaidi_password', 'fahd_suwaidi_center'),
+                ('abdullah_sulaiman_email', 'abdullah_sulaiman_password', 'abdullah_sulaiman_center'),
+                ('ali_sultan_email', 'ali_sultan_password', 'ali_sultan_center'),
+                ('ali_hassan_email', 'ali_hassan_password', 'ali_hassan_center'),
+                ('nayif_taniji_email', 'nayif_taniji_password', 'nayif_taniji_center'),
+                ('aisha_safsouf_email', 'aisha_safsouf_password', 'aisha_safsouf_center'),
+                ('ibrahim_taniji_email', 'ibrahim_taniji_password', 'ibrahim_taniji_center'),
+                ('khams_alhamar_email', 'khams_alhamar_password', 'khams_alhamar_center'),
             ]
             for email_key, password_key, center_key in user_configs:
                 if email_key in st.secrets.users and password_key in st.secrets.users:
