@@ -19,16 +19,16 @@ except ImportError:
     pdfplumber = None
 
 
-class GuidebookEmbedder:
-    """Loads, chunks, and embeds the customer services guidebook."""
+class GuidebookSearchIndex:
+    """Loads pre-computed guidebook embeddings and provides semantic search."""
 
     def __init__(self, pdf_path: str, persist_dir: Optional[str] = None):
         """
-        Initialize embedder.
+        Initialize search index.
 
         Args:
             pdf_path: Path to guidebook PDF
-            persist_dir: Directory to persist ChromaDB collections (default: .guidebook_cache)
+            persist_dir: Directory with pre-computed ChromaDB embeddings (default: .guidebook_cache)
         """
         self.pdf_path = pdf_path
         self.persist_dir = Path(persist_dir or ".guidebook_cache")
@@ -203,26 +203,26 @@ class GuidebookEmbedder:
         return all_data.get('documents', []) if all_data else []
 
 
-def get_guidebook_embedder(guidebook_path: str, persist_dir: Optional[str] = None) -> GuidebookEmbedder:
+def get_guidebook_search(guidebook_path: str, persist_dir: Optional[str] = None) -> GuidebookSearchIndex:
     """
-    Get or create guidebook embedder.
+    Get guidebook search index (loads pre-computed embeddings).
 
     Args:
         guidebook_path: Path to guidebook PDF
-        persist_dir: Directory for ChromaDB persistence
+        persist_dir: Directory with pre-computed ChromaDB embeddings
 
     Returns:
-        GuidebookEmbedder instance
+        GuidebookSearchIndex instance
     """
-    embedder = GuidebookEmbedder(guidebook_path, persist_dir)
+    search_index = GuidebookSearchIndex(guidebook_path, persist_dir)
 
-    # Try to load from cache, otherwise compute
+    # Load from cache
     try:
-        embedder.collection = embedder.client.get_collection(name="guidebook")
+        search_index.collection = search_index.client.get_collection(name="guidebook")
         print("✅ Loaded cached guidebook embeddings")
     except Exception:
         print("📚 Computing guidebook embeddings...")
-        embedder.compute_embeddings()
-        embedder.save_collection()
+        search_index.compute_embeddings()
+        search_index.save_collection()
 
-    return embedder
+    return search_index

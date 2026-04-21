@@ -47,7 +47,8 @@
       "Bash(python debug_heading_classification.py)",
       "Bash(python debug_bold_ending.py)",
       "Bash(ls -la *.py)",
-      "Bash(python verify_q1_extraction.py)"
+      "Bash(python verify_q1_extraction.py)",
+      "Bash(python3 /tmp/test_analyzer_full.py)"
     ],
     "additionalDirectories": [
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/outputs",

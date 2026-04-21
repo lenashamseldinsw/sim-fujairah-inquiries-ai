@@ -20,6 +20,7 @@ from .stage3_llm import run_stage3
 from .stage4_analysis import run_stage4
 from .stage5_gap import run_stage5
 from .stage6_artifacts import run_stage6
+from .guidebook import GuidebookSearchIndex
 
 
 class PipelineOrchestrator:
@@ -135,15 +136,18 @@ class PipelineOrchestrator:
         except Exception as e:
             return False, f"Stage 4 error: {str(e)}"
 
-    def run_stage5_gap_analysis(self, guidebook_text: str = "") -> Tuple[bool, str]:
+    def run_stage5_gap_analysis(self, search_index: Optional[GuidebookSearchIndex] = None) -> Tuple[bool, str]:
         """
         Run Stage 5: Gap analysis and FAQ validation.
+
+        Args:
+            search_index: GuidebookSearchIndex for semantic search on guidebook
 
         Returns:
             (success, message)
         """
         try:
-            self.state = run_stage5(self.state, self.api_key, guidebook_text)
+            self.state = run_stage5(self.state, self.api_key, search_index)
             self.save_state()
 
             msg = f"Gap analysis complete: {len(self.state.gap_table)} gaps identified, {len(self.state.validated_faqs)} FAQs validated"
@@ -181,11 +185,18 @@ class PipelineOrchestrator:
         df: pd.DataFrame,
         excel_path: str,
         word_path: str,
-        guidebook_text: str = "",
+        search_index: Optional[GuidebookSearchIndex] = None,
         language: str = 'ar'
     ) -> Dict[str, Any]:
         """
         Run all 6 stages in sequence.
+
+        Args:
+            df: Input DataFrame with case data
+            excel_path: Path for Excel output
+            word_path: Path for Word output
+            search_index: GuidebookSearchIndex for Stage 5 semantic search
+            language: Language for output ('ar' or 'en')
 
         Returns:
             Results dict with stage outcomes
@@ -224,7 +235,7 @@ class PipelineOrchestrator:
             results['errors'].append(msg)
 
         # Stage 5
-        success, msg = self.run_stage5_gap_analysis(guidebook_text)
+        success, msg = self.run_stage5_gap_analysis(search_index)
         results['stages']['stage5'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)

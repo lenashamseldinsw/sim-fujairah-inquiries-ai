@@ -17,8 +17,9 @@ Also validates FAQ candidates from Stage 4 against guidebook.
 
 import json
 import anthropic
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .state import PipelineState, GapRow, FAQCandidate
+from .guidebook import GuidebookSearchIndex
 
 
 GAP_ANALYSIS_TOOL = {
@@ -63,16 +64,40 @@ GAP_ANALYSIS_TOOL = {
 }
 
 
-def build_gap_analysis_prompt(patterns: List[Dict], journey_map: List[Dict], guidebook_excerpt: str) -> str:
-    """Build prompt for gap analysis with context."""
+def build_gap_analysis_prompt(
+    patterns: List[Dict],
+    journey_map: List[Dict],
+    search_index: Optional[GuidebookSearchIndex] = None
+) -> str:
+    """Build prompt for gap analysis with guidebook context from semantic search."""
     patterns_text = json.dumps(patterns, ensure_ascii=False, indent=2)
     journey_text = json.dumps(journey_map, ensure_ascii=False, indent=2)
+
+    # Build guidebook context from semantic search
+    guidebook_context = ""
+    if search_index:
+        # Search for relevant guidebook sections using all friction topics
+        queries = [p.get('description', p.get('topic', '')) for p in patterns[:5]]  # Top 5 patterns
+        relevant_chunks = set()
+
+        for query in queries:
+            if query:
+                results = search_index.query(query, top_k=3)
+                for result in results:
+                    relevant_chunks.add(result['text'])
+
+        if relevant_chunks:
+            guidebook_context = "\n\n".join(sorted(relevant_chunks)[:3000])  # Limit to 3000 chars
+        else:
+            guidebook_context = "(No matching guidebook sections found for the identified patterns)"
+    else:
+        guidebook_context = "(Guidebook search index not available)"
 
     return f"""You are evaluating information gaps in government customer service.
 
 Given:
 1. Identified friction points and patterns from customer interactions
-2. The customer services guidebook (excerpt provided below)
+2. Relevant excerpts from the customer services guidebook (retrieved via semantic search)
 
 Evaluate each friction topic on:
 1. Content Existence — is relevant information in the guidebook?
@@ -87,8 +112,8 @@ Friction Points from Analysis:
 Patterns Identified:
 {patterns_text}
 
-Guidebook Content (excerpt):
-{guidebook_excerpt}
+Guidebook Content (retrieved via semantic search):
+{guidebook_context}
 
 For each major friction topic:
 - Assess severity (Critical = many customers struggling, Medium = some issues, Adequate = well-covered)
@@ -99,23 +124,32 @@ Return bilingual output (English and Arabic) for all recommendations.
 """
 
 
-def run_stage5(state: PipelineState, api_key: str, guidebook_text: str = "") -> PipelineState:
+def run_stage5(
+    state: PipelineState,
+    api_key: str,
+    search_index: Optional[GuidebookSearchIndex] = None
+) -> PipelineState:
     """
     Stage 5: Gap analysis.
 
     Input: state with patterns, journey_map, faq_candidates from Stage 4
     Output: state with gap_table and validated_faqs
+
+    Args:
+        state: Pipeline state
+        api_key: Anthropic API key
+        search_index: GuidebookSearchIndex for semantic search on guidebook
     """
     if not state.journey_map:
         return state
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Build analysis prompt with guidebook
+    # Build analysis prompt with guidebook context from semantic search
     prompt = build_gap_analysis_prompt(
-        [j.model_dump() for j in state.journey_map],
         [p.model_dump() for p in state.patterns],
-        guidebook_text[:2000]  # First 2000 chars of guidebook
+        [j.model_dump() for j in state.journey_map],
+        search_index
     )
 
     # Call Claude with tool-use

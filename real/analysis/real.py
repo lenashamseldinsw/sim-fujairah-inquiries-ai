@@ -14,7 +14,7 @@ import pandas as pd
 from io import BytesIO
 
 from .base import Analyzer
-from pipeline.guidebook import GuidebookEmbedder
+from pipeline.guidebook import GuidebookSearchIndex
 
 # Check all required dependencies at import time
 _REQUIRED_PACKAGES = {
@@ -319,8 +319,8 @@ class RealAnalyzer(Analyzer):
 
             # Stage 5: Gap Analysis
             print(f"[Pipeline] Running Stage 5: Gap Analysis")
-            embedder = self._load_guidebook_embedder()
-            success, msg = self.orchestrator.run_stage5_gap_analysis(embedder)
+            search_index = self._load_guidebook_search()
+            success, msg = self.orchestrator.run_stage5_gap_analysis(search_index)
             if not success:
                 raise ValueError(f"Stage 5: {msg}")
             print(f"[Pipeline] Stage 5 complete: {msg}")
@@ -435,8 +435,8 @@ class RealAnalyzer(Analyzer):
 
 
 
-    def _load_guidebook_embedder(self) -> GuidebookEmbedder:
-        """Load pre-computed guidebook embeddings from .guidebook_cache."""
+    def _load_guidebook_search(self) -> GuidebookSearchIndex:
+        """Load pre-computed guidebook search index from .guidebook_cache."""
         try:
             guidebook_path = Path(__file__).parent.parent / 'inquiries-flow' / 'inquiries-supporting-files' / 'customer_services_guidebook.pdf'
             persist_dir = Path(__file__).parent.parent / '.guidebook_cache'
@@ -445,13 +445,13 @@ class RealAnalyzer(Analyzer):
                 print(f"[GuidebookLoader] ⚠️ Cache not found. Run: python real/precompute_guidebook.py")
                 return None
 
-            print(f"[GuidebookLoader] Loading pre-computed embeddings from {persist_dir}")
-            embedder = GuidebookEmbedder(str(guidebook_path), persist_dir=str(persist_dir))
-            # Just access the collection without recomputing
-            embedder.collection = embedder.client.get_collection(name="guidebook")
-            return embedder
+            print(f"[GuidebookLoader] Loading pre-computed search index from {persist_dir}")
+            search_index = GuidebookSearchIndex(str(guidebook_path), persist_dir=str(persist_dir))
+            # Load from cache without recomputing
+            search_index.collection = search_index.client.get_collection(name="guidebook")
+            return search_index
         except Exception as e:
-            print(f"[GuidebookLoader] Error loading guidebook: {e}")
+            print(f"[GuidebookLoader] Error loading search index: {e}")
             import traceback
             traceback.print_exc()
             return None
