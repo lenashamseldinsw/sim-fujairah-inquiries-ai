@@ -290,26 +290,18 @@ class RealAnalyzer(Analyzer):
             report["metadata"]["faq_candidates"] = len(faqs)
             report["metadata"]["gaps_identified"] = len(gaps)
 
-            # Store output file paths in session state for download functionality
-            try:
-                if 'output_files' not in st.session_state:
-                    st.session_state.output_files = {}
-                st.session_state.output_files['excel_path'] = str(excel_path)
-                st.session_state.output_files['word_path'] = str(word_path)
-            except Exception:
-                pass  # Session state might not be available in all contexts
-
             return report
 
         except Exception as e:
             raise RuntimeError(f"Pipeline execution failed: {str(e)}")
 
-    def _store_report_progress(self, report: Dict[str, Any], st) -> None:
-        """Store intermediate report progress in session state for real-time display."""
-        try:
-            st.session_state.report_data = report
-        except Exception:
-            pass  # Session state might not be available in all contexts
+    def _store_report_progress(self, report: Dict[str, Any], st_module) -> None:
+        """Store intermediate report progress in session state for real-time display.
+
+        Note: Session state updates happen in the app.py after analyzer completes.
+        This method is kept for documentation/future enhancement.
+        """
+        pass
 
 
     def _load_guidebook(self) -> str:

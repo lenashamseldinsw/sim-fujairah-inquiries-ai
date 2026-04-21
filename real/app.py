@@ -1728,6 +1728,23 @@ def process_with_analyzer(uploaded_files, lang='ar'):
         # Run the analyzer in main thread - this updates session state as stages complete
         report = ANALYZER.analyze(uploaded_file)
 
+        # Store report and output files in session state
+        st.session_state.report_data = report
+
+        # Extract and store output file paths for download functionality
+        if 'sections' in report and 'stage6_artifacts' in report['sections']:
+            artifacts = report['sections']['stage6_artifacts'].get('data', [])
+            for artifact in artifacts:
+                if isinstance(artifact, dict):
+                    if artifact.get('type') == 'Excel Workbook':
+                        if 'output_files' not in st.session_state:
+                            st.session_state.output_files = {}
+                        st.session_state.output_files['excel_path'] = artifact.get('path', '')
+                    elif artifact.get('type') == 'Word Report':
+                        if 'output_files' not in st.session_state:
+                            st.session_state.output_files = {}
+                        st.session_state.output_files['word_path'] = artifact.get('path', '')
+
         # Final progress update to 100%
         progress_container.markdown(
             create_custom_progress_bar(1.0, lang),
