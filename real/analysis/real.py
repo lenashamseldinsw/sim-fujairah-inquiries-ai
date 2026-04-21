@@ -1,19 +1,49 @@
 """Real implementation of the analyzer with agentic AI logic.
 
 Integrates with the 6-stage pipeline for analyzing inquiries.
-Gracefully handles missing dependencies while providing a working analyzer.
+All required dependencies must be installed.
 """
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
 import pandas as pd
 from io import BytesIO
-import json
-import time
 
 from .base import Analyzer
+
+# Check all required dependencies at import time
+_REQUIRED_PACKAGES = {
+    'pandera': 'Schema validation',
+    'chromadb': 'Vector embeddings/semantic search',
+    'pdfplumber': 'PDF table extraction',
+    'openpyxl': 'Excel file generation',
+    'anthropic': 'Claude API client',
+    'pydantic': 'Data validation',
+}
+
+_MISSING_PACKAGES = []
+for pkg_name, pkg_purpose in _REQUIRED_PACKAGES.items():
+    try:
+        __import__(pkg_name)
+    except ImportError:
+        _MISSING_PACKAGES.append(f"{pkg_name} ({pkg_purpose})")
+
+if _MISSING_PACKAGES:
+    raise ImportError(
+        f"RealAnalyzer requires the following missing packages:\n"
+        + "\n".join(f"  - {pkg}" for pkg in _MISSING_PACKAGES)
+        + "\n\nInstall with: pip install -r requirements.txt"
+    )
+
+# Import pipeline after verifying dependencies
+try:
+    from pipeline.orchestrator import PipelineOrchestrator
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from pipeline.orchestrator import PipelineOrchestrator
 
 
 class RealAnalyzer(Analyzer):
@@ -27,6 +57,8 @@ class RealAnalyzer(Analyzer):
     4. Pattern analysis
     5. Gap analysis
     6. Artifact generation (Excel + Word)
+
+    All required dependencies must be installed.
     """
 
     PROCESSING_STAGES = [
@@ -41,21 +73,14 @@ class RealAnalyzer(Analyzer):
     def __init__(self):
         """Initialize the real analyzer."""
         self.api_key = os.getenv('ANTHROPIC_API_KEY', '')
+        if not self.api_key:
+            raise ValueError(
+                "ANTHROPIC_API_KEY environment variable not set. "
+                "Add it to real/.env or set it in your environment."
+            )
         self.temp_dir = tempfile.mkdtemp(prefix='real_analyzer_')
         self.orchestrator = None
-        self._pipeline_available = self._check_pipeline_available()
 
-    def _check_pipeline_available(self) -> bool:
-        """Check if pipeline dependencies are available."""
-        try:
-            import sys
-            pipeline_path = Path(__file__).parent.parent / 'pipeline'
-            if pipeline_path.exists():
-                sys.path.insert(0, str(pipeline_path.parent))
-                from pipeline.orchestrator import PipelineOrchestrator
-                return True
-        except (ImportError, ModuleNotFoundError):
-            return False
 
     def validate_file(self, uploaded_file) -> tuple[bool, str]:
         """Validate file type and size."""
@@ -81,7 +106,7 @@ class RealAnalyzer(Analyzer):
 
     def analyze(self, uploaded_file) -> Dict[str, Any]:
         """
-        Analyze an uploaded file using the pipeline or basic analysis.
+        Analyze an uploaded file using the 6-stage pipeline.
 
         Args:
             uploaded_file: Streamlit UploadedFile object
@@ -95,12 +120,7 @@ class RealAnalyzer(Analyzer):
 
         try:
             df = self._parse_file(uploaded_file)
-
-            if self._pipeline_available and self.api_key:
-                return self._analyze_with_pipeline(df)
-            else:
-                return self._analyze_with_basic_processing(df, uploaded_file.name)
-
+            return self._analyze_with_pipeline(df)
         except Exception as e:
             raise RuntimeError(f"Analysis failed: {str(e)}")
 
@@ -188,93 +208,6 @@ class RealAnalyzer(Analyzer):
         except Exception as e:
             raise RuntimeError(f"Pipeline execution failed: {str(e)}")
 
-    def _analyze_with_basic_processing(self, df: pd.DataFrame, filename: str) -> Dict[str, Any]:
-        """Basic analysis when pipeline is not available."""
-        try:
-            row_count = len(df)
-            col_count = len(df.columns)
-            columns = list(df.columns)
-
-            categories = {}
-            for col in df.select_dtypes(include=['object']).columns:
-                try:
-                    value_counts = df[col].value_counts().head(5)
-                    categories[col] = dict(value_counts)
-                except:
-                    pass
-
-            report = {
-                "extraction_version": 1,
-                "document_name": filename,
-                "document_path": f"{self.temp_dir}/{filename}",
-                "metadata": {
-                    "title": "Inquiry Analysis Report (Basic)",
-                    "author": "Real AI Pipeline",
-                    "total_records": row_count,
-                    "total_columns": col_count,
-                    "columns": columns,
-                },
-                "charts": self._build_basic_charts(df, categories),
-                "sections": self._build_basic_sections(df, categories),
-            }
-
-            return report
-
-        except Exception as e:
-            raise RuntimeError(f"Basic analysis failed: {str(e)}")
-
-    def _build_basic_charts(self, df: pd.DataFrame, categories: Dict) -> list:
-        """Build basic charts from DataFrame."""
-        charts = []
-
-        for col, value_counts in categories.items():
-            if len(value_counts) <= 20:
-                charts.append({
-                    "type": "bar",
-                    "title": f"Distribution: {col}",
-                    "categories": list(value_counts.keys())[:10],
-                    "series": [{"name": "Count", "data": list(value_counts.values())[:10]}],
-                    "colors": ["#B68A35"]
-                })
-
-        if not charts and len(df) > 0:
-            charts.append({
-                "type": "pie",
-                "title": "Data Overview",
-                "categories": ["Records Analyzed"],
-                "series": [{"name": "Count", "data": [len(df)]}],
-                "colors": ["#B68A35"]
-            })
-
-        return charts
-
-    def _build_basic_sections(self, df: pd.DataFrame, categories: Dict) -> Dict[str, Any]:
-        """Build basic sections from DataFrame."""
-        sections = {}
-
-        sections["summary"] = {
-            "title": "Data Summary",
-            "content": f"Analyzed {len(df)} records across {len(df.columns)} columns",
-            "data": [
-                {"metric": "Total Records", "value": len(df)},
-                {"metric": "Total Columns", "value": len(df.columns)},
-            ]
-        }
-
-        if categories:
-            cat_summary = []
-            for col, counts in list(categories.items())[:3]:
-                cat_summary.append({
-                    "column": col,
-                    "top_values": counts
-                })
-            sections["categories"] = {
-                "title": "Category Distributions",
-                "content": "Top values in categorical columns",
-                "data": cat_summary
-            }
-
-        return sections
 
     def _load_guidebook(self) -> str:
         """Load guidebook text for gap analysis."""
