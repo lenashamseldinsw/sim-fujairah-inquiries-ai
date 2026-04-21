@@ -16,7 +16,7 @@ from pathlib import Path
 # Add real folder to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pipeline.guidebook import get_guidebook_embedder
+from pipeline.guidebook import get_guidebook_search
 
 
 def main():
@@ -33,18 +33,18 @@ def main():
     print(f"   Output: .guidebook_cache/")
 
     try:
-        embedder = get_guidebook_embedder(
+        search_index = get_guidebook_search(
             str(guidebook_path),
             persist_dir=".guidebook_cache"
         )
 
-        # Test the embedder
+        # Test the search index
         print("\n✅ Embeddings computed successfully!")
-        print(f"   Total chunks: {len(embedder.get_all_chunks())}")
+        print(f"   Total chunks: {len(search_index.get_all_chunks())}")
 
         # Test a query
         print("\n🔍 Testing query capability...")
-        results = embedder.query("كيفية التقديم على الخدمة", top_k=3)
+        results = search_index.query("كيفية التقديم على الخدمة", top_k=3)
         print(f"   Sample query returned {len(results)} results")
         for i, result in enumerate(results, 1):
             print(f"   {i}. Similarity: {result['similarity']:.2f}")
