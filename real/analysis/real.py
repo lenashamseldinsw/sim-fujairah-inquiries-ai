@@ -7,12 +7,14 @@ All required dependencies must be installed.
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional
 import pandas as pd
 from io import BytesIO
 
 from .base import Analyzer
+from pipeline.guidebook import GuidebookEmbedder
 
 # Check all required dependencies at import time
 _REQUIRED_PACKAGES = {
@@ -126,10 +128,19 @@ class RealAnalyzer(Analyzer):
             raise ValueError(error_msg)
 
         try:
+            print(f"[RealAnalyzer] Parsing file: {uploaded_file.name}")
             df = self._parse_file(uploaded_file)
-            return self._analyze_with_pipeline(df)
+            print(f"[RealAnalyzer] Parsed {len(df)} rows")
+
+            print(f"[RealAnalyzer] Starting pipeline analysis...")
+            result = self._analyze_with_pipeline(df)
+            print(f"[RealAnalyzer] Pipeline complete, returning report")
+            return result
         except Exception as e:
-            raise RuntimeError(f"Analysis failed: {str(e)}")
+            import traceback
+            error_msg = f"Analysis failed: {str(e)}\n{traceback.format_exc()}"
+            print(f"[RealAnalyzer] ERROR: {error_msg}")
+            raise RuntimeError(error_msg)
 
     def _parse_file(self, uploaded_file) -> pd.DataFrame:
         """Parse Excel or PDF file into DataFrame."""
@@ -137,7 +148,39 @@ class RealAnalyzer(Analyzer):
 
         try:
             if filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(uploaded_file)
+                # Convert uploaded file bytes to BytesIO for pandas
+                file_bytes = BytesIO(uploaded_file.getvalue())
+
+                # Read entire file with no headers to find the header row
+                print(f"[Parser] Reading entire file to detect header row...")
+                df_raw = pd.read_excel(file_bytes, header=None)
+                print(f"[Parser] Raw file has {len(df_raw)} rows")
+
+                # Find the row with the most non-NaN values (likely headers)
+                header_row_idx = 0
+                max_non_null = 0
+                for idx, row in df_raw.iterrows():
+                    non_null = row.dropna()
+                    if len(non_null) > max_non_null:
+                        max_non_null = len(non_null)
+                        header_row_idx = idx
+                        print(f"[Parser] Row {idx} has {len(non_null)} non-null values")
+
+                print(f"[Parser] Best header row is {header_row_idx} with {max_non_null} values")
+                print(f"[Parser] Headers: {list(df_raw.iloc[header_row_idx].values)}")
+
+                if header_row_idx is None:
+                    raise ValueError("Could not find header row in file")
+
+                # Read with the detected header row
+                file_bytes.seek(0)
+                df = pd.read_excel(file_bytes, header=header_row_idx)
+                print(f"[Parser] Using row {header_row_idx} as headers")
+
+                # Remove any rows before the header row
+                if header_row_idx > 0:
+                    df = df.iloc[header_row_idx:].reset_index(drop=True)
+
             elif filename.endswith('.pdf'):
                 df = self._parse_pdf(uploaded_file)
             else:
@@ -146,6 +189,8 @@ class RealAnalyzer(Analyzer):
             if df.empty:
                 raise ValueError("File contains no data")
 
+            print(f"[Parser] File columns: {list(df.columns)}")
+            print(f"[Parser] Detected {len(df)} data rows")
             return df
         except Exception as e:
             raise ValueError(f"Failed to parse file: {str(e)}")
@@ -168,12 +213,21 @@ class RealAnalyzer(Analyzer):
             raise ValueError(f"PDF parsing failed: {str(e)}")
 
     def _analyze_with_pipeline(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze using the full 6-stage pipeline, mapping outputs to UI sections."""
+        """
+        Analyze using 6-stage pipeline with parallel artifact generation.
+
+        Returns immediately after stage 5 with analysis results.
+        Stage 6 (artifact generation) runs in background thread.
+        """
         try:
             import sys
             import streamlit as st
             from pathlib import Path
-            sys.path.insert(0, str(Path(__file__).parent.parent))
+            # Add both real folder and root folder to path for imports
+            real_dir = Path(__file__).parent.parent
+            root_dir = real_dir.parent
+            sys.path.insert(0, str(real_dir))
+            sys.path.insert(0, str(root_dir))
 
             from pipeline.orchestrator import PipelineOrchestrator
 
@@ -187,28 +241,39 @@ class RealAnalyzer(Analyzer):
                     "author": "Real AI Pipeline",
                 },
                 "sections": {},
-                "charts": []
+                "charts": [],
+                "artifacts_status": {
+                    "excel_ready": False,
+                    "word_ready": False,
+                    "excel_path": None,
+                    "word_path": None,
+                    "error": None
+                }
             }
 
             session_id = Path(self.temp_dir).name
+            print(f"[Pipeline] Session ID: {session_id}")
             self.orchestrator = PipelineOrchestrator(self.api_key, self.temp_dir)
             self.orchestrator.initialize_state(session_id)
+            print(f"[Pipeline] Orchestrator initialized")
 
             # Stage 1: Schema Validation
-            success, msg = self.orchestrator.run_stage1_validator(df)
+            print(f"[Pipeline] Running Stage 1: Schema Validation")
+            success, msg, schema_data = self.orchestrator.run_stage1_validator(df)
             if not success:
                 raise ValueError(f"Stage 1: {msg}")
             report["sections"]["stage1_validation"] = {
                 "title": "Schema Validation Results",
                 "content": msg,
-                "data": self.orchestrator.state.validated_schema if self.orchestrator.state else {}
+                "data": schema_data or {}
             }
-            self._store_report_progress(report, st)
 
             # Stage 2: Rule-based Classification
+            print(f"[Pipeline] Running Stage 2: Rule-based Classification")
             success, msg = self.orchestrator.run_stage2_classifier()
             if not success:
                 raise ValueError(f"Stage 2: {msg}")
+            print(f"[Pipeline] Stage 2 complete: {msg}")
 
             classified_count = len(self.orchestrator.state.rule_classified) if self.orchestrator.state else 0
             report["sections"]["stage2_classification"] = {
@@ -216,12 +281,13 @@ class RealAnalyzer(Analyzer):
                 "content": f"Classified {classified_count} cases with decision tree rules",
                 "data": self.orchestrator.state.rule_classified[:10] if self.orchestrator.state else []
             }
-            self._store_report_progress(report, st)
 
             # Stage 3: LLM Classification
+            print(f"[Pipeline] Running Stage 3: LLM Classification")
             success, msg = self.orchestrator.run_stage3_llm_classifier()
             if not success:
                 raise ValueError(f"Stage 3: {msg}")
+            print(f"[Pipeline] Stage 3 complete: {msg}")
 
             llm_classified_count = len(self.orchestrator.state.llm_classified) if self.orchestrator.state else 0
             report["sections"]["stage3_llm"] = {
@@ -229,12 +295,13 @@ class RealAnalyzer(Analyzer):
                 "content": f"LLM classified {llm_classified_count} low-confidence cases",
                 "data": self.orchestrator.state.llm_classified[:10] if self.orchestrator.state else []
             }
-            self._store_report_progress(report, st)
 
             # Stage 4: Pattern Analysis
+            print(f"[Pipeline] Running Stage 4: Pattern Analysis")
             success, msg = self.orchestrator.run_stage4_analysis()
             if not success:
                 raise ValueError(f"Stage 4: {msg}")
+            print(f"[Pipeline] Stage 4 complete: {msg}")
 
             patterns = self.orchestrator.state.patterns if self.orchestrator.state else []
             faqs = self.orchestrator.state.faq_candidates if self.orchestrator.state else []
@@ -249,13 +316,14 @@ class RealAnalyzer(Analyzer):
                 "content": "Frequently asked questions extracted from inquiries",
                 "data": faqs[:10]
             }
-            self._store_report_progress(report, st)
 
             # Stage 5: Gap Analysis
-            guidebook_text = self._load_guidebook()
-            success, msg = self.orchestrator.run_stage5_gap_analysis(guidebook_text)
+            print(f"[Pipeline] Running Stage 5: Gap Analysis")
+            embedder = self._load_guidebook_embedder()
+            success, msg = self.orchestrator.run_stage5_gap_analysis(embedder)
             if not success:
                 raise ValueError(f"Stage 5: {msg}")
+            print(f"[Pipeline] Stage 5 complete: {msg}")
 
             gaps = self.orchestrator.state.gap_table if self.orchestrator.state else []
             validated_faqs = self.orchestrator.state.validated_faqs if self.orchestrator.state else []
@@ -270,54 +338,121 @@ class RealAnalyzer(Analyzer):
                 "content": f"Validated {len(validated_faqs)} FAQ candidates against guidelines",
                 "data": validated_faqs[:10]
             }
-            self._store_report_progress(report, st)
 
-            # Stage 6: Artifact Generation
-            excel_path = Path(self.temp_dir) / "analysis_results.xlsx"
-            word_path = Path(self.temp_dir) / "analysis_report.docx"
-
-            success, msg = self.orchestrator.run_stage6_artifacts(
-                str(excel_path), str(word_path), language='ar'
-            )
-            if not success:
-                raise ValueError(f"Stage 6: {msg}")
-
-            report["sections"]["stage6_artifacts"] = {
-                "title": "Generated Artifacts",
-                "content": "Analysis report and detailed Excel workbook generated",
-                "data": [
-                    {"type": "Excel Workbook", "path": str(excel_path)},
-                    {"type": "Word Report", "path": str(word_path)}
-                ]
-            }
-
-            # Update metadata with final counts
+            # Update metadata with analysis results (before artifacts are ready)
             report["metadata"]["total_classified"] = len(self.orchestrator.state.all_classified) if self.orchestrator.state else 0
             report["metadata"]["patterns_found"] = len(patterns)
             report["metadata"]["faq_candidates"] = len(faqs)
             report["metadata"]["gaps_identified"] = len(gaps)
 
+            # ============================================================================
+            # Stage 6: Queue artifact generation in background thread
+            # This allows UI to display results immediately while artifacts are generated
+            # ============================================================================
+            print(f"[Pipeline] Stage 6: Queuing artifact generation in background")
+            excel_path = Path(self.temp_dir) / "analysis_results.xlsx"
+            word_path = Path(self.temp_dir) / "analysis_report.docx"
+
+            # Update report with artifact paths (will be marked ready when generation completes)
+            report["artifacts_status"]["excel_path"] = str(excel_path)
+            report["artifacts_status"]["word_path"] = str(word_path)
+
+            # Start artifact generation in background thread
+            # Store reference to orchestrator state so background thread can access it
+            artifact_thread = threading.Thread(
+                target=self._generate_artifacts_background,
+                args=(report, excel_path, word_path, self.orchestrator.state, self.api_key),
+                daemon=True
+            )
+            artifact_thread.start()
+            print(f"[Pipeline] Background artifact generation started")
+
+            # Return report immediately (UI can display while artifacts generate)
+            print(f"[Pipeline] Analysis complete! Report returned with {len(report.get('sections', {}))} sections")
             return report
 
         except Exception as e:
             raise RuntimeError(f"Pipeline execution failed: {str(e)}")
 
-    def _store_report_progress(self, report: Dict[str, Any], st_module) -> None:
-        """Store intermediate report progress in session state for real-time display.
-
-        Note: Session state updates happen in the app.py after analyzer completes.
-        This method is kept for documentation/future enhancement.
+    def _generate_artifacts_background(self, report: Dict[str, Any], excel_path: Path, word_path: Path, state, api_key: str) -> None:
         """
-        pass
+        Generate Excel and Word artifacts in background thread.
+        Updates report dict when complete so UI can display download buttons.
 
-
-    def _load_guidebook(self) -> str:
-        """Load guidebook text for gap analysis."""
+        Args:
+            report: Report dict to update with artifact status
+            excel_path: Path to save Excel file
+            word_path: Path to save Word file
+            state: Pipeline state with analysis results
+            api_key: API key for sword-word-builder
+        """
         try:
-            guidebook_path = Path(__file__).parent.parent / '.guidebook_cache' / 'guidebook.txt'
-            if guidebook_path.exists():
-                return guidebook_path.read_text(encoding='utf-8')
-        except:
-            pass
-        return ""
+            # Set up sys.path in background thread (required for imports)
+            import sys
+            from pathlib import Path
+            real_dir = Path(__file__).parent.parent
+            root_dir = real_dir.parent
+            if str(real_dir) not in sys.path:
+                sys.path.insert(0, str(real_dir))
+            if str(root_dir) not in sys.path:
+                sys.path.insert(0, str(root_dir))
+
+            from pipeline.stage6_artifacts import generate_excel, generate_word_report
+
+            # Generate Excel
+            generate_excel(state, str(excel_path))
+            report["artifacts_status"]["excel_ready"] = True
+
+            # Generate Word report
+            generate_word_report(
+                state,
+                str(word_path),
+                language='ar',
+                api_key=api_key
+            )
+            report["artifacts_status"]["word_ready"] = True
+
+            # Add artifacts section once both are ready
+            report["sections"]["stage6_artifacts"] = {
+                "title": "Generated Artifacts",
+                "content": "Analysis report and detailed Excel workbook ready for download",
+                "data": [
+                    {"type": "Excel Workbook", "path": str(excel_path), "ready": True},
+                    {"type": "Word Report", "path": str(word_path), "ready": True}
+                ]
+            }
+
+        except Exception as e:
+            import traceback
+            error_details = f"{str(e)}\n{traceback.format_exc()}"
+            report["artifacts_status"]["error"] = error_details
+            report["sections"]["stage6_artifacts"] = {
+                "title": "Artifact Generation Error",
+                "content": f"Failed to generate artifacts: {str(e)}",
+                "data": []
+            }
+            print(f"[Background] Artifact generation error: {error_details}")
+
+
+
+    def _load_guidebook_embedder(self) -> GuidebookEmbedder:
+        """Load pre-computed guidebook embeddings from .guidebook_cache."""
+        try:
+            guidebook_path = Path(__file__).parent.parent / 'inquiries-flow' / 'inquiries-supporting-files' / 'customer_services_guidebook.pdf'
+            persist_dir = Path(__file__).parent.parent / '.guidebook_cache'
+
+            if not persist_dir.exists():
+                print(f"[GuidebookLoader] ⚠️ Cache not found. Run: python real/precompute_guidebook.py")
+                return None
+
+            print(f"[GuidebookLoader] Loading pre-computed embeddings from {persist_dir}")
+            embedder = GuidebookEmbedder(str(guidebook_path), persist_dir=str(persist_dir))
+            # Just access the collection without recomputing
+            embedder.collection = embedder.client.get_collection(name="guidebook")
+            return embedder
+        except Exception as e:
+            print(f"[GuidebookLoader] Error loading guidebook: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
