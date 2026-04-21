@@ -72,11 +72,18 @@ class RealAnalyzer(Analyzer):
 
     def __init__(self):
         """Initialize the real analyzer."""
-        self.api_key = os.getenv('ANTHROPIC_API_KEY', '')
+        try:
+            import streamlit as st
+            self.api_key = st.secrets.get('ANTHROPIC_API_KEY', '')
+        except (ImportError, AttributeError, KeyError):
+            # Fallback to environment variable if not in Streamlit context
+            self.api_key = os.getenv('ANTHROPIC_API_KEY', '')
+
         if not self.api_key:
             raise ValueError(
-                "ANTHROPIC_API_KEY environment variable not set. "
-                "Add it to real/.env or set it in your environment."
+                "ANTHROPIC_API_KEY not found. "
+                "Add it to ~/.streamlit/secrets.toml (local) or "
+                "configure it in your deployment platform's secrets."
             )
         self.temp_dir = tempfile.mkdtemp(prefix='real_analyzer_')
         self.orchestrator = None
