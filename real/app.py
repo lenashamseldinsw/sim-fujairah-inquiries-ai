@@ -1553,34 +1553,60 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries'):
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
 def create_download_zip(flow_type: str = 'inquiries'):
-    """Create a ZIP file containing the Word report and Excel file
+    """Create a ZIP file containing analysis outputs.
+
+    For real flow: Uses dynamically generated files from analyzer.
+    For demo flow: Uses pre-existing report files.
 
     Args:
-        flow_type: 'inquiries' or 'complaints' - determines which output folder to use
+        flow_type: 'inquiries' or 'complaints'
     """
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Try to get output paths from session state (real flow)
+        output_files = st.session_state.get('output_files', {})
+
         if flow_type == 'complaints':
-            # Complaints flow files
-            report_path = Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx")
-            if report_path.exists():
-                zip_file.write(report_path, "تقرير تحليل شكاوى المتعاملين.docx")
+            # Real flow: generated files from analyzer
+            if 'word_path' in output_files:
+                word_path = Path(output_files['word_path'])
+                if word_path.exists():
+                    zip_file.write(str(word_path), "تقرير_تحليل_شكاوى_المتعاملين.docx")
 
-            # Add complaints Excel file
-            excel_path = Path("complaints-output/تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
-            if excel_path.exists():
-                zip_file.write(excel_path, "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
+            if 'excel_path' in output_files:
+                excel_path = Path(output_files['excel_path'])
+                if excel_path.exists():
+                    zip_file.write(str(excel_path), "تصنيف_شكاوى_المتعاملين.xlsx")
+
+            # Fallback: Demo flow - look for static files
+            demo_report = Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx")
+            if demo_report.exists() and 'word_path' not in output_files:
+                zip_file.write(str(demo_report), "تقرير تحليل شكاوى المتعاملين.docx")
+
+            demo_excel = Path("complaints-output/تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
+            if demo_excel.exists() and 'excel_path' not in output_files:
+                zip_file.write(str(demo_excel), "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
         else:
-            # Inquiries flow files (default)
-            report_path = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
-            if report_path.exists():
-                zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
+            # Real flow: generated files from analyzer
+            if 'word_path' in output_files:
+                word_path = Path(output_files['word_path'])
+                if word_path.exists():
+                    zip_file.write(str(word_path), "تقرير_تحليل_استفسارات_المتعاملين.docx")
 
-            # Add inquiries Excel file
-            excel_path = Path("inquiries-output/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
-            if excel_path.exists():
-                zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+            if 'excel_path' in output_files:
+                excel_path = Path(output_files['excel_path'])
+                if excel_path.exists():
+                    zip_file.write(str(excel_path), "تحليل_استفسارات_المتعاملين.xlsx")
+
+            # Fallback: Demo flow - look for static files
+            demo_report = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
+            if demo_report.exists() and 'word_path' not in output_files:
+                zip_file.write(str(demo_report), "تقرير تحليل استفسارات المتعاملين .docx")
+
+            demo_excel = Path("inquiries-output/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+            if demo_excel.exists() and 'excel_path' not in output_files:
+                zip_file.write(str(demo_excel), "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()

@@ -164,6 +164,7 @@ class RealAnalyzer(Analyzer):
         """Analyze using the full 6-stage pipeline."""
         try:
             import sys
+            import streamlit as st
             from pathlib import Path
             sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -202,6 +203,15 @@ class RealAnalyzer(Analyzer):
             )
             if not success:
                 raise ValueError(f"Stage 6: {msg}")
+
+            # Store output file paths in session state for download functionality
+            try:
+                if 'output_files' not in st.session_state:
+                    st.session_state.output_files = {}
+                st.session_state.output_files['excel_path'] = str(excel_path)
+                st.session_state.output_files['word_path'] = str(word_path)
+            except Exception:
+                pass  # Session state might not be available in all contexts
 
             return self._generate_report_from_state()
 
