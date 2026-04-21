@@ -3,6 +3,7 @@ import time
 import os
 import json
 import random
+import threading
 from pathlib import Path
 from analysis import RealAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
@@ -1648,17 +1649,66 @@ def create_custom_progress_bar(current_pct=0, lang='ar'):
     return progress_html
 
 # ── Processing ───────────────────────────────────────────────────────────────
-def process_with_analyzer(uploaded_files, lang='ar'):
-    """Process files using the analyzer and display progress."""
-    tx = T[lang]
-    DIR = 'rtl' if lang == 'ar' else 'ltr'
+def _monitor_pipeline_progress(progress_container, pct_container, analyzer_stages, lang):
+    """Monitor pipeline progress and update UI in real-time."""
+    stage_sequence = [
+        'stage1_validation',
+        'stage2_classification',
+        'stage3_llm',
+        'stage4_patterns',
+        'stage4_faqs',
+        'stage5_gaps',
+        'stage5_validated_faqs',
+        'stage6_artifacts',
+    ]
 
-    # Display custom progress bar
+    last_section_count = 0
+    check_interval = 0.2  # Check progress every 200ms
+
+    while True:
+        try:
+            # Check if analyzer is still running by looking at session state
+            if 'report_data' in st.session_state and st.session_state.report_data:
+                report = st.session_state.report_data
+                completed_sections = list(report.get('sections', {}).keys())
+                num_completed = len([s for s in stage_sequence if s in completed_sections])
+
+                # Only update if progress changed
+                if num_completed != last_section_count:
+                    last_section_count = num_completed
+                    current_pct = min(1.0, num_completed / len(stage_sequence))
+
+                    # Update progress bar
+                    progress_container.markdown(
+                        create_custom_progress_bar(current_pct, lang),
+                        unsafe_allow_html=True,
+                    )
+
+                    # Update stage label
+                    current_stage_idx = min(int(current_pct * len(analyzer_stages)), len(analyzer_stages) - 1)
+                    if current_stage_idx >= 0 and current_stage_idx < len(analyzer_stages):
+                        current_stage = analyzer_stages[current_stage_idx]
+                        stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
+                        pct_container.markdown(
+                            f"<div class='pct-display'>{int(current_pct * 100)}% — {stage_label}</div>",
+                            unsafe_allow_html=True,
+                        )
+
+            time.sleep(check_interval)
+        except Exception:
+            time.sleep(check_interval)
+
+
+def process_with_analyzer(uploaded_files, lang='ar'):
+    """Process files using analyzer with real-time progress tracking."""
+    tx = T[lang]
+
+    # Display custom progress bar and stage display
     progress_container = st.empty()
     pct_container = st.empty()
 
     try:
-        # For now, just process the first file (can be extended to handle multiple)
+        # Process first file
         uploaded_file = uploaded_files[0] if uploaded_files else None
         if not uploaded_file:
             st.error(tx['err_no_file'])
@@ -1667,57 +1717,43 @@ def process_with_analyzer(uploaded_files, lang='ar'):
         # Get analyzer's processing stages
         analyzer_stages = ANALYZER.get_processing_stages()
 
-        # Simulate processing with stages from analyzer
-        # total_duration = random.randint(30, 60)  # Random 30-60 seconds
-        total_duration = 1
-        update_interval = 0.5
-        total_steps = int(total_duration / update_interval)
+        # Start progress monitor thread
+        monitor_thread = threading.Thread(
+            target=_monitor_pipeline_progress,
+            args=(progress_container, pct_container, analyzer_stages, lang),
+            daemon=True
+        )
+        monitor_thread.start()
 
-        for step in range(total_steps + 1):
-            elapsed = step * update_interval
-            # Find current stage based on elapsed time
-            current_pct = min(1.0, elapsed / total_duration)
+        # Run the analyzer in main thread - this updates session state as stages complete
+        report = ANALYZER.analyze(uploaded_file)
 
-            # Update custom progress bar
-            progress_container.markdown(
-                create_custom_progress_bar(current_pct, lang),
-                unsafe_allow_html=True,
-            )
-
-            # Update stage display
-            current_stage = next(
-                (s for s in analyzer_stages
-                 if s.get('percent_start', 0) <= current_pct * 100 < s.get('percent_end', 100)),
-                analyzer_stages[0] if analyzer_stages else None
-            )
-
-            if current_stage:
-                # Use language-specific label
-                stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
-                pct_container.markdown(
-                    f"<div class='{tx.get('pct_class', 'pct-display')}'>"
-                    f"{int(current_pct * 100)}% — {stage_label}"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-            time.sleep(update_interval)
-
-        # Final progress bar at 100%
+        # Final progress update to 100%
         progress_container.markdown(
             create_custom_progress_bar(1.0, lang),
             unsafe_allow_html=True,
         )
+
+        if analyzer_stages:
+            final_stage = analyzer_stages[-1]
+            stage_label = final_stage.get('label_en', final_stage.get('label', 'Complete')) if lang == 'en' else final_stage.get('label', 'Complete')
+            pct_container.markdown(
+                f"<div class='pct-display'>100% — {stage_label}</div>",
+                unsafe_allow_html=True,
+            )
+
+        # Brief pause before clearing
+        time.sleep(0.3)
         pct_container.empty()
 
-        # Now call the actual analyzer
-        report = ANALYZER.analyze(uploaded_file)
         return report
 
     except Exception as e:
         st.error(f"Error during processing: {str(e)}")
         progress_container.empty()
         pct_container.empty()
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 
