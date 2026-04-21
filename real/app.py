@@ -3,7 +3,6 @@ import time
 import os
 import json
 import random
-import threading
 from pathlib import Path
 from analysis import RealAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
@@ -1649,63 +1648,14 @@ def create_custom_progress_bar(current_pct=0, lang='ar'):
     return progress_html
 
 # ── Processing ───────────────────────────────────────────────────────────────
-def _monitor_pipeline_progress(progress_container, pct_container, analyzer_stages, lang):
-    """Monitor pipeline progress and update UI in real-time."""
-    stage_sequence = [
-        'stage1_validation',
-        'stage2_classification',
-        'stage3_llm',
-        'stage4_patterns',
-        'stage4_faqs',
-        'stage5_gaps',
-        'stage5_validated_faqs',
-        'stage6_artifacts',
-    ]
-
-    last_section_count = 0
-    check_interval = 0.2  # Check progress every 200ms
-
-    while True:
-        try:
-            # Check if analyzer is still running by looking at session state
-            if 'report_data' in st.session_state and st.session_state.report_data:
-                report = st.session_state.report_data
-                completed_sections = list(report.get('sections', {}).keys())
-                num_completed = len([s for s in stage_sequence if s in completed_sections])
-
-                # Only update if progress changed
-                if num_completed != last_section_count:
-                    last_section_count = num_completed
-                    current_pct = min(1.0, num_completed / len(stage_sequence))
-
-                    # Update progress bar
-                    progress_container.markdown(
-                        create_custom_progress_bar(current_pct, lang),
-                        unsafe_allow_html=True,
-                    )
-
-                    # Update stage label
-                    current_stage_idx = min(int(current_pct * len(analyzer_stages)), len(analyzer_stages) - 1)
-                    if current_stage_idx >= 0 and current_stage_idx < len(analyzer_stages):
-                        current_stage = analyzer_stages[current_stage_idx]
-                        stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
-                        pct_container.markdown(
-                            f"<div class='pct-display'>{int(current_pct * 100)}% — {stage_label}</div>",
-                            unsafe_allow_html=True,
-                        )
-
-            time.sleep(check_interval)
-        except Exception:
-            time.sleep(check_interval)
-
-
 def process_with_analyzer(uploaded_files, lang='ar'):
-    """Process files using analyzer with real-time progress tracking."""
+    """Process files using analyzer. Progress tracked by actual stage completion."""
     tx = T[lang]
 
-    # Display custom progress bar and stage display
+    # Display progress bar
     progress_container = st.empty()
     pct_container = st.empty()
+    status_container = st.empty()
 
     try:
         # Process first file
@@ -1717,15 +1667,10 @@ def process_with_analyzer(uploaded_files, lang='ar'):
         # Get analyzer's processing stages
         analyzer_stages = ANALYZER.get_processing_stages()
 
-        # Start progress monitor thread
-        monitor_thread = threading.Thread(
-            target=_monitor_pipeline_progress,
-            args=(progress_container, pct_container, analyzer_stages, lang),
-            daemon=True
-        )
-        monitor_thread.start()
+        # Show initial "processing" message
+        status_container.info("🔄 Processing file through pipeline...")
 
-        # Run the analyzer in main thread - this updates session state as stages complete
+        # Run the analyzer - this executes all 6 stages and updates report incrementally
         report = ANALYZER.analyze(uploaded_file)
 
         # Store report and output files in session state
@@ -1745,28 +1690,47 @@ def process_with_analyzer(uploaded_files, lang='ar'):
                             st.session_state.output_files = {}
                         st.session_state.output_files['word_path'] = artifact.get('path', '')
 
-        # Final progress update to 100%
+        # Calculate progress based on actual sections created
+        stage_sequence = [
+            'stage1_validation',
+            'stage2_classification',
+            'stage3_llm',
+            'stage4_patterns',
+            'stage4_faqs',
+            'stage5_gaps',
+            'stage5_validated_faqs',
+            'stage6_artifacts',
+        ]
+
+        completed_sections = list(report.get('sections', {}).keys())
+        num_completed = len([s for s in stage_sequence if s in completed_sections])
+        current_pct = min(1.0, num_completed / len(stage_sequence))
+
+        # Show final progress - 100% since all stages completed
         progress_container.markdown(
             create_custom_progress_bar(1.0, lang),
             unsafe_allow_html=True,
         )
 
-        if analyzer_stages:
-            final_stage = analyzer_stages[-1]
+        final_stage = analyzer_stages[-1] if analyzer_stages else None
+        if final_stage:
             stage_label = final_stage.get('label_en', final_stage.get('label', 'Complete')) if lang == 'en' else final_stage.get('label', 'Complete')
             pct_container.markdown(
                 f"<div class='pct-display'>100% — {stage_label}</div>",
                 unsafe_allow_html=True,
             )
 
-        # Brief pause before clearing
+        # Clear status message
+        status_container.empty()
+
+        # Brief pause before clearing progress display
         time.sleep(0.3)
         pct_container.empty()
 
         return report
 
     except Exception as e:
-        st.error(f"Error during processing: {str(e)}")
+        status_container.error(f"Error during processing: {str(e)}")
         progress_container.empty()
         pct_container.empty()
         import traceback
