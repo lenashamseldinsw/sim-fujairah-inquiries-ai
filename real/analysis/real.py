@@ -161,7 +161,7 @@ class RealAnalyzer(Analyzer):
             raise ValueError(f"PDF parsing failed: {str(e)}")
 
     def _analyze_with_pipeline(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze using the full 6-stage pipeline."""
+        """Analyze using the full 6-stage pipeline, mapping outputs to UI sections."""
         try:
             import sys
             import streamlit as st
@@ -170,31 +170,102 @@ class RealAnalyzer(Analyzer):
 
             from pipeline.orchestrator import PipelineOrchestrator
 
+            # Initialize report structure that maps directly to UI sections
+            report = {
+                "extraction_version": 1,
+                "document_name": "Analysis Report - Real Pipeline",
+                "document_path": f"{self.temp_dir}/analysis_report.docx",
+                "metadata": {
+                    "title": "Inquiry Analysis Report",
+                    "author": "Real AI Pipeline",
+                },
+                "sections": {},
+                "charts": []
+            }
+
             session_id = Path(self.temp_dir).name
             self.orchestrator = PipelineOrchestrator(self.api_key, self.temp_dir)
             self.orchestrator.initialize_state(session_id)
 
+            # Stage 1: Schema Validation
             success, msg = self.orchestrator.run_stage1_validator(df)
             if not success:
                 raise ValueError(f"Stage 1: {msg}")
+            report["sections"]["stage1_validation"] = {
+                "title": "Schema Validation Results",
+                "content": msg,
+                "data": self.orchestrator.state.validated_schema if self.orchestrator.state else {}
+            }
+            self._store_report_progress(report, st)
 
+            # Stage 2: Rule-based Classification
             success, msg = self.orchestrator.run_stage2_classifier()
             if not success:
                 raise ValueError(f"Stage 2: {msg}")
 
+            classified_count = len(self.orchestrator.state.rule_classified) if self.orchestrator.state else 0
+            report["sections"]["stage2_classification"] = {
+                "title": "Rule-Based Classification",
+                "content": f"Classified {classified_count} cases with decision tree rules",
+                "data": self.orchestrator.state.rule_classified[:10] if self.orchestrator.state else []
+            }
+            self._store_report_progress(report, st)
+
+            # Stage 3: LLM Classification
             success, msg = self.orchestrator.run_stage3_llm_classifier()
             if not success:
                 raise ValueError(f"Stage 3: {msg}")
 
+            llm_classified_count = len(self.orchestrator.state.llm_classified) if self.orchestrator.state else 0
+            report["sections"]["stage3_llm"] = {
+                "title": "AI-Based Classification",
+                "content": f"LLM classified {llm_classified_count} low-confidence cases",
+                "data": self.orchestrator.state.llm_classified[:10] if self.orchestrator.state else []
+            }
+            self._store_report_progress(report, st)
+
+            # Stage 4: Pattern Analysis
             success, msg = self.orchestrator.run_stage4_analysis()
             if not success:
                 raise ValueError(f"Stage 4: {msg}")
 
+            patterns = self.orchestrator.state.patterns if self.orchestrator.state else []
+            faqs = self.orchestrator.state.faq_candidates if self.orchestrator.state else []
+
+            report["sections"]["stage4_patterns"] = {
+                "title": "Pattern Analysis",
+                "content": f"Found {len(patterns)} inquiry patterns and {len(faqs)} FAQ candidates",
+                "data": patterns[:5]
+            }
+            report["sections"]["stage4_faqs"] = {
+                "title": "FAQ Candidates",
+                "content": "Frequently asked questions extracted from inquiries",
+                "data": faqs[:10]
+            }
+            self._store_report_progress(report, st)
+
+            # Stage 5: Gap Analysis
             guidebook_text = self._load_guidebook()
             success, msg = self.orchestrator.run_stage5_gap_analysis(guidebook_text)
             if not success:
                 raise ValueError(f"Stage 5: {msg}")
 
+            gaps = self.orchestrator.state.gap_table if self.orchestrator.state else []
+            validated_faqs = self.orchestrator.state.validated_faqs if self.orchestrator.state else []
+
+            report["sections"]["stage5_gaps"] = {
+                "title": "Service Gaps Identified",
+                "content": f"Identified {len(gaps)} service gaps based on guidebook analysis",
+                "data": gaps[:10]
+            }
+            report["sections"]["stage5_validated_faqs"] = {
+                "title": "Validated FAQs",
+                "content": f"Validated {len(validated_faqs)} FAQ candidates against guidelines",
+                "data": validated_faqs[:10]
+            }
+            self._store_report_progress(report, st)
+
+            # Stage 6: Artifact Generation
             excel_path = Path(self.temp_dir) / "analysis_results.xlsx"
             word_path = Path(self.temp_dir) / "analysis_report.docx"
 
@@ -203,6 +274,21 @@ class RealAnalyzer(Analyzer):
             )
             if not success:
                 raise ValueError(f"Stage 6: {msg}")
+
+            report["sections"]["stage6_artifacts"] = {
+                "title": "Generated Artifacts",
+                "content": "Analysis report and detailed Excel workbook generated",
+                "data": [
+                    {"type": "Excel Workbook", "path": str(excel_path)},
+                    {"type": "Word Report", "path": str(word_path)}
+                ]
+            }
+
+            # Update metadata with final counts
+            report["metadata"]["total_classified"] = len(self.orchestrator.state.all_classified) if self.orchestrator.state else 0
+            report["metadata"]["patterns_found"] = len(patterns)
+            report["metadata"]["faq_candidates"] = len(faqs)
+            report["metadata"]["gaps_identified"] = len(gaps)
 
             # Store output file paths in session state for download functionality
             try:
@@ -213,10 +299,17 @@ class RealAnalyzer(Analyzer):
             except Exception:
                 pass  # Session state might not be available in all contexts
 
-            return self._generate_report_from_state()
+            return report
 
         except Exception as e:
             raise RuntimeError(f"Pipeline execution failed: {str(e)}")
+
+    def _store_report_progress(self, report: Dict[str, Any], st) -> None:
+        """Store intermediate report progress in session state for real-time display."""
+        try:
+            st.session_state.report_data = report
+        except Exception:
+            pass  # Session state might not be available in all contexts
 
 
     def _load_guidebook(self) -> str:
@@ -229,104 +322,3 @@ class RealAnalyzer(Analyzer):
             pass
         return ""
 
-    def _generate_report_from_state(self) -> Dict[str, Any]:
-        """Generate report structure from pipeline state."""
-        if not self.orchestrator or not self.orchestrator.state:
-            raise ValueError("Pipeline state not available")
-
-        state = self.orchestrator.state
-
-        report = {
-            "extraction_version": 1,
-            "document_name": "Analysis Report - Real Pipeline",
-            "document_path": f"{self.temp_dir}/analysis_report.docx",
-            "metadata": {
-                "title": "Inquiry Analysis Report",
-                "author": "Real AI Pipeline",
-                "total_classified": len(state.all_classified) if state.all_classified else 0,
-                "patterns_found": len(state.patterns) if state.patterns else 0,
-                "faq_candidates": len(state.faq_candidates) if state.faq_candidates else 0,
-            },
-            "charts": self._build_pipeline_charts(state),
-            "sections": self._build_pipeline_sections(state),
-        }
-
-        return report
-
-    def _build_pipeline_charts(self, state) -> list:
-        """Build chart data from pipeline state."""
-        charts = []
-
-        try:
-            if hasattr(state, 'patterns') and state.patterns:
-                pattern_names = [
-                    p.get('name', f'Pattern {i}')
-                    for i, p in enumerate(state.patterns[:10])
-                ]
-                pattern_sizes = [
-                    p.get('size', 0)
-                    for p in state.patterns[:10]
-                ]
-
-                charts.append({
-                    "type": "bar",
-                    "title": "Inquiry Patterns",
-                    "categories": pattern_names,
-                    "series": [{"name": "Count", "data": pattern_sizes}],
-                    "colors": ["#B68A35"]
-                })
-
-            if hasattr(state, 'all_classified') and state.all_classified:
-                classifications = {}
-                for item in state.all_classified:
-                    category = item.get('category', 'Unknown') if isinstance(item, dict) else str(item)
-                    classifications[category] = classifications.get(category, 0) + 1
-
-                charts.append({
-                    "type": "pie",
-                    "title": "Classification Distribution",
-                    "categories": list(classifications.keys())[:10],
-                    "series": [{"name": "Count", "data": list(classifications.values())[:10]}],
-                    "colors": ["#B68A35", "#2E86AB", "#1a6b3c", "#808080"]
-                })
-        except Exception:
-            pass
-
-        return charts
-
-    def _build_pipeline_sections(self, state) -> Dict[str, Any]:
-        """Build report sections from pipeline state."""
-        sections = {}
-
-        try:
-            if hasattr(state, 'patterns') and state.patterns:
-                sections["patterns"] = {
-                    "title": "Identified Patterns",
-                    "content": "Top patterns found in inquiries",
-                    "data": state.patterns[:5]
-                }
-
-            if hasattr(state, 'faq_candidates') and state.faq_candidates:
-                sections["faq"] = {
-                    "title": "FAQ Candidates",
-                    "content": "Frequently asked questions from inquiries",
-                    "data": state.faq_candidates[:10]
-                }
-
-            if hasattr(state, 'gap_table') and state.gap_table:
-                sections["gaps"] = {
-                    "title": "Identified Gaps",
-                    "content": "Service gaps identified through analysis",
-                    "data": state.gap_table[:10]
-                }
-        except Exception:
-            pass
-
-        if not sections:
-            sections["summary"] = {
-                "title": "Analysis Summary",
-                "content": "Pipeline analysis complete",
-                "data": []
-            }
-
-        return sections
