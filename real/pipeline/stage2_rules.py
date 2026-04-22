@@ -61,31 +61,31 @@ def classify_case(case_row: dict) -> Tuple[str, str, float]:
     if case_type_norm.startswith('incident') or 'بلاغ' in case_type_norm:
         if any(x in desc_norm for x in ['خطأ', 'عطل', 'شاشة بيضاء', 'خلل تقني', 'error', 'bug', 'crash']):
             if any(x in res_norm for x in ['بلاغ تقني', 'الدعم الفني', 'technical support']):
-                return 'Technical Incident', 'بلاغ تقني محدد بواضحة', 0.97
+                return 'بلاغ تقني', 'بلاغ تقني محدد بواضحة', 0.97
 
     # --- PRIORITY 2: Location/Branch Inquiry ---
     location_keywords = ['أين يقع', 'أين مقر', 'أين موقع', 'where is', 'where are']
     location_answers = ['maps.app.goo.gl', 'google.com/maps', 'بني ياس', 'مدينة خليفة', 'محمد بن زايد']
 
     if any(x in desc_norm for x in [normalize_arabic(k) for k in location_keywords]):
-        return 'Location Inquiry', 'استفسار صريح عن الموقع الجغرافي', 0.98
+        return 'استفسار عن الموقع', 'استفسار صريح عن الموقع الجغرافي', 0.98
 
     if any(x in res_norm for x in [normalize_arabic(a) for a in location_answers]):
-        return 'Location Inquiry', 'توفر رابط خريطة أو موقع محدد في الحل', 0.96
+        return 'استفسار عن الموقع', 'توفر رابط خريطة أو موقع محدد في الحل', 0.96
 
     # --- PRIORITY 3: Cross-Entity Confusion ---
     cross_entity = ['هيئة المعاشات', 'الهيئة العامة للمعاشات', 'gpssa', 'خارج اختصاص', 'federal pension']
     if any(x in desc_norm for x in [normalize_arabic(k) for k in cross_entity]):
-        return 'Cross-Entity Confusion', 'الاستفسار متعلق بجهة أخرى', 0.94
+        return 'خلط بين الجهات', 'الاستفسار متعلق بجهة أخرى', 0.94
 
     # --- PRIORITY 4: Status Follow-up ---
     tracking_pattern = r'(?:MTEP|MTDP|AD20\d\d|ISU20)\w+'
     if re.search(tracking_pattern, desc):
-        return 'Status Follow-up', 'رقم تتبع محدد في الاستفسار', 0.96
+        return 'متابعة حالة', 'رقم تتبع محدد في الاستفسار', 0.96
 
     followup_keywords = ['رقم التتبع', 'بالرجوع للحالة', 'متابعة طلب', 'following up', 'tracking number']
     if any(x in desc_norm for x in [normalize_arabic(k) for k in followup_keywords]):
-        return 'Status Follow-up', 'طلب متابعة صريح لحالة سابقة', 0.95
+        return 'متابعة حالة', 'طلب متابعة صريح لحالة سابقة', 0.95
 
     # --- PRIORITY 5: Service Request vs Information (complex logic) ---
 
@@ -124,7 +124,7 @@ def classify_case(case_row: dict) -> Tuple[str, str, float]:
                 # Genuine Service Request
                 tracking_match = re.search(r'(?:برقم التتبع|tracking)\s*[A-Z0-9]{5,}', resolution)
                 confidence = 0.96 if tracking_match else 0.87
-                return 'Service Request', 'طلب خدمة واضح مع دليل تنفيذ', confidence
+                return 'طلب خدمة', 'طلب خدمة واضح مع دليل تنفيذ', confidence
 
     # Test B: Complex Financial Inquiry
     financial_pattern = r'\d[\d,]*\s*(?:درهم|AED|%)'
@@ -132,15 +132,15 @@ def classify_case(case_row: dict) -> Tuple[str, str, float]:
 
     if re.search(financial_pattern, desc):
         if any(k in desc_norm for k in [normalize_arabic(fk) for fk in financial_keywords]):
-            return 'Complex Financial Inquiry', 'استفسار مالي يتطلب توضيح الحسابات', 0.88
+            return 'استفسار مالي معقد', 'استفسار مالي يتطلب توضيح الحسابات', 0.88
 
     # Test C: Default fallthrough — Pure Information Inquiry
     if case_type_norm == 'استفسار' or case_type_norm == 'information':
-        return 'Pure Information Inquiry', 'استفسار عام عن معلومات أو خدمات', 0.82
+        return 'استفسار معلومات', 'استفسار عام عن معلومات أو خدمات', 0.82
     elif case_type_norm == 'شكوى' or case_type_norm == 'complaint':
-        return 'Complaint', 'شكوى مباشرة من المتعامل', 0.90
+        return 'شكوى', 'شكوى مباشرة من المتعامل', 0.90
     else:
-        return 'Pure Information Inquiry', 'تصنيف افتراضي — معلومات', 0.72
+        return 'استفسار معلومات', 'تصنيف افتراضي — معلومات', 0.72
 
 
 def run_stage2(state: PipelineState) -> PipelineState:
@@ -159,6 +159,9 @@ def run_stage2(state: PipelineState) -> PipelineState:
     for idx, row in state.raw_df.iterrows():
         contact_type, reason, confidence = classify_case(row.to_dict())
 
+        # Use SLA compliance field (نعم/لا) if available, else fall back to status
+        sla_value = str(row.get('سلا_امتثال', '')).strip() or str(row.get('الحالة_SLA', '')).strip()
+
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),
             case_title=str(row.get('تفاصيل_الطلب', '')),
@@ -166,8 +169,8 @@ def run_stage2(state: PipelineState) -> PipelineState:
             case_channel=str(row.get('قناة_تقديم_الخدمة', '')),
             description=str(row.get('نوع_المكالمة', '')),
             resolution_response=str(row.get('الحل', '')),
-            sla_color=str(row.get('الحالة_SLA', '')),
-            case_type=str(row.get('التصنيف_الفرعي', '')),
+            sla_color=sla_value,
+            case_type=str(row.get('نوع_المكالمة', '')),  # Original CRM label (استفسار, شكوى, طلب)
             service_name=str(row.get('الخدمة_الرئيسية', '')),
             actual_contact_type=contact_type,
             classification_reason=reason,

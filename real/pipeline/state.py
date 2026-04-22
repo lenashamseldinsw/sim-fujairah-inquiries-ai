@@ -62,13 +62,22 @@ class GapRow(BaseModel):
     """Gap analysis row from Stage 5."""
     topic: str
     case_count: int
-    guidebook_status: str
+    guidebook_status: str  # "Covered" | "Partially Covered" | "Missing"
     gap_type: str
     severity: str  # Critical | Medium | Adequate
     recommendation: str
     topic_ar: Optional[str] = None
     gap_type_ar: Optional[str] = None
     recommendation_ar: Optional[str] = None
+    # Enhanced guidebook intelligence fields
+    guidebook_excerpt: Optional[str] = None  # Actual text snippet from guidebook
+    guidebook_excerpt_ar: Optional[str] = None
+    coverage_percentage: Optional[float] = None  # % of issue addressed by guidebook
+    clarity_assessment: Optional[str] = None  # plain_language | bureaucratic | unclear
+    format_assessment: Optional[str] = None  # step_by_step | wall_of_text | mixed
+    has_visual_guidance: Optional[bool] = None  # Has diagrams/screenshots
+    guidebook_match_confidence: Optional[float] = None  # 0.0-1.0 confidence score
+    proactive_notification_opportunity: Optional[bool] = None  # Could be solved by proactive SMS/email
 
 
 class PipelineState(BaseModel):
@@ -139,3 +148,80 @@ def save_state_to_json(state: PipelineState, json_path: str) -> None:
     data = state.model_dump(mode='json', exclude={'raw_df'})  # Exclude DataFrame
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def extract_month_year_range(cases: list) -> str:
+    """
+    Extract month_year range from date_opened fields in cases.
+
+    Handles formats: YYYY-MM-DD HH:MM:SS, DD/MM/YYYY, YYYY-MM-DD, etc.
+    Returns: "Month Year — Month Year" (e.g., "January 2025 — February 2025")
+    """
+    if not cases:
+        return None
+
+    dates = []
+    for case in cases:
+        date_str = case.get('date_opened', '') if isinstance(case, dict) else case.date_opened
+        if not date_str or str(date_str) in ('nan', 'NaT', 'None'):
+            continue
+
+        try:
+            date_obj = None
+
+            # Try ISO datetime format: YYYY-MM-DD HH:MM:SS
+            if ' ' in str(date_str):
+                date_part = str(date_str).split(' ')[0]  # Get YYYY-MM-DD part
+                parts = date_part.split('-')
+                if len(parts) == 3:
+                    try:
+                        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                        date_obj = datetime(year, month, day)
+                    except (ValueError, IndexError):
+                        pass
+
+            # Try DD/MM/YYYY
+            if date_obj is None and '/' in str(date_str):
+                parts = str(date_str).split('/')
+                if len(parts) == 3:
+                    try:
+                        day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                        date_obj = datetime(year, month, day)
+                    except (ValueError, IndexError):
+                        pass
+
+            # Try YYYY-MM-DD
+            if date_obj is None and '-' in str(date_str):
+                parts = str(date_str).split('-')
+                if len(parts) == 3:
+                    try:
+                        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                        date_obj = datetime(year, month, day)
+                    except (ValueError, IndexError):
+                        pass
+
+            if date_obj:
+                dates.append(date_obj)
+        except Exception:
+            continue
+
+    if not dates:
+        return None
+
+    dates.sort()
+    min_date = dates[0]
+    max_date = dates[-1]
+
+    # Format as "Month Year — Month Year"
+    month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December']
+
+    min_month = month_names[min_date.month - 1]
+    max_month = month_names[max_date.month - 1]
+
+    if min_date.year == max_date.year and min_date.month == max_date.month:
+        return f"{min_month} {min_date.year}"
+    elif min_date.year == max_date.year:
+        return f"{min_month} — {max_month} {max_date.year}"
+    else:
+        return f"{min_month} {min_date.year} — {max_month} {max_date.year}"

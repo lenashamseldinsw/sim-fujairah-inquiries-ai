@@ -13,14 +13,13 @@ from typing import Optional, Tuple, Dict, Any
 import pandas as pd
 import anthropic
 
-from .state import PipelineState, save_state_to_json, load_state_from_json
+from .state import PipelineState, save_state_to_json, load_state_from_json, extract_month_year_range
 from .stage1_validator import run_stage1
 from .stage2_rules import run_stage2
 from .stage3_llm import run_stage3
 from .stage4_analysis import run_stage4
-from .stage5_gap import run_stage5
+from .stage5_gap import run_stage5, load_guidebook_for_stage5
 from .stage6_artifacts import run_stage6
-from .guidebook import GuidebookSearchIndex
 
 
 class PipelineOrchestrator:
@@ -39,6 +38,7 @@ class PipelineOrchestrator:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.state: Optional[PipelineState] = None
         self.state_file: Optional[Path] = None
+        self.guidebook_path: Optional[str] = None
 
     def initialize_state(self, session_id: str) -> None:
         """Initialize or load state for a session."""
@@ -57,6 +57,36 @@ class PipelineOrchestrator:
         """Save current state to JSON."""
         if self.state and self.state_file:
             save_state_to_json(self.state, str(self.state_file))
+
+    def find_guidebook_json(self) -> bool:
+        """
+        Find and set the guidebook JSON path.
+
+        Returns:
+            True if guidebook found, False otherwise
+        """
+        if self.guidebook_path:
+            return True  # Already found
+
+        try:
+            # Try relative paths to guidebook (works in any deployment)
+            locations = [
+                Path(__file__).parent.parent / 'inquiries-flow' / 'inquiries-supporting-files' / 'guidebook_final.json',
+                Path(__file__).parent.parent / 'inquiries-flow' / 'inquiries-supporting-files' / 'guidebook.json',
+            ]
+
+            for loc in locations:
+                if loc.exists():
+                    self.guidebook_path = str(loc)
+                    print(f"[Guidebook] Found at {loc.name}")
+                    return True
+
+            print(f"[Guidebook] JSON not found in inquiries-flow/inquiries-supporting-files/")
+            return False
+
+        except Exception as e:
+            print(f"[Guidebook] Error: {e}")
+            return False
 
     def run_stage1_validator(self, df: pd.DataFrame) -> Tuple[bool, str, Dict[str, Any]]:
         """
@@ -90,9 +120,12 @@ class PipelineOrchestrator:
         except Exception as e:
             return False, f"Stage 2 error: {str(e)}"
 
-    def run_stage3_llm_classifier(self) -> Tuple[bool, str]:
+    def run_stage3_llm_classifier(self, progress_callback=None) -> Tuple[bool, str]:
         """
         Run Stage 3: LLM classifier for low-confidence cases.
+
+        Args:
+            progress_callback: Optional function(batch_num, total_batches) for batch progress updates
 
         Returns:
             (success, message)
@@ -104,10 +137,15 @@ class PipelineOrchestrator:
             return True, "No low-confidence cases to review"
 
         try:
-            self.state = run_stage3(self.state, self.api_key)
+            self.state = run_stage3(self.state, self.api_key, progress_callback=progress_callback)
 
             # Merge classifications
             self.state.all_classified = self.state.rule_classified + self.state.llm_classified
+
+            # Extract month_year range from date_opened fields
+            self.state.month_year = extract_month_year_range(
+                [c.model_dump() for c in self.state.all_classified]
+            )
 
             self.save_state()
 
@@ -136,18 +174,25 @@ class PipelineOrchestrator:
         except Exception as e:
             return False, f"Stage 4 error: {str(e)}"
 
-    def run_stage5_gap_analysis(self, search_index: Optional[GuidebookSearchIndex] = None) -> Tuple[bool, str]:
+    def run_stage5_gap_analysis(self) -> Tuple[bool, str]:
         """
         Run Stage 5: Gap analysis and FAQ validation.
-
-        Args:
-            search_index: GuidebookSearchIndex for semantic search on guidebook
 
         Returns:
             (success, message)
         """
         try:
-            self.state = run_stage5(self.state, self.api_key, search_index)
+            # Find and load guidebook
+            if not self.find_guidebook_json():
+                return False, "Could not find guidebook JSON"
+
+            # Extract friction clusters from journey map for filtering
+            friction_clusters = [j.cluster for j in self.state.journey_map] if self.state.journey_map else []
+
+            # Load filtered guidebook data
+            guidebook_data = load_guidebook_for_stage5(self.guidebook_path, friction_clusters)
+
+            self.state = run_stage5(self.state, self.api_key, guidebook_data)
             self.save_state()
 
             msg = f"Gap analysis complete: {len(self.state.gap_table)} gaps identified, {len(self.state.validated_faqs)} FAQs validated"
@@ -185,7 +230,6 @@ class PipelineOrchestrator:
         df: pd.DataFrame,
         excel_path: str,
         word_path: str,
-        search_index: Optional[GuidebookSearchIndex] = None,
         language: str = 'ar'
     ) -> Dict[str, Any]:
         """
@@ -195,7 +239,6 @@ class PipelineOrchestrator:
             df: Input DataFrame with case data
             excel_path: Path for Excel output
             word_path: Path for Word output
-            search_index: GuidebookSearchIndex for Stage 5 semantic search
             language: Language for output ('ar' or 'en')
 
         Returns:
@@ -235,7 +278,7 @@ class PipelineOrchestrator:
             results['errors'].append(msg)
 
         # Stage 5
-        success, msg = self.run_stage5_gap_analysis(search_index)
+        success, msg = self.run_stage5_gap_analysis()
         results['stages']['stage5'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
