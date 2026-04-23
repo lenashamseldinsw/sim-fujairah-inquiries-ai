@@ -451,7 +451,6 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # ISSUE 1 FIX: Ensure comparing final top_level against original case_type
         distribution = {}
         original_distribution = {}
-        misclassified = []
 
         for case in all_classified:
             final_type = case.top_level  # Final classification (after Stage 2 + Stage 3)
@@ -460,10 +459,6 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             # Track misclassifications against original CRM label
             original_type = case.case_type  # Original CRM نوع_المكالمة label
             original_distribution[original_type] = original_distribution.get(original_type, 0) + 1
-
-            # Case is reclassified if final doesn't match original
-            if original_type != final_type:
-                misclassified.append(case)
 
         misclassification_count = state.reclassified_count
         misclassification_rate = state.reclassification_rate
