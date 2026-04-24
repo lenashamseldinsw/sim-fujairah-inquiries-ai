@@ -6,7 +6,7 @@ Generates:
 2. Word report (sword-word-builder) — 9-section bilingual report
 3. Report dictionary — demo-compatible format for Streamlit display (in-memory)
 
-Uses state.report_sections from Stage 4/5 to build Word document and report dict.
+Uses state.report_sections_ar and state.report_sections_en to build Word document and report dict.
 Report dict is stored in state.report_json for passing to display functions.
 """
 
@@ -244,8 +244,11 @@ def generate_word_report(
         raise ImportError("sword-word-builder not installed")
 
     # Build report content via LLM if not in state
-    if not state.report_sections:
+    if not state.report_sections_ar and not state.report_sections_en:
         _generate_report_sections(state, api_key)
+
+    # Select appropriate language dict
+    report_sections = state.report_sections_ar if language == 'ar' else state.report_sections_en
 
     # Create builder
     is_arabic = language == 'ar'
@@ -294,18 +297,14 @@ def generate_word_report(
     ]
 
     for section_key in section_order:
-        if section_key not in state.report_sections:
+        if section_key not in report_sections:
             continue
 
-        section_data = state.report_sections[section_key]
+        section_data = report_sections[section_key]
 
-        # Get language-specific content
-        if is_arabic:
-            heading = section_data.get('heading_ar', section_data.get('heading', ''))
-            body = section_data.get('body_ar', section_data.get('body', ''))
-        else:
-            heading = section_data.get('heading_en', section_data.get('heading', ''))
-            body = section_data.get('body_en', section_data.get('body', ''))
+        # Get language-specific content (already selected language dict above)
+        heading = section_data.get('heading', '')
+        body = section_data.get('body', '')
 
         if not heading:
             continue
@@ -350,53 +349,97 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     8. Improvement Roadmap (placeholder)
     9. Conclusion (placeholder)
     """
+    print(f"[GenSections] api_key present: {bool(api_key)}")
+    print(f"[GenSections] api_key length: {len(api_key) if api_key else 0}")
+
     if not api_key:
         # Fallback to basic structure if no API key
         _create_basic_report_sections(state)
         return
 
     try:
-        # Initialize report_sections dict
-        state.report_sections = {}
+        # Initialize both language dicts
+        state.report_sections_ar = {}
+        state.report_sections_en = {}
 
         # 1. Generate Executive Summary (primary, detailed implementation)
         print("[Report Gen] Generating Executive Summary...")
         exec_summary = generate_executive_summary_section(state, api_key)
         if exec_summary:
             # Store in report_sections with proper structure for Word builder
-            state.report_sections['executive_summary'] = {
-                'heading': 'Executive Summary',
-                'heading_ar': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body_ar': exec_summary.get('framing_paragraph_ar', ''),
-                'body_en': exec_summary.get('framing_paragraph_en', ''),
+            state.report_sections_ar['executive_summary'] = {
+                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
+                'body': exec_summary.get('framing_paragraph_ar', ''),
                 'tables': [exec_summary.get('key_findings', [])],  # Will be formatted as table
-                'core_message_ar': exec_summary.get('core_message_ar', ''),
-                'core_message_en': exec_summary.get('core_message_en', ''),
+                'core_message': exec_summary.get('core_message_ar', ''),
                 'raw_data': exec_summary  # Store full response for later processing
+            }
+            state.report_sections_en['executive_summary'] = {
+                'heading': 'Executive Summary',
+                'body': exec_summary.get('framing_paragraph_en', ''),
+                'tables': [exec_summary.get('key_findings', [])],
+                'core_message': exec_summary.get('core_message_en', ''),
+                'raw_data': exec_summary
             }
         else:
             print("[Report Gen] Warning: Executive summary generation failed, using fallback")
-            state.report_sections['executive_summary'] = {
-                'heading_ar': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body_ar': 'جاري إنشاء الملخص التنفيذي...',
+            state.report_sections_ar['executive_summary'] = {
+                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
+                'body': 'جاري إنشاء الملخص التنفيذي...',
+            }
+            state.report_sections_en['executive_summary'] = {
+                'heading': 'Executive Summary',
+                'body': 'Generating executive summary...',
             }
 
-        # 2. Generate Methodology section
+        # BUG 1: 2. Generate Methodology section with correct keys and state dicts
         print("[Report Gen] Generating Methodology section...")
         methodology = generate_methodology_section(state, api_key)
         if methodology:
-            state.report_sections['methodology'] = {
-                'heading_ar': 'ثانياً: المنهجية وطبيعة المصادر',
-                'body_ar': methodology.get('classification_method_ar', ''),
-                'tables': [methodology.get('sources_table', [])],
+            # Build language-split sources tables
+            sources_raw = _build_sources_table(
+                state, methodology.get('sources_table', [])
+            )
+            sources_ar = {
+                'columns': sources_raw['columns_ar'],
+                'rows': sources_raw['rows_ar'],
+                'row_count': len(sources_raw['rows_ar']),
+                'col_count': len(sources_raw['columns_ar']),
+            }
+            sources_en = {
+                'columns': sources_raw['columns_en'],
+                'rows': sources_raw['rows_en'],
+                'row_count': len(sources_raw['rows_en']),
+                'col_count': len(sources_raw['columns_en']),
+            }
+
+            state.report_sections_ar['methodology'] = {
+                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
+                'classification_method_ar': methodology.get('classification_method_ar', ''),
                 'analyzed_fields_ar': methodology.get('analyzed_fields_ar', ''),
+                'tables': [sources_ar],
+                'raw_data': methodology
+            }
+            state.report_sections_en['methodology'] = {
+                'heading': 'Methodology and Data Sources',
+                'classification_method_en': methodology.get('classification_method_en', ''),
+                'analyzed_fields_en': methodology.get('analyzed_fields_en', ''),
+                'tables': [sources_en],
                 'raw_data': methodology
             }
         else:
             print("[Report Gen] Warning: Methodology generation failed, using fallback")
-            state.report_sections['methodology'] = {
-                'heading_ar': 'ثانياً: المنهجية وطبيعة المصادر',
-                'body_ar': 'جاري إنشاء قسم المنهجية...',
+            state.report_sections_ar['methodology'] = {
+                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
+                'classification_method_ar': 'جاري إنشاء قسم المنهجية...',
+                'analyzed_fields_ar': '',
+                'tables': [],
+            }
+            state.report_sections_en['methodology'] = {
+                'heading': 'Methodology and Data Sources',
+                'classification_method_en': 'Generating methodology section...',
+                'analyzed_fields_en': '',
+                'tables': [],
             }
 
         # TODO: 3. Workload Map (ثالثاً: خريطة عبء العمل الحقيقي)
@@ -407,22 +450,28 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
         # TODO: 9. Conclusion (تاسعاً: الخلاصة)
 
-        # For now, fill in placeholders for remaining sections
-        for section_key, heading_ar in [
-            ('methodology', 'ثانياً: المنهجية وطبيعة المصادر'),
-            ('workload_map', 'ثالثاً: التحليل الأول — خريطة عبء العمل الحقيقي'),
-            ('journey_challenges', 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل'),
-            ('digital_gaps', 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية'),
-            ('digital_transformation', 'سادساً: التحليل الرابع — خطة التحويل الرقمي'),
-            ('ai_use_cases', 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي'),
-            ('improvement_roadmap', 'ثامناً: خارطة الطريق التحسينية المقترحة'),
-            ('conclusion', 'تاسعاً: الخلاصة — من البيانات إلى القرار'),
+        # BUG 2: Fill in placeholders for remaining sections (methodology already handled above)
+        for section_key, heading_ar, heading_en in [
+            ('workload_map', 'ثالثاً: التحليل الأول — خريطة عبء العمل الحقيقي', 'Workload Map'),
+            ('journey_challenges', 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل', 'Customer Journey Challenges'),
+            ('digital_gaps', 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية', 'Digital Gaps Analysis'),
+            ('digital_transformation', 'سادساً: التحليل الرابع — خطة التحويل الرقمي', 'Digital Transformation Plan'),
+            ('ai_use_cases', 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي', 'AI-Powered Use Cases'),
+            ('improvement_roadmap', 'ثامناً: خارطة الطريق التحسينية المقترحة', 'Improvement Roadmap'),
+            ('conclusion', 'تاسعاً: الخلاصة — من البيانات إلى القرار', 'Conclusion'),
         ]:
-            state.report_sections[section_key] = {
-                'heading_ar': heading_ar,
-                'body_ar': f'جاري إنشاء قسم {heading_ar}...',
-                'status': 'pending'  # Mark as pending for implementation
-            }
+            if section_key not in state.report_sections_ar:
+                state.report_sections_ar[section_key] = {
+                    'heading': heading_ar,
+                    'body': f'جاري إنشاء قسم {heading_ar}...',
+                    'status': 'pending'
+                }
+            if section_key not in state.report_sections_en:
+                state.report_sections_en[section_key] = {
+                    'heading': heading_en,
+                    'body': f'Generating {heading_en} section...',
+                    'status': 'pending'
+                }
 
     except Exception as e:
         print(f"Error in _generate_report_sections: {e}")
@@ -742,6 +791,8 @@ Return a single bilingual JSON object:
 """
 
         client = anthropic.Anthropic(api_key=api_key)
+        print(f"[ExecSummary] Calling API with model claude-sonnet-4-6")
+        print(f"[ExecSummary] total_cases={total_cases}, reclassified={misclassification_count}")
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=4000,  # Increased to handle full response
@@ -824,6 +875,52 @@ Return a single bilingual JSON object:
     except Exception as e:
         print(f"Error generating executive summary: {e}")
         return None
+
+
+def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Build bilingual sources table for methodology section."""
+    columns_ar = ["المصدر", "الطبيعة", "الحجم", "الفترة"]
+    columns_en = ["Source", "Nature", "Size", "Period"]
+
+    # Build source rows
+    case_count = state.total_cases if state and state.total_cases else 100
+
+    rows_ar = [
+        {
+            "المصدر": "تحليل الاستفسارات",
+            "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الطلب، الحلول، أسماء الخدمات، أوصاف الحالات)",
+            "الحجم": f"{case_count} حالة مغلقة",
+            "الفترة": "January — July 2025"
+        },
+        {
+            "المصدر": "دليل خدمات العملاء",
+            "الطبيعة": "الدليل الرسمي يغطي خدمات المرور والترخيص والأمن، مع التحقق من الأسئلة الشائعة وتحليل فجوات التغطية",
+            "الحجم": "160 صفحة، 25 سؤالاً",
+            "الفترة": "2025"
+        }
+    ]
+
+    rows_en = [
+        {
+            "Source": "Inquiry Analysis",
+            "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+            "Size": f"{case_count} closed cases",
+            "Period": "January — July 2025"
+        },
+        {
+            "Source": "Customer Services Guidebook",
+            "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+            "Size": "160 pages, 25 FAQs",
+            "Period": "2025"
+        }
+    ]
+
+    return {
+        'columns_ar': columns_ar,
+        'columns_en': columns_en,
+        'rows_ar': rows_ar,
+        'rows_en': rows_en
+    }
 
 
 def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
@@ -1093,6 +1190,7 @@ No bilingual fields — the report is Arabic-only.
 Do not reproduce or quote CRM case text verbatim."""
 
         client = anthropic.Anthropic(api_key=api_key)
+        print(f"[Methodology] Calling API, prompt length: {len(prompt)}")
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=4000,
@@ -1223,31 +1321,82 @@ def _build_summary_context(state: PipelineState) -> str:
 
 
 def _create_basic_report_sections(state: PipelineState) -> None:
-    """Create basic report structure without LLM."""
-    state.report_sections = {
+    """Create basic report structure without LLM — write to both language dicts."""
+    state.report_sections_ar = {
+        'executive_summary': {
+            'heading': 'الملخص التنفيذي',
+            'body': f'يحلل هذا التقرير {state.total_cases} استفسار وشكوى من المتعاملين. تشمل النتائج الرئيسية تحديد أنماط الخدمة، والنقاط الصعبة في رحلة المتعامل، والتوصيات لتحسين الخدمة.',
+        },
+        'methodology': {
+            'heading': 'المنهجية',
+            'body': 'تم إجراء التحليل باستخدام خط أنابيب متقدم يضم ستة مراحل: (1) التحقق من الصيغة، (2) التصنيف القائم على القواعد، (3) التصنيف المحسّن بالذكاء الاصطناعي، (4) تحليل الأنماط، (5) تحديد الفجوات، و (6) توليد التقرير.',
+            'tables': [{
+                'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'],
+                'rows': [
+                    {
+                        'المصدر': 'تحليل الاستفسارات',
+                        'الطبيعة': 'بيانات CRM — نصوص غير مهيكلة',
+                        'الحجم': f'{state.total_cases} حالة مغلقة',
+                        'الفترة': state.month_year or 'يناير — مارس 2026'
+                    },
+                    {
+                        'المصدر': 'دليل خدمات العملاء',
+                        'الطبيعة': 'الدليل الرسمي يغطي خدمات المرور والترخيص والأمن',
+                        'الحجم': '160 صفحة، 25 سؤالاً',
+                        'الفترة': '2025'
+                    }
+                ],
+                'row_count': 2,
+                'col_count': 4,
+                'original_index': 0
+            }],
+        },
+        'classification_summary': {
+            'heading': 'ملخص التصنيف',
+            'body': 'تم تصنيف الحالات في ثماني فئات بناءً على نوايا المتعامل وأنماط التفاعل.',
+        },
+        'recommendations': {
+            'heading': 'التوصيات',
+            'body': 'بناءً على التحليل، يتم تقديم التوصيات التالية لتحسين جودة الخدمة ورضا المتعاملين.',
+        },
+    }
+
+    state.report_sections_en = {
         'executive_summary': {
             'heading': 'Executive Summary',
-            'heading_ar': 'الملخص التنفيذي',
             'body': f'This report analyzes {state.total_cases} customer inquiries and complaints. Key findings include identification of customer service patterns, friction points in the customer journey, and recommendations for service improvement.',
-            'body_ar': f'يحلل هذا التقرير {state.total_cases} استفسار وشكوى من المتعاملين. تشمل النتائج الرئيسية تحديد أنماط الخدمة، والنقاط الصعبة في رحلة المتعامل، والتوصيات لتحسين الخدمة.',
         },
         'methodology': {
             'heading': 'Methodology',
-            'heading_ar': 'المنهجية',
             'body': 'Analysis was conducted using a six-stage pipeline: (1) Schema validation, (2) Rule-based classification, (3) LLM-enhanced classification, (4) Pattern analysis, (5) Gap identification, and (6) Report generation.',
-            'body_ar': 'تم إجراء التحليل باستخدام خط أنابيب متقدم يضم ستة مراحل: (1) التحقق من الصيغة، (2) التصنيف القائم على القواعد، (3) التصنيف المحسّن بالذكاء الاصطناعي، (4) تحليل الأنماط، (5) تحديد الفجوات، و (6) توليد التقرير.',
+            'tables': [{
+                'columns': ['Source', 'Nature', 'Size', 'Period'],
+                'rows': [
+                    {
+                        'Source': 'Inquiry Analysis',
+                        'Nature': 'CRM data — unstructured text fields',
+                        'Size': f'{state.total_cases} closed cases',
+                        'Period': state.month_year or 'Q1 2026'
+                    },
+                    {
+                        'Source': 'Customer Services Guidebook',
+                        'Nature': 'Official guidebook covering traffic, licensing, security services',
+                        'Size': '160 pages, 25 FAQs',
+                        'Period': '2025'
+                    }
+                ],
+                'row_count': 2,
+                'col_count': 4,
+                'original_index': 0
+            }],
         },
         'classification_summary': {
             'heading': 'Classification Summary',
-            'heading_ar': 'ملخص التصنيف',
             'body': 'Cases were classified into eight categories based on customer intent and interaction patterns.',
-            'body_ar': 'تم تصنيف الحالات في ثماني فئات بناءً على نوايا المتعامل وأنماط التفاعل.',
         },
         'recommendations': {
             'heading': 'Recommendations',
-            'heading_ar': 'التوصيات',
             'body': 'Based on the analysis, the following recommendations are provided for improving service delivery and customer satisfaction.',
-            'body_ar': 'بناءً على التحليل، يتم تقديم التوصيات التالية لتحسين جودة الخدمة ورضا المتعاملين.',
         },
     }
 
