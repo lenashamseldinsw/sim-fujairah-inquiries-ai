@@ -41,12 +41,12 @@ def main():
         print(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
         print(f"   Columns: {list(df.columns)[:5]}...")
 
-        # Sample 100 random rows
-        if len(df) > 100:
-            df = df.sample(n=100, random_state=42)
-            print(f"✅ Sampled 100 random rows (seed=42 for reproducibility)")
+        # Sample 50 random rows
+        if len(df) > 50:
+            df = df.sample(n=50, random_state=42)
+            print(f"✅ Sampled 50 random rows (seed=42 for reproducibility)")
         else:
-            print(f"⚠️  Only {len(df)} rows available (less than 100)")
+            print(f"⚠️  Only {len(df)} rows available (less than 50)")
 
     except Exception as e:
         print(f"❌ Failed to load file: {e}")
@@ -234,17 +234,40 @@ def main():
             }
 
         if methodology:
+            # Convert sources_table to language-specific format
+            sources_raw = methodology.get('sources_table', {})
+
+            # Arabic version
+            sources_ar = {}
+            if isinstance(sources_raw, dict) and 'rows_ar' in sources_raw:
+                sources_ar = {
+                    'columns': sources_raw.get('columns_ar', []),
+                    'rows': sources_raw.get('rows_ar', []),
+                    'row_count': len(sources_raw.get('rows_ar', [])),
+                    'col_count': len(sources_raw.get('columns_ar', [])),
+                }
+
+            # English version
+            sources_en = {}
+            if isinstance(sources_raw, dict) and 'rows_en' in sources_raw:
+                sources_en = {
+                    'columns': sources_raw.get('columns_en', []),
+                    'rows': sources_raw.get('rows_en', []),
+                    'row_count': len(sources_raw.get('rows_en', [])),
+                    'col_count': len(sources_raw.get('columns_en', [])),
+                }
+
             state.report_sections_ar['methodology'] = {
                 'heading': 'ثانياً: المنهجية وطبيعة المصادر',
                 'body': methodology.get('classification_method_ar', ''),
-                'tables': [methodology.get('sources_table', [])],
+                'tables': [sources_ar] if sources_ar else [],
                 'analyzed_fields': methodology.get('analyzed_fields_ar', ''),
                 'raw_data': methodology
             }
             state.report_sections_en['methodology'] = {
                 'heading': 'Methodology and Data Sources',
                 'body': methodology.get('classification_method_en', ''),
-                'tables': [methodology.get('sources_table', [])],
+                'tables': [sources_en] if sources_en else [],
                 'analyzed_fields': methodology.get('analyzed_fields_en', ''),
                 'raw_data': methodology
             }
@@ -255,20 +278,49 @@ def main():
         state.report_json = generate_json_report(state)
         print(f"✅ JSON report generated")
 
-        # Save to file
-        output_file = output_dir / f"test_report_sections_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        # Save to files
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
+        # Save full report JSON
+        output_file = output_dir / f"report_full_{timestamp}.json"
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(state.report_json, f, ensure_ascii=False, indent=2)
-
-        print(f"\n💾 Saved report JSON to: {output_file}")
+        print(f"\n💾 Saved full report JSON to: {output_file}")
         print(f"   File size: {output_file.stat().st_size} bytes")
+
+        # Save report sections (Arabic)
+        ar_file = output_dir / f"report_sections_ar_{timestamp}.json"
+        with open(ar_file, 'w', encoding='utf-8') as f:
+            json.dump(state.report_sections_ar, f, ensure_ascii=False, indent=2)
+        print(f"💾 Saved Arabic report sections to: {ar_file}")
+        print(f"   File size: {ar_file.stat().st_size} bytes")
+
+        # Save report sections (English)
+        en_file = output_dir / f"report_sections_en_{timestamp}.json"
+        with open(en_file, 'w', encoding='utf-8') as f:
+            json.dump(state.report_sections_en, f, ensure_ascii=False, indent=2)
+        print(f"💾 Saved English report sections to: {en_file}")
+        print(f"   File size: {en_file.stat().st_size} bytes")
 
         # Print summary of report_json structure
         if state.report_json:
             print(f"\n📊 Report JSON Structure:")
             print(f"   Sections: {list(state.report_json.keys())}")
             for section_key, section_data in state.report_json.items():
+                if isinstance(section_data, dict):
+                    print(f"   - {section_key}: {list(section_data.keys())}")
+
+        # Print summary of report_sections
+        print(f"\n📊 Report Sections Structure:")
+        print(f"   Arabic sections: {list(state.report_sections_ar.keys())}")
+        if state.report_sections_ar:
+            for section_key, section_data in state.report_sections_ar.items():
+                if isinstance(section_data, dict):
+                    print(f"   - {section_key}: {list(section_data.keys())}")
+
+        print(f"   English sections: {list(state.report_sections_en.keys())}")
+        if state.report_sections_en:
+            for section_key, section_data in state.report_sections_en.items():
                 if isinstance(section_data, dict):
                     print(f"   - {section_key}: {list(section_data.keys())}")
 
