@@ -40,6 +40,9 @@ tmp/
 # Cache directory for extracted reports
 outputs/cache/
 
+# Pipeline test output
+pipeline-test-output/
+
 # Credentials and Secrets
 credentials.json
 *.env
