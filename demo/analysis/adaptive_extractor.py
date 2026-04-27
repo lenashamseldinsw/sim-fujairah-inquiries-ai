@@ -87,32 +87,31 @@ class AdaptiveReportExtractor:
         self.CACHE_DIR = Path(self._detect_cache_dir(docx_path))
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Determine cache file path (needed for both cache check and save)
+        is_english = 'english-output' in str(docx_path).lower()
+        if is_english:
+            docx_path_str = str(docx_path).lower()
+            json_filename = None
+            # Map periods to their English JSON files
+            if 'q1-2026' in docx_path_str or 'q1_2026' in docx_path_str:
+                json_filename = 'Q1_2026_complaints_analysis_en.json'
+            elif '2025' in docx_path_str:
+                json_filename = 'complaints_analysis_2025_en.json'
+            cache_file = self.CACHE_DIR / json_filename if json_filename else self.CACHE_DIR / "cache.json"
+        else:
+            # Arabic flow: Use hash-based cache key
+            cache_key = self._generate_cache_key(doc_path)
+            cache_file = self.CACHE_DIR / f"{cache_key}.json"
+
         # Check cache first (unless force refresh)
         if not force_refresh:
-            is_english = 'english-output' in str(docx_path).lower()
-
             if is_english:
-                # English flow: Use hardcoded period-to-JSON mapping
-                docx_path_str = str(docx_path).lower()
-                json_filename = None
-
-                # Map periods to their English JSON files
-                if 'q1-2026' in docx_path_str or 'q1_2026' in docx_path_str:
-                    json_filename = 'Q1_2026_complaints_analysis_en.json'
-                elif '2025' in docx_path_str:
-                    json_filename = 'complaints_analysis_2025_en.json'
-
-                if json_filename:
-                    cache_file = self.CACHE_DIR / json_filename
-                    if cache_file.exists():
-                        cached_report = self._load_from_cache(cache_file)
-                        print(f"✓ Loading cached report structure from: {cache_file.name}")
-                        return cached_report
+                if cache_file.exists():
+                    cached_report = self._load_from_cache(cache_file)
+                    print(f"✓ Loading cached report structure from: {cache_file.name}")
+                    return cached_report
             else:
                 # Arabic flow: Use hash-based cache key (original behavior)
-                cache_key = self._generate_cache_key(doc_path)
-                cache_file = self.CACHE_DIR / f"{cache_key}.json"
-
                 if cache_file.exists():
                     cached_report = self._load_from_cache(cache_file)
                     # Verify cache version matches current extraction logic

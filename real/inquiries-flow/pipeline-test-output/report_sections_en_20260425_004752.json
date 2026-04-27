@@ -1,0 +1,175 @@
+{
+  "executive_summary": {
+    "heading": "Executive Summary",
+    "body": "This report presents an in-depth analysis of 5 contact cases extracted from two primary sources: CRM System Export — Unformatted Text, and the Services Guidebook & FAQ, covering the period from May to December 2025, with the explicit purpose of transforming raw data into actionable operational decisions rather than descriptive statistics. Key Structural Discovery: Reclassification revealed that cases originally logged entirely as inquiries in fact contained one documented complaint reflecting a systemic platform defect that caused a double payment deduction — meaning 20% of actual workload was concealed behind an inaccurate classification label, signalling that the true scope of operational dissatisfaction is broader than system records currently reflect.",
+    "tables": [
+      [
+        {
+          "number": 1,
+          "title_ar": "دقة التصنيف 0% خطأ — لكن النظام أخفى شكوى حرجة بنسبة انزياح فعلية 20%",
+          "title_en": "0% Misclassification Rate — Yet the System Concealed a Critical Complaint Representing a 20% Actual Label Shift",
+          "description_ar": "لم تُسجَّل أي حالة خاطئة التصنيف رسمياً من أصل 5 حالات؛ غير أن التصنيف الأصلي في النظام وضع جميع الحالات الخمس تحت مسمى «استفسار»، في حين كشفت إعادة التحليل النوعي عن حالة شكوى واحدة ناجمة عن خلل في المنصة — أي أن التصنيف الآلي فشل في التقاط 20% من الحمل الفعلي بصورته الصحيحة. يُمثّل هذا المعدل فجوة جودة بيانات حرجة لا يمكن مقارنتها بأي فترة سابقة في نطاق هذا التقرير، مما يجعله المرجع القاعدي الأول لقياس دقة التصنيف في الدورات القادمة.",
+          "description_en": "No case was formally flagged as misclassified out of the 5 cases analyzed; however, the original CRM system assigned all five cases the label 'inquiry', while qualitative re-analysis uncovered one complaint case rooted in a platform defect — meaning automated classification failed to correctly capture 20% of the actual workload by type. This represents a critical data quality gap with no prior-period benchmark available within this report's scope, establishing it as the baseline reference for classification accuracy in future cycles.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الاستفسارات تهيمن بـ 80% على عبء التواصل — وتحجب شكوى تشغيلية واحدة ذات أثر مالي مباشر",
+          "title_en": "Inquiries Dominate 80% of Contact Volume — Masking One Operationally Impactful Complaint with Direct Financial Consequences",
+          "description_ar": "بلغ عدد الاستفسارات 4 حالات من أصل 5، أي ما نسبته 80% من إجمالي التواصل بعد إعادة التصنيف، مقارنةً بـ 100% في التصنيف الأصلي للنظام — وهو تحوّل يكشف أن التصنيف الآلي كان يُسوّي بين طبيعتَي التواصل دون تمييز. وبالنظر إلى الفئة الفرعية الوحيدة للشكاوى المُعاد تصنيفها، فإنها تتمحور حول خلل في المنصة أفضى إلى خصم مالي مزدوج دون إصدار شهادة المركبة، وهو ما يُشير إلى أن التركّز في نقطة اتصال واحدة ذات أثر مالي يستدعي معالجة فورية بمعزل عن حجمها العددي المحدود.",
+          "description_en": "Inquiries accounted for 4 out of 5 cases, representing 80% of total contact volume after reclassification, compared to 100% under the original CRM labeling — a shift that reveals the automated classification system was conflating two fundamentally different contact natures. The sole reclassified complaint subcategory centers on a platform bug that caused a double financial deduction without issuing the vehicle certificate, signalling that concentration in a single financially impactful contact point demands immediate remediation regardless of its limited numerical volume.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "حالة واحدة — إشعار بمخالفة مرورية خاطئة وتغطية صفرية في الدليل (ثقة مطابقة: 5%)",
+          "title_en": "1 Case — Incorrect Traffic Fine Notification with Zero Guidebook Coverage (Match Confidence: 5%)",
+          "description_ar": "تضرّرت حالة واحدة من غياب أي إجراء موثّق للاعتراض على مخالفة مرورية خاطئة صدرت على مركبة في الفجيرة، وهي نقطة احتكاك تحمل تصنيف «حرجة» ولا تحظى بأي تغطية في دليل الخدمات — إذ بلغت نسبة التغطية 0% ومعامل ثقة المطابقة 0.05 فحسب، وهو الأدنى بين جميع الفجوات المرصودة. يكشف السبب الجذري — وهو غياب المعلومات — أن المتعامل يجد نفسه في مسار مسدود كلياً عند محاولة الطعن في مخالفة لا علاقة لمركبته بها، دون أي قناة وصول رقمية أو مرجعية إجرائية تُرشده.",
+          "description_en": "One case was affected by the complete absence of any documented procedure for contesting an incorrect traffic fine issued against a vehicle in Fujairah — a friction point classified as critical with zero guidebook coverage, a coverage score of 0%, and a match confidence of only 0.05, the lowest recorded across all identified gaps. The root cause — missing information — reveals that customers hit a complete dead end when attempting to dispute a fine unrelated to their vehicle, with no digital access path and no procedural reference to guide them.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "حالتان ناجمتان عن غياب الإشعار الاستباقي — تخفيض مخالفات وترخيص سلاح دون أي تحديث للمتعامل",
+          "title_en": "2 Cases Driven by Absence of Proactive Notification — Traffic Fine Discount and Weapon License with No Status Updates",
+          "description_ar": "تشترك نقطتا احتكاك في السبب الجذري ذاته — غياب الإشعار الاستباقي: الأولى تتعلق بعدم علم المتعامل بتطبيق تخفيض على مخالفاته المرورية (حالة واحدة، شدة عالية)، والثانية تتعلق بغياب التواصل بشأن حالة طلب ترخيص السلاح بعد فترة طويلة من التقديم (حالة واحدة، شدة عالية) — وكلتاهما تفتقران تماماً إلى أي محتوى في دليل الخدمات. يُثبت التحليل أن إطلاق رسائل SMS/بريد إلكتروني استباقية آلية عند تفعيل التخفيض وعند كل مرحلة من مراحل الطلب كفيل بتجنّب هاتين الحالتين بالكامل دون أي تعديل في الإجراءات التشغيلية الجوهرية.",
+          "description_en": "Two friction points share an identical root cause — the absence of proactive notification: the first concerns a customer unaware of an applied traffic fine discount (1 case, high severity), and the second concerns complete silence regarding the status of a weapon license application submitted long before contact (1 case, high severity) — both with zero guidebook coverage. The data demonstrates that deploying automated SMS/email proactive notifications at discount activation and at each application stage milestone would fully eliminate both cases without requiring any modification to core operational procedures.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 5,
+          "title_ar": "100% إغلاق في الوقت المحدد — قدرة تنفيذية راسخة في مواجهة فجوات هيكلية",
+          "title_en": "100% SLA Closure Rate — Solid Execution Capacity Against a Backdrop of Structural Gaps",
+          "description_ar": "أُغلقت جميع الحالات الخمس ضمن الوقت المحدد، محققةً معدل الالتزام بمستوى الخدمة 100% — وهو مؤشر أداء تشغيلي يُثبت قدرة الفرق التنفيذية على الاستجابة الفعّالة. بيد أن هذه النتيجة الإيجابية لا تُعالج الفجوة الهيكلية المتمثّلة في ضعف التصنيف الأصلي وانعدام تغطية الدليل بمتوسط 13.3%؛ إذ تكشف في المقابل أن المؤسسة تمتلك البنية التنفيذية اللازمة للانتقال من الاستجابة التفاعلية إلى الاستباقية متى توافرت البيانات الصحيحة.",
+          "description_en": "All 5 cases were closed within the defined timeframe, achieving a 100% SLA compliance rate — an operational performance indicator that confirms the execution teams' capacity for effective response. However, this positive result does not address the structural gap of inaccurate original classification and near-absent guidebook coverage averaging only 13.3%; rather, it reveals that the organization possesses the execution infrastructure needed to transition from reactive to proactive service delivery, provided it is guided by accurate and complete data.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ]
+    ],
+    "core_message": "Core Message: The systemic failure this analysis exposes lies not in operational response — where SLA compliance reached 100% — but in the information infrastructure itself: the services guidebook fully covers zero out of 5 identified gaps, with an average coverage rate of only 13.3% and a match confidence of a mere 15%, meaning customers reached the contact channel because the system failed to enable self-resolution in 100% of cases. Addressing these five gaps — three of which are immediately solvable through automated proactive notifications representing 60% of total cases — will transform operational data from a descriptor of what happened into a strategic engine that prevents repeat contact before it occurs.",
+    "raw_data": {
+      "section": "executive_summary",
+      "framing_paragraph_ar": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 5 حالات تواصل مُستخلصة من مصدرَين رئيسيَّين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة، وذلك للفترة الممتدة من مايو حتى ديسمبر 2025، بهدف تحويل البيانات الخام إلى قرارات تشغيلية قابلة للتنفيذ لا مجرد أرقام وصفية. المُستجد الجوهري: إعادة التصنيف كشفت أن ما صنّفه النظام بالكامل على أنه استفسارات يحتوي في حقيقته على شكوى موثّقة تعكس خللاً منهجياً في المنصة أدى إلى خصم مزدوج، مما يعني أن 20% من حجم العمل الفعلي كان مُخفياً خلف تصنيف غير دقيق، ويُنذر بأن الصورة الكاملة للاستياء التشغيلي أوسع مما تُظهره سجلات النظام.",
+      "framing_paragraph_en": "This report presents an in-depth analysis of 5 contact cases extracted from two primary sources: CRM System Export — Unformatted Text, and the Services Guidebook & FAQ, covering the period from May to December 2025, with the explicit purpose of transforming raw data into actionable operational decisions rather than descriptive statistics. Key Structural Discovery: Reclassification revealed that cases originally logged entirely as inquiries in fact contained one documented complaint reflecting a systemic platform defect that caused a double payment deduction — meaning 20% of actual workload was concealed behind an inaccurate classification label, signalling that the true scope of operational dissatisfaction is broader than system records currently reflect.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title_ar": "دقة التصنيف 0% خطأ — لكن النظام أخفى شكوى حرجة بنسبة انزياح فعلية 20%",
+          "title_en": "0% Misclassification Rate — Yet the System Concealed a Critical Complaint Representing a 20% Actual Label Shift",
+          "description_ar": "لم تُسجَّل أي حالة خاطئة التصنيف رسمياً من أصل 5 حالات؛ غير أن التصنيف الأصلي في النظام وضع جميع الحالات الخمس تحت مسمى «استفسار»، في حين كشفت إعادة التحليل النوعي عن حالة شكوى واحدة ناجمة عن خلل في المنصة — أي أن التصنيف الآلي فشل في التقاط 20% من الحمل الفعلي بصورته الصحيحة. يُمثّل هذا المعدل فجوة جودة بيانات حرجة لا يمكن مقارنتها بأي فترة سابقة في نطاق هذا التقرير، مما يجعله المرجع القاعدي الأول لقياس دقة التصنيف في الدورات القادمة.",
+          "description_en": "No case was formally flagged as misclassified out of the 5 cases analyzed; however, the original CRM system assigned all five cases the label 'inquiry', while qualitative re-analysis uncovered one complaint case rooted in a platform defect — meaning automated classification failed to correctly capture 20% of the actual workload by type. This represents a critical data quality gap with no prior-period benchmark available within this report's scope, establishing it as the baseline reference for classification accuracy in future cycles.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الاستفسارات تهيمن بـ 80% على عبء التواصل — وتحجب شكوى تشغيلية واحدة ذات أثر مالي مباشر",
+          "title_en": "Inquiries Dominate 80% of Contact Volume — Masking One Operationally Impactful Complaint with Direct Financial Consequences",
+          "description_ar": "بلغ عدد الاستفسارات 4 حالات من أصل 5، أي ما نسبته 80% من إجمالي التواصل بعد إعادة التصنيف، مقارنةً بـ 100% في التصنيف الأصلي للنظام — وهو تحوّل يكشف أن التصنيف الآلي كان يُسوّي بين طبيعتَي التواصل دون تمييز. وبالنظر إلى الفئة الفرعية الوحيدة للشكاوى المُعاد تصنيفها، فإنها تتمحور حول خلل في المنصة أفضى إلى خصم مالي مزدوج دون إصدار شهادة المركبة، وهو ما يُشير إلى أن التركّز في نقطة اتصال واحدة ذات أثر مالي يستدعي معالجة فورية بمعزل عن حجمها العددي المحدود.",
+          "description_en": "Inquiries accounted for 4 out of 5 cases, representing 80% of total contact volume after reclassification, compared to 100% under the original CRM labeling — a shift that reveals the automated classification system was conflating two fundamentally different contact natures. The sole reclassified complaint subcategory centers on a platform bug that caused a double financial deduction without issuing the vehicle certificate, signalling that concentration in a single financially impactful contact point demands immediate remediation regardless of its limited numerical volume.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "حالة واحدة — إشعار بمخالفة مرورية خاطئة وتغطية صفرية في الدليل (ثقة مطابقة: 5%)",
+          "title_en": "1 Case — Incorrect Traffic Fine Notification with Zero Guidebook Coverage (Match Confidence: 5%)",
+          "description_ar": "تضرّرت حالة واحدة من غياب أي إجراء موثّق للاعتراض على مخالفة مرورية خاطئة صدرت على مركبة في الفجيرة، وهي نقطة احتكاك تحمل تصنيف «حرجة» ولا تحظى بأي تغطية في دليل الخدمات — إذ بلغت نسبة التغطية 0% ومعامل ثقة المطابقة 0.05 فحسب، وهو الأدنى بين جميع الفجوات المرصودة. يكشف السبب الجذري — وهو غياب المعلومات — أن المتعامل يجد نفسه في مسار مسدود كلياً عند محاولة الطعن في مخالفة لا علاقة لمركبته بها، دون أي قناة وصول رقمية أو مرجعية إجرائية تُرشده.",
+          "description_en": "One case was affected by the complete absence of any documented procedure for contesting an incorrect traffic fine issued against a vehicle in Fujairah — a friction point classified as critical with zero guidebook coverage, a coverage score of 0%, and a match confidence of only 0.05, the lowest recorded across all identified gaps. The root cause — missing information — reveals that customers hit a complete dead end when attempting to dispute a fine unrelated to their vehicle, with no digital access path and no procedural reference to guide them.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "حالتان ناجمتان عن غياب الإشعار الاستباقي — تخفيض مخالفات وترخيص سلاح دون أي تحديث للمتعامل",
+          "title_en": "2 Cases Driven by Absence of Proactive Notification — Traffic Fine Discount and Weapon License with No Status Updates",
+          "description_ar": "تشترك نقطتا احتكاك في السبب الجذري ذاته — غياب الإشعار الاستباقي: الأولى تتعلق بعدم علم المتعامل بتطبيق تخفيض على مخالفاته المرورية (حالة واحدة، شدة عالية)، والثانية تتعلق بغياب التواصل بشأن حالة طلب ترخيص السلاح بعد فترة طويلة من التقديم (حالة واحدة، شدة عالية) — وكلتاهما تفتقران تماماً إلى أي محتوى في دليل الخدمات. يُثبت التحليل أن إطلاق رسائل SMS/بريد إلكتروني استباقية آلية عند تفعيل التخفيض وعند كل مرحلة من مراحل الطلب كفيل بتجنّب هاتين الحالتين بالكامل دون أي تعديل في الإجراءات التشغيلية الجوهرية.",
+          "description_en": "Two friction points share an identical root cause — the absence of proactive notification: the first concerns a customer unaware of an applied traffic fine discount (1 case, high severity), and the second concerns complete silence regarding the status of a weapon license application submitted long before contact (1 case, high severity) — both with zero guidebook coverage. The data demonstrates that deploying automated SMS/email proactive notifications at discount activation and at each application stage milestone would fully eliminate both cases without requiring any modification to core operational procedures.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 5,
+          "title_ar": "100% إغلاق في الوقت المحدد — قدرة تنفيذية راسخة في مواجهة فجوات هيكلية",
+          "title_en": "100% SLA Closure Rate — Solid Execution Capacity Against a Backdrop of Structural Gaps",
+          "description_ar": "أُغلقت جميع الحالات الخمس ضمن الوقت المحدد، محققةً معدل الالتزام بمستوى الخدمة 100% — وهو مؤشر أداء تشغيلي يُثبت قدرة الفرق التنفيذية على الاستجابة الفعّالة. بيد أن هذه النتيجة الإيجابية لا تُعالج الفجوة الهيكلية المتمثّلة في ضعف التصنيف الأصلي وانعدام تغطية الدليل بمتوسط 13.3%؛ إذ تكشف في المقابل أن المؤسسة تمتلك البنية التنفيذية اللازمة للانتقال من الاستجابة التفاعلية إلى الاستباقية متى توافرت البيانات الصحيحة.",
+          "description_en": "All 5 cases were closed within the defined timeframe, achieving a 100% SLA compliance rate — an operational performance indicator that confirms the execution teams' capacity for effective response. However, this positive result does not address the structural gap of inaccurate original classification and near-absent guidebook coverage averaging only 13.3%; rather, it reveals that the organization possesses the execution infrastructure needed to transition from reactive to proactive service delivery, provided it is guided by accurate and complete data.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ],
+      "core_message_ar": "الرسالة الجوهرية: الفشل المنهجي الذي يكشفه هذا التحليل ليس في الاستجابة التشغيلية — إذ بلغت نسبة الالتزام بمستوى الخدمة 100% — بل في منظومة المعلومات ذاتها: دليل الخدمات يغطّي بالكامل صفراً من أصل 5 فجوات محددة، بمتوسط تغطية لا يتجاوز 13.3% ومعامل ثقة مطابقة 15% فحسب، مما يعني أن المتعامل يصل إلى قناة التواصل لأن النظام لم يُمكّنه من الإجابة الذاتية في 100% من الحالات. معالجة هذه الفجوات الخمس — ثلاث منها قابلة للحل فوراً بإشعارات استباقية آلية تمثّل 60% من إجمالي الحالات — ستُحوّل البيانات التشغيلية من أداة وصف لما حدث إلى محرّك استراتيجي يمنع تكرار الاتصال قبل وقوعه.",
+      "core_message_en": "Core Message: The systemic failure this analysis exposes lies not in operational response — where SLA compliance reached 100% — but in the information infrastructure itself: the services guidebook fully covers zero out of 5 identified gaps, with an average coverage rate of only 13.3% and a match confidence of a mere 15%, meaning customers reached the contact channel because the system failed to enable self-resolution in 100% of cases. Addressing these five gaps — three of which are immediately solvable through automated proactive notifications representing 60% of total cases — will transform operational data from a descriptor of what happened into a strategic engine that prevents repeat contact before it occurs."
+    }
+  },
+  "methodology": {
+    "heading": "Methodology and Data Sources",
+    "body": "The analysis employed an automated two-stage classification pipeline applied to all five cases. In Stage 1, the rule-based engine (stage2_rules.py) processed all cases through a prioritised decision tree structured as follows: (1) Objection to a traffic violation, (2) Submission of a security or traffic report, (3) Request for a weapons permit or licence, (4) Complaint regarding non-receipt of service, (5) Complaint regarding a technical or system error, (6) Complaint regarding processing delay, (7) Inquiry about licences and vehicles, (8) Commendation; where none of these priorities could be matched, the CRM's original نوع_المكالمة label was used as a fallback. Cases meeting or exceeding a confidence threshold of 0.75 were classified directly, while cases falling below this threshold were queued for Stage 2. In Stage 2, the large language model classifier (stage3_llm.py), utilising the claude-haiku-4-5-20251001 model, classified rule-engine rejects via tool-use against a two-level taxonomy comprising 4 top-level types — Complaint (شكوى), Request (طلب), Inquiry (استفسار), and Commendation (شكر وثناء) — distributed across 25 domain-specific sub-classifications. Cases for which the model's confidence fell below 0.65 were routed to the human review queue and excluded from report counts. In this analysis, no cases were referred to Stage 2 and no cases were excluded due to low confidence, as the rule-based engine successfully classified all five cases with a reclassification rate of 0.0%. The following core definitional principle governs all stages of classification: the nature of what is being requested — not the phrasing — is the decisive criterion; a case expressing dissatisfaction is classified as a complaint even if it includes a request for action.",
+    "tables": [
+      {
+        "columns": [
+          "Source",
+          "Nature",
+          "Size",
+          "Period"
+        ],
+        "rows": [
+          {
+            "Source": "Inquiry Analysis",
+            "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+            "Size": "5 closed cases",
+            "Period": "May — December 2025"
+          },
+          {
+            "Source": "Customer Services Guidebook",
+            "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+            "Size": "160 pages, 25 FAQs",
+            "Period": "2025"
+          }
+        ],
+        "row_count": 2,
+        "col_count": 4
+      }
+    ],
+    "analyzed_fields": "The data analyzed comprised two groups of fields. First, the structured fields, which are handled by the dashboard and PowerBI system outside the scope of this pipeline; these include: Case Number (رقم_الطلب), Creation Date (تاريخ_الإنشاء), Service Submission Channel (قناة_تقديم_الخدمة), Primary Service (الخدمة_الرئيسية), Call Type (نوع_المكالمة), Nationality (الجنسية), and Responsible Department (الإدارة المختصة). Second, the unstructured fields, which constitute the primary focus of this analysis; these comprise the Case Details field (تفاصيل_الطلب), with an average of 614 characters per case and a language distribution of 72% Arabic and 28% English, and the Resolution field (الحل), with an average of 89 characters per case and an identical language distribution of 72% Arabic and 28% English. Analysis of these two fields enables the identification of the true nature of each case beyond the original label assigned in the CRM's Call Type field (نوع_المكالمة).",
+    "raw_data": {
+      "sources_table_ar": [
+        {
+          "المصدر": "تحليل الاستفسارات",
+          "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تتضمن حقول نصية غير منظمة تشمل: تفاصيل الحالات، والحلول المقدمة، وأسماء الخدمات، وأوصاف الحالات",
+          "الحجم": "5 حالات مغلقة",
+          "الفترة": "مايو — ديسمبر 2025"
+        },
+        {
+          "المصدر": "دليل خدمات العملاء",
+          "الطبيعة": "دليل رسمي يغطي خدمات المرور والترخيص والأمن، ويُستخدم مرجعاً للتحقق من صحة الأسئلة الشائعة وتحليل الفجوات في الخدمات المقدمة",
+          "الحجم": "160 صفحة، 25 سؤالاً شائعاً",
+          "الفترة": "2025"
+        }
+      ],
+      "sources_table_en": [
+        {
+          "Source": "Inquiry Analysis",
+          "Nature": "Customer Relationship Management (CRM) data comprising unstructured text fields, including case details, resolutions, service names, and case descriptions",
+          "Size": "5 closed cases",
+          "Period": "May — December 2025"
+        },
+        {
+          "Source": "Customer Services Guidebook",
+          "Nature": "Official reference document covering traffic, licensing, and security services, used for FAQ validation and service gap analysis",
+          "Size": "160 pages, 25 FAQs",
+          "Period": "2025"
+        }
+      ],
+      "classification_method_ar": "اعتمد التحليل على منهجية تصنيف آلية من مرحلتين متكاملتين. في المرحلة الأولى، طُبِّق محرك القواعد (stage2_rules.py) على جميع الحالات الخمس، إذ يعتمد على شجرة قرار ذات أولويات مرتّبة على النحو الآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء؛ وعند تعذّر مطابقة أيٍّ من هذه الأولويات، يُستند إلى تسمية نوع_المكالمة الواردة في نظام CRM. تُصنَّف الحالات التي يبلغ مستوى ثقتها 0.75 أو أعلى مباشرةً، في حين تُحال الحالات دون هذا الحد إلى المرحلة الثانية. في المرحلة الثانية، يتولى نموذج اللغة الكبير (stage3_llm.py) بالاستناد إلى نموذج claude-haiku-4-5-20251001 تصنيف الحالات المرفوضة من المرحلة الأولى عبر آلية استخدام الأدوات (tool-use) وفق تصنيف ثنائي المستوى يتضمن 4 أنواع رئيسية هي: شكوى، وطلب، واستفسار، وشكر وثناء، موزّعةً على 25 تصنيفاً فرعياً متخصصاً. الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 تُحال إلى قائمة المراجعة البشرية وتُستثنى من إحصاءات التقرير. في هذا التحليل، لم تُحَل أي حالة إلى المرحلة الثانية، ولم تُستبعد أي حالة بسبب انخفاض مستوى الثقة، إذ صنَّف محرك القواعد جميع الحالات الخمس بنجاح مع معدل إعادة تصنيف بلغ 0.0%. يسري على جميع مراحل التصنيف المبدأ التعريفي الجوهري الآتي: «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+      "classification_method_en": "The analysis employed an automated two-stage classification pipeline applied to all five cases. In Stage 1, the rule-based engine (stage2_rules.py) processed all cases through a prioritised decision tree structured as follows: (1) Objection to a traffic violation, (2) Submission of a security or traffic report, (3) Request for a weapons permit or licence, (4) Complaint regarding non-receipt of service, (5) Complaint regarding a technical or system error, (6) Complaint regarding processing delay, (7) Inquiry about licences and vehicles, (8) Commendation; where none of these priorities could be matched, the CRM's original نوع_المكالمة label was used as a fallback. Cases meeting or exceeding a confidence threshold of 0.75 were classified directly, while cases falling below this threshold were queued for Stage 2. In Stage 2, the large language model classifier (stage3_llm.py), utilising the claude-haiku-4-5-20251001 model, classified rule-engine rejects via tool-use against a two-level taxonomy comprising 4 top-level types — Complaint (شكوى), Request (طلب), Inquiry (استفسار), and Commendation (شكر وثناء) — distributed across 25 domain-specific sub-classifications. Cases for which the model's confidence fell below 0.65 were routed to the human review queue and excluded from report counts. In this analysis, no cases were referred to Stage 2 and no cases were excluded due to low confidence, as the rule-based engine successfully classified all five cases with a reclassification rate of 0.0%. The following core definitional principle governs all stages of classification: the nature of what is being requested — not the phrasing — is the decisive criterion; a case expressing dissatisfaction is classified as a complaint even if it includes a request for action.",
+      "analyzed_fields_ar": "شملت البيانات المُحلَّلة مجموعتين من الحقول. أولاً، الحقول المنظمة التي يتولى معالجتها نظام لوحة المعلومات (PowerBI) خارج نطاق هذه المنهجية، وتضم: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. ثانياً، الحقول غير المنظمة التي تمثّل محور هذا التحليل، وتشمل حقل تفاصيل_الطلب بمتوسط 614 حرفاً لكل حالة وتوزيع لغوي يبلغ 72% عربي و28% إنجليزي، وحقل الحل بمتوسط 89 حرفاً لكل حالة وتوزيع لغوي مماثل يبلغ 72% عربي و28% إنجليزي. يتيح تحليل هذين الحقلين الكشف عن الطبيعة الحقيقية لكل حالة بما يتجاوز التسمية الأصلية المُدرجة في حقل نوع_المكالمة بنظام CRM.",
+      "analyzed_fields_en": "The data analyzed comprised two groups of fields. First, the structured fields, which are handled by the dashboard and PowerBI system outside the scope of this pipeline; these include: Case Number (رقم_الطلب), Creation Date (تاريخ_الإنشاء), Service Submission Channel (قناة_تقديم_الخدمة), Primary Service (الخدمة_الرئيسية), Call Type (نوع_المكالمة), Nationality (الجنسية), and Responsible Department (الإدارة المختصة). Second, the unstructured fields, which constitute the primary focus of this analysis; these comprise the Case Details field (تفاصيل_الطلب), with an average of 614 characters per case and a language distribution of 72% Arabic and 28% English, and the Resolution field (الحل), with an average of 89 characters per case and an identical language distribution of 72% Arabic and 28% English. Analysis of these two fields enables the identification of the true nature of each case beyond the original label assigned in the CRM's Call Type field (نوع_المكالمة)."
+    }
+  }
+}

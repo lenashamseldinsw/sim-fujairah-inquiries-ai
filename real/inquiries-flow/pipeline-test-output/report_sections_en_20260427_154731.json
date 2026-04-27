@@ -1,0 +1,68 @@
+{
+  "sections": [
+    {
+      "id": "section_15_أولا_الملخص_التنفيذي",
+      "title": "Executive Summary",
+      "title_en": "Executive Summary",
+      "level": 2,
+      "content": "This report presents an in-depth analysis of 10 contact cases extracted from two primary sources — CRM System Export (unformatted text) and the Services Guide & FAQ — covering the period from May to December 2025, with the explicit purpose of transforming raw data into actionable decisions rather than standalone statistics. Core Discovery: Reclassification revealed that 60% of cases were entirely mislabelled as 'Inquiries' in the CRM system, when in reality they contained complaints and requests reflecting structural operational failures that demand immediate intervention.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_16_النتائج_الرئيسية",
+          "title": "Key Findings",
+          "title_en": "Key Findings",
+          "level": 3,
+          "content": "Core Message: The fundamental failure the data exposes is not poor service quality — it is the collapse of classification accuracy; the original system concealed 60% of cases behind the label 'Inquiry,' masking real complaints and requests while leaving 7 friction points without structural resolution and an average guidebook coverage of only 37.5%. Correcting this failure unlocks the ability to redirect 80% of cases through proactive notifications and updated digital content rather than reactive contact channels, transforming a proven 100% SLA execution capacity from a load-absorbing mechanism into a data-driven service strategy built on evidence, not organised guesswork.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Discovery",
+                "Description",
+                "Importance Level"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Discovery": "60% Misclassification Rate — A Critical Data Quality Failure",
+                  "Description": "6 out of 10 cases were classified as 'Inquiry' in the original CRM system; however, reanalysis revealed they distribute into 4 complaints, 4 inquiries, and 2 requests — meaning the original classification entirely concealed the existence of complaints and requests. No prior-period benchmark is available for comparison, making this 60% rate a standalone critical data quality gap that renders any decision based on current CRM classifications unreliable.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "2",
+                  "Discovery": "Inquiries Dominate at 40% — Complaints Concealed Behind a Misleading Label",
+                  "Description": "Inquiries represent the highest-volume type at 4 cases (40%) post-reclassification, versus the original CRM's claim of 100% — a stark contradiction exposing a complete absence of accurate classification mechanisms. Complaint subcategories were not captured in the original source, which deepens the risk of operational focus being directed at the wrong channels and prevents meaningful pattern detection in real customer needs.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "3",
+                  "Discovery": "3 Cases Affected by Unclear License Transfer Procedures and Double-Payment Errors",
+                  "Description": "The highest-volume friction point encompasses 3 cases related to the lack of clarity in inter-emirate license transfer procedures and double-payment error handling, with the Services Guide covering only 30% of this topic at a match confidence of 0.35 — a critically low level exposing a wide information gap. The root cause is missing information, forcing customers into repeated contact with service channels rather than self-service digital resolution, against a backdrop of 0% digital channel utilisation.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "4",
+                  "Discovery": "2 Critical Cases Driven by the Absence of Proactive Notifications for Weapons Permits",
+                  "Description": "Two separate cases — absence of proactive communication on permit application outcomes (1 case) and prolonged waiting without response on a weapons license request (1 case) — share a single root cause: the complete absence of proactive notification, with zero guidebook coverage and a match confidence of 0.05 for both. The data demonstrates that introducing automated SMS notifications at key processing milestones would entirely eliminate these cases, representing the lowest-cost, highest-impact intervention available for reducing repeat-contact volume.",
+                  "Importance Level": "🟡 High"
+                },
+                {
+                  "#": "5",
+                  "Discovery": "100% On-Time Closure Rate — Reliable Execution Capacity Against Structural Gaps",
+                  "Description": "All 10 cases were closed within the defined service level, achieving a 100% SLA compliance rate — an operational performance indicator that cannot be overlooked. However, this achievement does not address the structural gap of 60% case misclassification; rather, it confirms that the organisation possesses the execution capacity required to absorb the systematic improvements recommended in this report.",
+                  "Importance Level": "🟢 Positive"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        }
+      ]
+    }
+  ]
+}

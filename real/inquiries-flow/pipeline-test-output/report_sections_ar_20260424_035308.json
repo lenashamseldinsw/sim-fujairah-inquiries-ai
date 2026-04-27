@@ -1,0 +1,135 @@
+{
+  "executive_summary": {
+    "heading": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+    "body": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ50 حالة تواصل مُستخرجة من مصدرَين رئيسيَّين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة، وذلك خلال الفترة الممتدة من يناير إلى ديسمبر 2025، بهدف تحويل البيانات الخام إلى قرارات تشغيلية قابلة للتنفيذ، لا مجرد استعراض أرقام. المُستجد الجوهري: إعادة التصنيف كشفت أن 100% من الحالات كانت مُصنَّفة أصلاً كـ«استفسارات» في نظام إدارة علاقات العملاء، في حين أثبت التحليل المعمّق أن 58% منها شكاوى حقيقية ذات جذور تشغيلية وتقنية، مما يعني أن المنظومة كانت تُخفي ضغطاً خدمياً جوهرياً خلف تصنيف مُضلِّل.",
+    "tables": [
+      [
+        {
+          "number": 1,
+          "title_ar": "تصنيف غير دقيق بنسبة 100% — جميع الحالات مُعاد تصنيفها من فئة واحدة",
+          "title_en": "100% Misclassification Rate — All Cases Reclassified from a Single Category",
+          "description_ar": "صنّف نظام إدارة علاقات العملاء الـ50 حالة بأكملها تحت تصنيف «استفسار»، في حين كشف التحليل المُعمَّق أنها تنقسم فعلياً إلى: 29 شكوى (58%)، و14 استفساراً حقيقياً (28%)، و7 طلبات (14%). يقف معدل إعادة التصنيف عند 72% من مجمل الحالات، وهو فجوة جودة بيانات حرجة لا سابق موثّق لها في الفترات الماضية يمكن المقارنة بها، مما يجعل هذا الاكتشاف معياراً تأسيسياً لقياس الأداء في الربع الأول من 2026.",
+          "description_en": "The CRM system classified all 50 cases uniformly as 'inquiries', while in-depth analysis revealed an actual distribution of 29 complaints (58%), 14 genuine inquiries (28%), and 7 requests (14%). The effective reclassification rate stands at 72% of all cases — a critical data-quality gap with no documented prior-period benchmark available for comparison, making this finding a foundational baseline for Q1 2026 performance measurement.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ58% على عبء العمل — فجوة تشغيلية مُخفاة",
+          "title_en": "Complaints Dominate 58% of Workload — A Concealed Operational Gap",
+          "description_ar": "بلغ حجم الشكاوى 29 حالة من أصل 50، أي ما يعادل 58% من إجمالي التواصل، في مقابل تصنيف أصلي يُدرجها جميعاً ضمن الاستفسارات، مما يعني أن المنظومة لم تكن تُميّز بين طلب المعلومة والتعبير عن الضائقة الخدمية. يتركّز عبء الشكاوى حول محورَين رئيسيَّين: مخالفات مرورية منسوبة بشكل خاطئ (11 حالة) وعدم استلام وثائق المركبة (9 حالات)، وهو تركّز يكشف أن المشكلة ليست موزّعة عشوائياً بل تنبع من خلل منهجي في منصة البيانات وإدارة التوصيل.",
+          "description_en": "Complaints accounted for 29 out of 50 cases — 58% of all contact volume — against an original CRM classification that grouped them entirely as inquiries, meaning the system failed to distinguish between information-seeking and service distress. The complaint burden is concentrated around two dominant clusters: wrongly attributed traffic fines (11 cases) and non-receipt of vehicle documents (9 cases), a concentration that signals not random dissatisfaction but a systemic failure in the data platform and document delivery pipeline.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "11 حالة بسبب مخالفات مرورية منسوبة بشكل خاطئ — خلل حرج في المنصة بلا مسار رقمي للتظلم",
+          "title_en": "11 Cases of Wrongly Attributed Traffic Fines — Critical Platform Bug with No Digital Dispute Path",
+          "description_ar": "تُمثّل مخالفات المركبات المنسوبة بشكل خاطئ — سواء لمركبة لم تكن في الفجيرة أو بسبب عدم تطابق بيانات اللوحة — أعلى نقطة احتكاك فردية بـ11 حالة، أي ما يعادل 22% من إجمالي حجم التواصل. السبب الجذري هو خلل في المنصة، وتكشف البيانات أن دليل الخدمات يُغطّي هذه الحالة بنسبة 25% فقط مع معدل تطابق 0.35 من 1.0، في حين تقتصر قناة الاعتراض الرسمية على مراكز الخدمة حصراً، مما يُجبر المتعامل على التواصل الشخصي بدلاً من الاعتماد على مسار رقمي ذاتي.",
+          "description_en": "Wrongly attributed traffic fines — for vehicles absent from Fujairah or mismatched plate data — represent the single highest-volume friction point at 11 cases, equivalent to 22% of total contact volume. The root cause is a platform bug, and the data shows that the service guidebook covers this scenario at only 25% with a match confidence of 0.35 out of 1.0, while the formal dispute channel is restricted exclusively to service centers — forcing customers into manual contact rather than a self-service digital path.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "16 حالة ناتجة عن بيانات تواصل غير محدثة وغياب الإشعار التلقائي — فجوة استباقية قابلة للحل فورياً",
+          "title_en": "16 Cases Driven by Outdated Contact Data and No Proactive Notifications — An Immediately Solvable Proactive Gap",
+          "description_ar": "تشترك نقطتا الاحتكاك: عدم استلام وثائق المركبة (9 حالات) وغياب التحديثات التلقائية على حالة الطلب (4 حالات) في سبب جذري مشترك هو غياب البنية الاستباقية للإشعار، إذ يُغطّي الدليل الحالة الأولى بنسبة 20% فقط والثانية بنسبة 5% فقط مع شبه انعدام في التوافق مع احتياج المتعامل الفعلي. البيانات تُشير إلى أن 46% من الحالات الكلية (23 حالة) كان بالإمكان منعها باستباقية عبر إشعارات SMS أو بريد إلكتروني آلي في نقاط مفصلية من رحلة الخدمة، مما يجعل تفعيل منظومة الإشعار التلقائي الإجراءَ ذا أعلى عائد فوري.",
+          "description_en": "Two friction points — non-receipt of vehicle documents (9 cases) and absence of automated request status updates (4 cases) — share a common root cause: the total absence of a proactive notification infrastructure, with the guidebook covering the first at only 20% and the second at a near-absent 5%, with minimal alignment to actual customer needs. The data indicates that 46% of all cases (23 cases) could have been proactively prevented through automated SMS or email notifications at key service milestones, making the activation of an automated notification system the single highest-return immediate intervention.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد — طاقة تنفيذية عالية في مقابل فجوة تصنيف هيكلية",
+          "title_en": "98% On-Time Closure Rate — High Execution Capacity Against a Structural Classification Gap",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن الإطار الزمني المحدد، بمعدل التزام بمستوى الخدمة بلغ 98%، وهو مؤشر أداء تشغيلي إيجابي يعكس كفاءة الفرق في الاستجابة. غير أن هذا المعدل المرتفع لا يُعالج الفجوة الهيكلية المتمثلة في غياب التصنيف الدقيق لطبيعة التواصل، إذ يُثبت فقط قدرة المنظومة على الإغلاق السريع، لا على التعامل الاستراتيجي مع الأسباب الجذرية للشكاوى الهيكلية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a 98% SLA compliance rate — a positive operational performance indicator reflecting strong team responsiveness. However, this elevated rate does not address the structural gap in contact-type classification accuracy; it confirms the system's capacity for rapid closure, not its ability to engage strategically with the root causes driving structural complaints.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ]
+    ],
+    "core_message": "الرسالة الجوهرية: الفشل المنهجي الذي تكشفه البيانات ليس في الاستجابة — إذ تُغلق 98% من الحالات في وقتها — بل في العمى التصنيفي الذي جعل 100% من حالات 2025 تُسجَّل كـ«استفسارات»، مُخفياً 29 شكوى حقيقية وحارماً القيادة من الرؤية اللازمة لاتخاذ قرارات وقائية. معالجة خلل المنصة المُسبِّب لـ11 حالة، وتفعيل منظومة الإشعار الاستباقي القادرة على درء 23 حالة (46% من العبء الكلي)، يُتيحان تحويل ما يزيد على نصف حجم التواصل من ضغط تفاعلي إلى خدمة وقائية مدارة. هذا التقرير لا يُشخِّص الماضي فحسب، بل يُرسي أول قاعدة بيانات مُصنَّفة بدقة تُمكِّن الإمارة من بناء استراتيجية تجربة متعامل مبنية على الدليل لا على التخمين.",
+    "raw_data": {
+      "section": "executive_summary",
+      "framing_paragraph_ar": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ50 حالة تواصل مُستخرجة من مصدرَين رئيسيَّين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة، وذلك خلال الفترة الممتدة من يناير إلى ديسمبر 2025، بهدف تحويل البيانات الخام إلى قرارات تشغيلية قابلة للتنفيذ، لا مجرد استعراض أرقام. المُستجد الجوهري: إعادة التصنيف كشفت أن 100% من الحالات كانت مُصنَّفة أصلاً كـ«استفسارات» في نظام إدارة علاقات العملاء، في حين أثبت التحليل المعمّق أن 58% منها شكاوى حقيقية ذات جذور تشغيلية وتقنية، مما يعني أن المنظومة كانت تُخفي ضغطاً خدمياً جوهرياً خلف تصنيف مُضلِّل.",
+      "framing_paragraph_en": "This report presents an in-depth analysis of 50 contact cases extracted from two primary sources — CRM System Export (Unformatted Text) and the Service Guidebook & FAQ — covering the period from January to December 2025, with the explicit purpose of transforming raw data into actionable operational decisions rather than presenting numbers in isolation. The Core Discovery: reclassification revealed that 100% of cases were originally labelled as 'inquiries' in the CRM, while rigorous analysis demonstrated that 58% are genuine complaints rooted in operational and technical failures — meaning the system had been masking substantial service pressure behind a misleading classification layer.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title_ar": "تصنيف غير دقيق بنسبة 100% — جميع الحالات مُعاد تصنيفها من فئة واحدة",
+          "title_en": "100% Misclassification Rate — All Cases Reclassified from a Single Category",
+          "description_ar": "صنّف نظام إدارة علاقات العملاء الـ50 حالة بأكملها تحت تصنيف «استفسار»، في حين كشف التحليل المُعمَّق أنها تنقسم فعلياً إلى: 29 شكوى (58%)، و14 استفساراً حقيقياً (28%)، و7 طلبات (14%). يقف معدل إعادة التصنيف عند 72% من مجمل الحالات، وهو فجوة جودة بيانات حرجة لا سابق موثّق لها في الفترات الماضية يمكن المقارنة بها، مما يجعل هذا الاكتشاف معياراً تأسيسياً لقياس الأداء في الربع الأول من 2026.",
+          "description_en": "The CRM system classified all 50 cases uniformly as 'inquiries', while in-depth analysis revealed an actual distribution of 29 complaints (58%), 14 genuine inquiries (28%), and 7 requests (14%). The effective reclassification rate stands at 72% of all cases — a critical data-quality gap with no documented prior-period benchmark available for comparison, making this finding a foundational baseline for Q1 2026 performance measurement.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ58% على عبء العمل — فجوة تشغيلية مُخفاة",
+          "title_en": "Complaints Dominate 58% of Workload — A Concealed Operational Gap",
+          "description_ar": "بلغ حجم الشكاوى 29 حالة من أصل 50، أي ما يعادل 58% من إجمالي التواصل، في مقابل تصنيف أصلي يُدرجها جميعاً ضمن الاستفسارات، مما يعني أن المنظومة لم تكن تُميّز بين طلب المعلومة والتعبير عن الضائقة الخدمية. يتركّز عبء الشكاوى حول محورَين رئيسيَّين: مخالفات مرورية منسوبة بشكل خاطئ (11 حالة) وعدم استلام وثائق المركبة (9 حالات)، وهو تركّز يكشف أن المشكلة ليست موزّعة عشوائياً بل تنبع من خلل منهجي في منصة البيانات وإدارة التوصيل.",
+          "description_en": "Complaints accounted for 29 out of 50 cases — 58% of all contact volume — against an original CRM classification that grouped them entirely as inquiries, meaning the system failed to distinguish between information-seeking and service distress. The complaint burden is concentrated around two dominant clusters: wrongly attributed traffic fines (11 cases) and non-receipt of vehicle documents (9 cases), a concentration that signals not random dissatisfaction but a systemic failure in the data platform and document delivery pipeline.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "11 حالة بسبب مخالفات مرورية منسوبة بشكل خاطئ — خلل حرج في المنصة بلا مسار رقمي للتظلم",
+          "title_en": "11 Cases of Wrongly Attributed Traffic Fines — Critical Platform Bug with No Digital Dispute Path",
+          "description_ar": "تُمثّل مخالفات المركبات المنسوبة بشكل خاطئ — سواء لمركبة لم تكن في الفجيرة أو بسبب عدم تطابق بيانات اللوحة — أعلى نقطة احتكاك فردية بـ11 حالة، أي ما يعادل 22% من إجمالي حجم التواصل. السبب الجذري هو خلل في المنصة، وتكشف البيانات أن دليل الخدمات يُغطّي هذه الحالة بنسبة 25% فقط مع معدل تطابق 0.35 من 1.0، في حين تقتصر قناة الاعتراض الرسمية على مراكز الخدمة حصراً، مما يُجبر المتعامل على التواصل الشخصي بدلاً من الاعتماد على مسار رقمي ذاتي.",
+          "description_en": "Wrongly attributed traffic fines — for vehicles absent from Fujairah or mismatched plate data — represent the single highest-volume friction point at 11 cases, equivalent to 22% of total contact volume. The root cause is a platform bug, and the data shows that the service guidebook covers this scenario at only 25% with a match confidence of 0.35 out of 1.0, while the formal dispute channel is restricted exclusively to service centers — forcing customers into manual contact rather than a self-service digital path.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "16 حالة ناتجة عن بيانات تواصل غير محدثة وغياب الإشعار التلقائي — فجوة استباقية قابلة للحل فورياً",
+          "title_en": "16 Cases Driven by Outdated Contact Data and No Proactive Notifications — An Immediately Solvable Proactive Gap",
+          "description_ar": "تشترك نقطتا الاحتكاك: عدم استلام وثائق المركبة (9 حالات) وغياب التحديثات التلقائية على حالة الطلب (4 حالات) في سبب جذري مشترك هو غياب البنية الاستباقية للإشعار، إذ يُغطّي الدليل الحالة الأولى بنسبة 20% فقط والثانية بنسبة 5% فقط مع شبه انعدام في التوافق مع احتياج المتعامل الفعلي. البيانات تُشير إلى أن 46% من الحالات الكلية (23 حالة) كان بالإمكان منعها باستباقية عبر إشعارات SMS أو بريد إلكتروني آلي في نقاط مفصلية من رحلة الخدمة، مما يجعل تفعيل منظومة الإشعار التلقائي الإجراءَ ذا أعلى عائد فوري.",
+          "description_en": "Two friction points — non-receipt of vehicle documents (9 cases) and absence of automated request status updates (4 cases) — share a common root cause: the total absence of a proactive notification infrastructure, with the guidebook covering the first at only 20% and the second at a near-absent 5%, with minimal alignment to actual customer needs. The data indicates that 46% of all cases (23 cases) could have been proactively prevented through automated SMS or email notifications at key service milestones, making the activation of an automated notification system the single highest-return immediate intervention.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد — طاقة تنفيذية عالية في مقابل فجوة تصنيف هيكلية",
+          "title_en": "98% On-Time Closure Rate — High Execution Capacity Against a Structural Classification Gap",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن الإطار الزمني المحدد، بمعدل التزام بمستوى الخدمة بلغ 98%، وهو مؤشر أداء تشغيلي إيجابي يعكس كفاءة الفرق في الاستجابة. غير أن هذا المعدل المرتفع لا يُعالج الفجوة الهيكلية المتمثلة في غياب التصنيف الدقيق لطبيعة التواصل، إذ يُثبت فقط قدرة المنظومة على الإغلاق السريع، لا على التعامل الاستراتيجي مع الأسباب الجذرية للشكاوى الهيكلية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a 98% SLA compliance rate — a positive operational performance indicator reflecting strong team responsiveness. However, this elevated rate does not address the structural gap in contact-type classification accuracy; it confirms the system's capacity for rapid closure, not its ability to engage strategically with the root causes driving structural complaints.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ],
+      "core_message_ar": "الرسالة الجوهرية: الفشل المنهجي الذي تكشفه البيانات ليس في الاستجابة — إذ تُغلق 98% من الحالات في وقتها — بل في العمى التصنيفي الذي جعل 100% من حالات 2025 تُسجَّل كـ«استفسارات»، مُخفياً 29 شكوى حقيقية وحارماً القيادة من الرؤية اللازمة لاتخاذ قرارات وقائية. معالجة خلل المنصة المُسبِّب لـ11 حالة، وتفعيل منظومة الإشعار الاستباقي القادرة على درء 23 حالة (46% من العبء الكلي)، يُتيحان تحويل ما يزيد على نصف حجم التواصل من ضغط تفاعلي إلى خدمة وقائية مدارة. هذا التقرير لا يُشخِّص الماضي فحسب، بل يُرسي أول قاعدة بيانات مُصنَّفة بدقة تُمكِّن الإمارة من بناء استراتيجية تجربة متعامل مبنية على الدليل لا على التخمين.",
+      "core_message_en": "Core Message: The systemic failure the data exposes is not in response capacity — 98% of cases are closed on time — but in the classification blindness that caused 100% of 2025 cases to be recorded as 'inquiries', concealing 29 genuine complaints and depriving leadership of the visibility needed for preventive decision-making. Resolving the platform bug driving 11 cases and activating a proactive notification infrastructure capable of preventing 23 cases (46% of total contact volume) would convert more than half of all contact pressure from reactive firefighting into managed preventive service. This report does not merely diagnose the past — it establishes the Emirate's first accurately classified dataset, enabling a customer experience strategy built on evidence rather than assumption."
+    }
+  },
+  "methodology": {
+    "heading": "ثانياً: المنهجية وطبيعة المصادر",
+    "body": "اعتمد التحليل على منهجية تصنيف آلية مزدوجة المراحل، طُبِّقت على جميع الحالات الخمسين المُدرجة في نطاق الدراسة. تستند المنهجية إلى تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: الشكوى، والطلب، والاستفسار، وشكر وثناء؛ ويندرج تحت كل نوع رئيسي مجموعة من التصنيفات الفرعية المتخصصة بحسب طبيعة الخدمة، بإجمالي خمسة وعشرين تصنيفاً فرعياً. المرحلة الأولى: المحرك القائم على القواعد (stage2_rules.py)، إذ خضعت جميع الحالات الخمسين لشجرة قرار مرتبة الأولوية على النحو الآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، مع تطبيق التصنيف الافتراضي استناداً إلى حقل نوع_المكالمة في حال عدم انطباق أي من الأولويات السابقة. تُقبَل نتيجة التصنيف مباشرةً عند بلوغ درجة الثقة عتبة 0.75 أو تجاوزها، في حين تُحال الحالات التي تقل درجة ثقتها عن هذه العتبة إلى المرحلة الثانية. المرحلة الثانية: التصنيف بالنموذج اللغوي الكبير (stage3_llm.py)، وتُطبَّق على الحالات التي أخفق المحرك القاعدي في تصنيفها بدرجة ثقة كافية؛ وقد بلغ عدد هذه الحالات صفراً في الدورة الحالية. يعتمد هذا النموذج — claude-haiku-4-5-20251001 — على التصنيف الثنائي المستوى ذاته عبر آلية استخدام الأدوات (tool-use)، وتُحال الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 إلى قائمة المراجعة البشرية وتُستبعد من إحصاءات التقرير، وقد بلغ عدد هذه الحالات صفراً كذلك. يسري على جميع مراحل التصنيف المبدأ التعريفي الجوهري الآتي: «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+    "tables": [],
+    "analyzed_fields": "شملت البيانات الخاضعة للتحليل نوعين من الحقول: أولاً، الحقول المنظمة التي تعالجها لوحات المتابعة والتقارير البيانية (PowerBI) خارج نطاق هذه المنهجية، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. ثانياً، الحقول غير المنظمة التي شكّلت محور هذا التحليل، وتشمل حقل تفاصيل_الطلب بمتوسط 363 حرفاً لكل حالة، وحقل الحل بمتوسط 102 حرف لكل حالة، وكلا الحقلين موزّع لغوياً بنسبة 72% عربي و28% إنجليزي؛ ويُتيح استقراء هذين الحقلين الكشف عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأولي المُدرج في حقل نوع_المكالمة بنظام إدارة علاقات العملاء.",
+    "raw_data": {
+      "section": "methodology",
+      "sources_table": [
+        {
+          "المصدر": "تحليل الاستفسارات",
+          "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تشمل حقولاً نصية غير منظمة تتضمن تفاصيل الحالات، والحلول المتخذة، وأسماء الخدمات، وأوصاف الطلبات",
+          "الحجم": "50 حالة مغلقة",
+          "الفترة": "يناير — ديسمبر 2025"
+        },
+        {
+          "المصدر": "دليل خدمات العملاء",
+          "الطبيعة": "دليل رسمي يغطي خدمات المرور والتراخيص والأمن، ويُستخدم مرجعاً للتحقق من الأسئلة الشائعة وتحليل الفجوات في تقديم الخدمات",
+          "الحجم": "160 صفحة، 25 سؤالاً شائعاً",
+          "الفترة": "2025"
+        }
+      ],
+      "classification_method_ar": "اعتمد التحليل على منهجية تصنيف آلية مزدوجة المراحل، طُبِّقت على جميع الحالات الخمسين المُدرجة في نطاق الدراسة. تستند المنهجية إلى تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: الشكوى، والطلب، والاستفسار، وشكر وثناء؛ ويندرج تحت كل نوع رئيسي مجموعة من التصنيفات الفرعية المتخصصة بحسب طبيعة الخدمة، بإجمالي خمسة وعشرين تصنيفاً فرعياً. المرحلة الأولى: المحرك القائم على القواعد (stage2_rules.py)، إذ خضعت جميع الحالات الخمسين لشجرة قرار مرتبة الأولوية على النحو الآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، مع تطبيق التصنيف الافتراضي استناداً إلى حقل نوع_المكالمة في حال عدم انطباق أي من الأولويات السابقة. تُقبَل نتيجة التصنيف مباشرةً عند بلوغ درجة الثقة عتبة 0.75 أو تجاوزها، في حين تُحال الحالات التي تقل درجة ثقتها عن هذه العتبة إلى المرحلة الثانية. المرحلة الثانية: التصنيف بالنموذج اللغوي الكبير (stage3_llm.py)، وتُطبَّق على الحالات التي أخفق المحرك القاعدي في تصنيفها بدرجة ثقة كافية؛ وقد بلغ عدد هذه الحالات صفراً في الدورة الحالية. يعتمد هذا النموذج — claude-haiku-4-5-20251001 — على التصنيف الثنائي المستوى ذاته عبر آلية استخدام الأدوات (tool-use)، وتُحال الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 إلى قائمة المراجعة البشرية وتُستبعد من إحصاءات التقرير، وقد بلغ عدد هذه الحالات صفراً كذلك. يسري على جميع مراحل التصنيف المبدأ التعريفي الجوهري الآتي: «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+      "analyzed_fields_ar": "شملت البيانات الخاضعة للتحليل نوعين من الحقول: أولاً، الحقول المنظمة التي تعالجها لوحات المتابعة والتقارير البيانية (PowerBI) خارج نطاق هذه المنهجية، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. ثانياً، الحقول غير المنظمة التي شكّلت محور هذا التحليل، وتشمل حقل تفاصيل_الطلب بمتوسط 363 حرفاً لكل حالة، وحقل الحل بمتوسط 102 حرف لكل حالة، وكلا الحقلين موزّع لغوياً بنسبة 72% عربي و28% إنجليزي؛ ويُتيح استقراء هذين الحقلين الكشف عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأولي المُدرج في حقل نوع_المكالمة بنظام إدارة علاقات العملاء."
+    }
+  }
+}

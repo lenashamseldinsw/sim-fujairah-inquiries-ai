@@ -1,0 +1,160 @@
+{
+  "executive_summary": {
+    "heading": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+    "body": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 50 حالة تواصل مُستخرجة من مصدرَين رئيسيَّين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة، وذلك للفترة الممتدة من يناير حتى ديسمبر 2025، في إطار مراجعة الربع الأول من عام 2026. لا يسعى التقرير إلى عرض الأرقام بوصفها غاية، بل إلى تحويل البيانات الخام إلى قرارات تشغيلية وتوصيات قابلة للتنفيذ تُحسّن تجربة المتعاملين وتُخفف عبء قنوات التواصل. المُستجد الجوهري: إعادة التصنيف كشفت أن 100% من الحالات كانت مُصنَّفة في نظام إدارة العلاقات بوصفها استفسارات، في حين أثبت التحليل المعمّق أن 60% منها شكاوى حقيقية — مما يعني أن المنظومة كانت تُدير أزمة خدمية صامتة دون أن ترصدها أدواتها الرقابية.",
+    "tables": [
+      [
+        {
+          "number": 1,
+          "title_ar": "فجوة دقة التصنيف: 0% تصنيف صحيح في نظام إدارة علاقات العملاء",
+          "title_en": "Classification Accuracy Gap: 0% Correct Labelling in CRM",
+          "description_ar": "صنّف نظام إدارة علاقات العملاء الـ 50 حالة بأكملها على أنها استفسارات، في حين أماط التحليل اللثام عن توزيع حقيقي مغاير تماماً: 30 شكوى (60%)، و10 استفسارات (20%)، و10 طلبات (20%). معدل الخطأ التصنيفي لهذه الفترة يبلغ 0.0% وفق التعريف الإجرائي للمشروع — غير أن انعدام دقة التصنيف المصدري يُشكّل فجوة جوهرية في جودة البيانات لا يمكن القياس عليها دون إصلاحها.",
+          "description_en": "The CRM classified all 50 cases as inquiries, whereas analysis uncovered a fundamentally different true distribution: 30 complaints (60%), 10 inquiries (20%), and 10 requests (20%). The misclassification rate for this period stands at 0.0% per the project's operational definition — however, the complete inaccuracy of source-level labelling represents a critical data quality gap that renders all CRM-derived reporting unreliable until corrected.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ 60% على عبء العمل — مُخفيّة بالكامل في السجلات الأصلية",
+          "title_en": "Complaints Dominate 60% of Workload — Entirely Hidden in Original Records",
+          "description_ar": "بلغت الشكاوى 30 حالة من أصل 50، أي 60% من إجمالي التواصل، مقارنةً بتصنيف أصلي يُدرجها جميعها ضمن الاستفسارات — وهو تضارب جذري يُثبت أن النظام القائم عاجز عن رصد حِدّة الضغط التشغيلي الفعلي. تتمحور الشكاوى حول محورَين رئيسيَّين: المخالفات المرورية المشكوك في صحتها وخدمات الترخيص بـ 8 حالات لكلٍّ منهما، مما يكشف أن البنية التحتية للتحقق الذاتي وإجراءات الاعتراض تمثّل نقطة الإخفاق التشغيلي الأكثر إلحاحاً.",
+          "description_en": "Complaints totalled 30 out of 50 cases, representing 60% of all contacts, against an original classification that labelled every single one as an inquiry — a radical discrepancy that proves the existing system is incapable of detecting actual operational pressure intensity. The complaints cluster around two dominant themes: disputed traffic violations and licensing services with 8 cases each, revealing that the self-verification infrastructure and objection procedures represent the most urgent operational failure point.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "9 حالات بلا مسار رقمي: غياب آلية التحقق الذاتي من المخالفات المرورية",
+          "title_en": "9 Cases with No Digital Path: Absence of Self-Verification Mechanism for Traffic Violations",
+          "description_ar": "تأثّرت 9 حالات من مجموع التواصل بنقطة الاحتكاك الأعلى حجماً، إذ يتلقى المتعامل إشعار مخالفة مرورية غير صحيحة دون أي آلية واضحة للتحقق الذاتي من صحتها قبل التواصل مع الجهة؛ يُضاف إلى ذلك أن دليل الخدمات يُغطّي هذه المسألة بنسبة 30% فحسب بمستوى ثقة تطابق بالغ الانخفاض عند 0.4. السبب الجذري هو عدم إتاحة المعلومات (inaccessible_info)، مما يُجبر المتعامل على التواصل المباشر كممر إلزامي وحيد بدلاً من استخدام قنوات الخدمة الذاتية الرقمية المتاحة نظرياً.",
+          "description_en": "9 cases were affected by the highest-volume friction point: customers receiving incorrect traffic violation notifications with no clear mechanism to self-verify their validity before contacting the authority; the services guidebook covers this issue at only 30% with a critically low match confidence of 0.4. The root cause is inaccessible information (inaccessible_info), which forces direct human contact as the sole mandatory channel instead of the digitally available self-service options that theoretically exist.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "12 حالة ناتجة عن فجوة المعلومات المفقودة: قواعد المرور ونقل الملكية",
+          "title_en": "12 Cases Driven by Missing Information Gap: Traffic Rules and Ownership Transfer",
+          "description_ar": "تشترك نقطتا الاحتكاك الثانية والسابعة في السبب الجذري ذاته (missing_info): 5 حالات ناتجة عن جهل المتعاملين بحدود السرعة المعتمدة في إمارة الفجيرة وإجراءات الاعتراض الرسمية، و7 حالات ناتجة عن غياب معلومات إجراءات نقل الملكية واعتماد الرخصة بين الإمارات — وكلاهما مُصنَّف بمستوى خطورة حرجة. تُشير البيانات إلى أن إنشاء صفحة معلومات مخصصة لأنظمة المرور في الفجيرة ودليل شامل لإجراءات نقل الملكية كفيل بتحييد 24% من إجمالي حجم التواصل بصورة مباشرة.",
+          "description_en": "The second and seventh friction points share an identical root cause (missing_info): 5 cases stemming from customers' unawareness of Fujairah's approved speed limits and formal objection procedures, and 7 cases arising from the absence of clear information on inter-emirate ownership transfer procedures and licence endorsement — both rated critical severity. The data indicates that creating a dedicated Fujairah traffic rules information page and a comprehensive ownership transfer guide would directly neutralise 24% of total contact volume.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد — طاقة تنفيذية عالية في مواجهة فجوة هيكلية",
+          "title_en": "98% On-Time Case Closure — Strong Execution Capacity Facing a Structural Gap",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن الإطار الزمني المحدد، محققةً معدل الالتزام بمستوى الخدمة 98% — وهو مؤشر أداء تشغيلي يعكس قدرة تنفيذية حقيقية على مستوى فريق الخدمة. بيد أن هذا الأداء الرفيع لا يُخفّف من حدة الفجوة الهيكلية المتمثلة في غياب التصنيف الدقيق وانعدام قنوات الخدمة الذاتية الرقمية بنسبة 0.0%، إذ يُثبت أن الفريق يعالج أعراض المشكلة بكفاءة دون معالجة أسبابها الجذرية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a 98% SLA compliance rate — an operational performance indicator reflecting genuine execution capacity at the service team level. However, this strong performance does not mitigate the structural gap of absent accurate classification and zero digital self-service channel uptake at 0.0%, as it demonstrates the team is efficiently treating symptoms rather than addressing root causes.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ]
+    ],
+    "core_message": "الرسالة الجوهرية: الفشل المنظومي الذي تكشفه البيانات ليس تدني جودة الخدمة، بل انهيار طبقة المعلومات الاستباقية — إذ اضطر 44% من المتعاملين (22 حالة) إلى التواصل المباشر لأن الجهة لم تُخبرهم بما يحتاجون معرفته قبل أن تنشأ الحاجة، في حين يبقى دليل الخدمات مُغطياً لحاجات المتعاملين بمتوسط 29.3% فحسب بمعدل ثقة تطابق لا يتجاوز 0.3. إصلاح هذه الفجوة — عبر الإشعارات الاستباقية ومسارات التحقق الذاتي الرقمية وتحديث الدليل — يُتيح تحويل ما يزيد على نصف حجم التواصل إلى قنوات رقمية مستقلة، مما يُحرّر طاقة الفريق التنفيذية المرتفعة ذات الـ 98% لمعالجة الحالات الفعلية ذات القيمة المضافة. إعادة التصنيف الصحيح هذه لم تكشف عن أرقام مختلفة — بل كشفت عن واقع مختلف، وتُمثّل الأساس الأول لاستراتيجية خدمة مبنية على بيانات حقيقية لا على تسميات نظام مخطئ.",
+    "raw_data": {
+      "section": "executive_summary",
+      "framing_paragraph_ar": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 50 حالة تواصل مُستخرجة من مصدرَين رئيسيَّين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة، وذلك للفترة الممتدة من يناير حتى ديسمبر 2025، في إطار مراجعة الربع الأول من عام 2026. لا يسعى التقرير إلى عرض الأرقام بوصفها غاية، بل إلى تحويل البيانات الخام إلى قرارات تشغيلية وتوصيات قابلة للتنفيذ تُحسّن تجربة المتعاملين وتُخفف عبء قنوات التواصل. المُستجد الجوهري: إعادة التصنيف كشفت أن 100% من الحالات كانت مُصنَّفة في نظام إدارة العلاقات بوصفها استفسارات، في حين أثبت التحليل المعمّق أن 60% منها شكاوى حقيقية — مما يعني أن المنظومة كانت تُدير أزمة خدمية صامتة دون أن ترصدها أدواتها الرقابية.",
+      "framing_paragraph_en": "This report presents an in-depth analysis of 50 customer contact cases extracted from two primary sources: CRM System Export — Unformatted Texts, and the Services Guidebook & FAQ, covering the period from January through December 2025, within the Q1 2026 review cycle. The report's purpose is not to present numbers as an end in themselves, but to transform raw data into operational decisions and actionable recommendations that improve customer experience and reduce contact channel load. Core Discovery: Reclassification revealed that 100% of cases had been labelled as inquiries in the CRM, whereas in-depth analysis established that 60% were genuine complaints — meaning the organisation had been managing a silent service crisis entirely invisible to its monitoring tools.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title_ar": "فجوة دقة التصنيف: 0% تصنيف صحيح في نظام إدارة علاقات العملاء",
+          "title_en": "Classification Accuracy Gap: 0% Correct Labelling in CRM",
+          "description_ar": "صنّف نظام إدارة علاقات العملاء الـ 50 حالة بأكملها على أنها استفسارات، في حين أماط التحليل اللثام عن توزيع حقيقي مغاير تماماً: 30 شكوى (60%)، و10 استفسارات (20%)، و10 طلبات (20%). معدل الخطأ التصنيفي لهذه الفترة يبلغ 0.0% وفق التعريف الإجرائي للمشروع — غير أن انعدام دقة التصنيف المصدري يُشكّل فجوة جوهرية في جودة البيانات لا يمكن القياس عليها دون إصلاحها.",
+          "description_en": "The CRM classified all 50 cases as inquiries, whereas analysis uncovered a fundamentally different true distribution: 30 complaints (60%), 10 inquiries (20%), and 10 requests (20%). The misclassification rate for this period stands at 0.0% per the project's operational definition — however, the complete inaccuracy of source-level labelling represents a critical data quality gap that renders all CRM-derived reporting unreliable until corrected.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ 60% على عبء العمل — مُخفيّة بالكامل في السجلات الأصلية",
+          "title_en": "Complaints Dominate 60% of Workload — Entirely Hidden in Original Records",
+          "description_ar": "بلغت الشكاوى 30 حالة من أصل 50، أي 60% من إجمالي التواصل، مقارنةً بتصنيف أصلي يُدرجها جميعها ضمن الاستفسارات — وهو تضارب جذري يُثبت أن النظام القائم عاجز عن رصد حِدّة الضغط التشغيلي الفعلي. تتمحور الشكاوى حول محورَين رئيسيَّين: المخالفات المرورية المشكوك في صحتها وخدمات الترخيص بـ 8 حالات لكلٍّ منهما، مما يكشف أن البنية التحتية للتحقق الذاتي وإجراءات الاعتراض تمثّل نقطة الإخفاق التشغيلي الأكثر إلحاحاً.",
+          "description_en": "Complaints totalled 30 out of 50 cases, representing 60% of all contacts, against an original classification that labelled every single one as an inquiry — a radical discrepancy that proves the existing system is incapable of detecting actual operational pressure intensity. The complaints cluster around two dominant themes: disputed traffic violations and licensing services with 8 cases each, revealing that the self-verification infrastructure and objection procedures represent the most urgent operational failure point.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "9 حالات بلا مسار رقمي: غياب آلية التحقق الذاتي من المخالفات المرورية",
+          "title_en": "9 Cases with No Digital Path: Absence of Self-Verification Mechanism for Traffic Violations",
+          "description_ar": "تأثّرت 9 حالات من مجموع التواصل بنقطة الاحتكاك الأعلى حجماً، إذ يتلقى المتعامل إشعار مخالفة مرورية غير صحيحة دون أي آلية واضحة للتحقق الذاتي من صحتها قبل التواصل مع الجهة؛ يُضاف إلى ذلك أن دليل الخدمات يُغطّي هذه المسألة بنسبة 30% فحسب بمستوى ثقة تطابق بالغ الانخفاض عند 0.4. السبب الجذري هو عدم إتاحة المعلومات (inaccessible_info)، مما يُجبر المتعامل على التواصل المباشر كممر إلزامي وحيد بدلاً من استخدام قنوات الخدمة الذاتية الرقمية المتاحة نظرياً.",
+          "description_en": "9 cases were affected by the highest-volume friction point: customers receiving incorrect traffic violation notifications with no clear mechanism to self-verify their validity before contacting the authority; the services guidebook covers this issue at only 30% with a critically low match confidence of 0.4. The root cause is inaccessible information (inaccessible_info), which forces direct human contact as the sole mandatory channel instead of the digitally available self-service options that theoretically exist.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "12 حالة ناتجة عن فجوة المعلومات المفقودة: قواعد المرور ونقل الملكية",
+          "title_en": "12 Cases Driven by Missing Information Gap: Traffic Rules and Ownership Transfer",
+          "description_ar": "تشترك نقطتا الاحتكاك الثانية والسابعة في السبب الجذري ذاته (missing_info): 5 حالات ناتجة عن جهل المتعاملين بحدود السرعة المعتمدة في إمارة الفجيرة وإجراءات الاعتراض الرسمية، و7 حالات ناتجة عن غياب معلومات إجراءات نقل الملكية واعتماد الرخصة بين الإمارات — وكلاهما مُصنَّف بمستوى خطورة حرجة. تُشير البيانات إلى أن إنشاء صفحة معلومات مخصصة لأنظمة المرور في الفجيرة ودليل شامل لإجراءات نقل الملكية كفيل بتحييد 24% من إجمالي حجم التواصل بصورة مباشرة.",
+          "description_en": "The second and seventh friction points share an identical root cause (missing_info): 5 cases stemming from customers' unawareness of Fujairah's approved speed limits and formal objection procedures, and 7 cases arising from the absence of clear information on inter-emirate ownership transfer procedures and licence endorsement — both rated critical severity. The data indicates that creating a dedicated Fujairah traffic rules information page and a comprehensive ownership transfer guide would directly neutralise 24% of total contact volume.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد — طاقة تنفيذية عالية في مواجهة فجوة هيكلية",
+          "title_en": "98% On-Time Case Closure — Strong Execution Capacity Facing a Structural Gap",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن الإطار الزمني المحدد، محققةً معدل الالتزام بمستوى الخدمة 98% — وهو مؤشر أداء تشغيلي يعكس قدرة تنفيذية حقيقية على مستوى فريق الخدمة. بيد أن هذا الأداء الرفيع لا يُخفّف من حدة الفجوة الهيكلية المتمثلة في غياب التصنيف الدقيق وانعدام قنوات الخدمة الذاتية الرقمية بنسبة 0.0%، إذ يُثبت أن الفريق يعالج أعراض المشكلة بكفاءة دون معالجة أسبابها الجذرية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a 98% SLA compliance rate — an operational performance indicator reflecting genuine execution capacity at the service team level. However, this strong performance does not mitigate the structural gap of absent accurate classification and zero digital self-service channel uptake at 0.0%, as it demonstrates the team is efficiently treating symptoms rather than addressing root causes.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ],
+      "core_message_ar": "الرسالة الجوهرية: الفشل المنظومي الذي تكشفه البيانات ليس تدني جودة الخدمة، بل انهيار طبقة المعلومات الاستباقية — إذ اضطر 44% من المتعاملين (22 حالة) إلى التواصل المباشر لأن الجهة لم تُخبرهم بما يحتاجون معرفته قبل أن تنشأ الحاجة، في حين يبقى دليل الخدمات مُغطياً لحاجات المتعاملين بمتوسط 29.3% فحسب بمعدل ثقة تطابق لا يتجاوز 0.3. إصلاح هذه الفجوة — عبر الإشعارات الاستباقية ومسارات التحقق الذاتي الرقمية وتحديث الدليل — يُتيح تحويل ما يزيد على نصف حجم التواصل إلى قنوات رقمية مستقلة، مما يُحرّر طاقة الفريق التنفيذية المرتفعة ذات الـ 98% لمعالجة الحالات الفعلية ذات القيمة المضافة. إعادة التصنيف الصحيح هذه لم تكشف عن أرقام مختلفة — بل كشفت عن واقع مختلف، وتُمثّل الأساس الأول لاستراتيجية خدمة مبنية على بيانات حقيقية لا على تسميات نظام مخطئ.",
+      "core_message_en": "Core Message: The systemic failure the data exposes is not poor service quality, but the collapse of the proactive information layer — 44% of customers (22 cases) were compelled to make direct contact because the organisation did not inform them of what they needed to know before the need arose, while the services guidebook addresses customer needs at an average of only 29.3% with a match confidence no higher than 0.3. Fixing this gap — through proactive notifications, digital self-verification pathways, and guidebook overhaul — creates the conditions to deflect over half of current contact volume to independent digital channels, freeing the high-performing 98% execution capacity to handle genuinely complex, value-added cases. This accurate reclassification did not reveal different numbers — it revealed a different reality, and it constitutes the foundational first step toward a service strategy built on real data rather than a mislabelled system."
+    }
+  },
+  "methodology": {
+    "heading": "ثانياً: المنهجية وطبيعة المصادر",
+    "body": "اعتمدت منهجية التصنيف على مسار معالجة ثنائي المرحلة طُبِّق على مجموع الحالات البالغ خمسين حالة. في المرحلة الأولى، استُخدم محرك قواعدي (stage2_rules.py) يعمل وفق شجرة قرار ذات أولويات مرتبة، إذ تُفحص كل حالة تسلسلياً وفق الترتيب الآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، وعند عدم انطباق أيٍّ من هذه الأولويات تُعتمد قيمة حقل نوع_المكالمة الواردة من نظام CRM مرجعاً افتراضياً للتصنيف. تُصنَّف الحالة تلقائياً إذا بلغت درجة الثقة عتبة 0.75 أو تجاوزتها، أما الحالات التي تقع درجة ثقتها دون هذه العتبة فتُحال إلى المرحلة الثانية. في المرحلة الثانية، يُطبَّق نموذج اللغة الكبيرة (claude-haiku-4-5-20251001) عبر آلية استدعاء الأدوات (tool-use) مستعيناً بالتصنيف الثنائي المستوى، وذلك على الحالات التي رفضها المحرك القواعدي، وقد بلغ عدد هذه الحالات صفراً في هذه الدورة التحليلية. الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 تُحال إلى طابور المراجعة البشرية وتُستبعد من إجماليات التقرير، وقد بلغ عدد هذه الحالات صفراً كذلك. يرتكز التصنيف في مجمله على تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: شكوى، وطلب، واستفسار، وشكر وثناء، موزَّعة على خمسة وعشرين تصنيفاً فرعياً متخصصاً. والمبدأ الجوهري الحاكم لهذه العملية هو أن «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+    "tables": [
+      {
+        "columns": [
+          "المصدر",
+          "الطبيعة",
+          "الحجم",
+          "الفترة"
+        ],
+        "rows": [
+          {
+            "المصدر": "تحليل الاستفسارات",
+            "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تشمل حقول نصية غير منظمة تتضمن تفاصيل الحالات، والحلول المتخذة، وأسماء الخدمات، وأوصاف الحالات",
+            "الحجم": "50 حالة مغلقة",
+            "الفترة": "يناير — ديسمبر 2025"
+          },
+          {
+            "المصدر": "دليل خدمات العملاء",
+            "الطبيعة": "دليل رسمي يغطي خدمات المرور والترخيص والخدمات الأمنية، ويُستخدم مرجعاً للتحقق من الأسئلة الشائعة وتحليل فجوات الخدمة",
+            "الحجم": "160 صفحة، 25 سؤالاً شائعاً",
+            "الفترة": "2025"
+          }
+        ],
+        "row_count": 2,
+        "col_count": 4
+      }
+    ],
+    "analyzed_fields": "تنقسم الحقول المُحلَّلة إلى مجموعتين: تضم المجموعة الأولى الحقول المنظمة التي تعالجها لوحة المتابعة (PowerBI) وليست موضع هذا التحليل، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. أما المجموعة الثانية فتشمل الحقول النصية غير المنظمة التي تُشكّل محور هذا التحليل، وهي حقل تفاصيل_الطلب بمتوسط 363 حرفاً للحالة الواحدة بتوزيع لغوي 72% عربي و28% إنجليزي، وحقل الحل بمتوسط 102 حرف للحالة الواحدة بالتوزيع اللغوي ذاته، وقد أتاح تحليل هذين الحقلين معاً الكشف عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأولي المُسجَّل في حقل نوع_المكالمة بنظام CRM.",
+    "raw_data": {
+      "section": "methodology",
+      "sources_table": [
+        {
+          "المصدر": "تحليل الاستفسارات",
+          "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تشمل حقول نصية غير منظمة تتضمن تفاصيل الحالات، والحلول المتخذة، وأسماء الخدمات، وأوصاف الحالات",
+          "الحجم": "50 حالة مغلقة",
+          "الفترة": "يناير — ديسمبر 2025"
+        },
+        {
+          "المصدر": "دليل خدمات العملاء",
+          "الطبيعة": "دليل رسمي يغطي خدمات المرور والترخيص والخدمات الأمنية، ويُستخدم مرجعاً للتحقق من الأسئلة الشائعة وتحليل فجوات الخدمة",
+          "الحجم": "160 صفحة، 25 سؤالاً شائعاً",
+          "الفترة": "2025"
+        }
+      ],
+      "classification_method_ar": "اعتمدت منهجية التصنيف على مسار معالجة ثنائي المرحلة طُبِّق على مجموع الحالات البالغ خمسين حالة. في المرحلة الأولى، استُخدم محرك قواعدي (stage2_rules.py) يعمل وفق شجرة قرار ذات أولويات مرتبة، إذ تُفحص كل حالة تسلسلياً وفق الترتيب الآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، وعند عدم انطباق أيٍّ من هذه الأولويات تُعتمد قيمة حقل نوع_المكالمة الواردة من نظام CRM مرجعاً افتراضياً للتصنيف. تُصنَّف الحالة تلقائياً إذا بلغت درجة الثقة عتبة 0.75 أو تجاوزتها، أما الحالات التي تقع درجة ثقتها دون هذه العتبة فتُحال إلى المرحلة الثانية. في المرحلة الثانية، يُطبَّق نموذج اللغة الكبيرة (claude-haiku-4-5-20251001) عبر آلية استدعاء الأدوات (tool-use) مستعيناً بالتصنيف الثنائي المستوى، وذلك على الحالات التي رفضها المحرك القواعدي، وقد بلغ عدد هذه الحالات صفراً في هذه الدورة التحليلية. الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 تُحال إلى طابور المراجعة البشرية وتُستبعد من إجماليات التقرير، وقد بلغ عدد هذه الحالات صفراً كذلك. يرتكز التصنيف في مجمله على تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: شكوى، وطلب، واستفسار، وشكر وثناء، موزَّعة على خمسة وعشرين تصنيفاً فرعياً متخصصاً. والمبدأ الجوهري الحاكم لهذه العملية هو أن «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+      "analyzed_fields_ar": "تنقسم الحقول المُحلَّلة إلى مجموعتين: تضم المجموعة الأولى الحقول المنظمة التي تعالجها لوحة المتابعة (PowerBI) وليست موضع هذا التحليل، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. أما المجموعة الثانية فتشمل الحقول النصية غير المنظمة التي تُشكّل محور هذا التحليل، وهي حقل تفاصيل_الطلب بمتوسط 363 حرفاً للحالة الواحدة بتوزيع لغوي 72% عربي و28% إنجليزي، وحقل الحل بمتوسط 102 حرف للحالة الواحدة بالتوزيع اللغوي ذاته، وقد أتاح تحليل هذين الحقلين معاً الكشف عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأولي المُسجَّل في حقل نوع_المكالمة بنظام CRM."
+    }
+  }
+}

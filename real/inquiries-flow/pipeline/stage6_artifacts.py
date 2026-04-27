@@ -87,94 +87,147 @@ SHEET_NAMES = [
 def generate_excel(state: PipelineState, output_path: str) -> None:
     """Generate Excel workbook with classification results."""
     wb = openpyxl.Workbook()
-    wb.remove(wb.active)  # Remove default sheet
+    wb.remove(wb.active)
 
-    # Add summary sheet
+    # Sheet 1: Summary
     ws_summary = wb.create_sheet('ملخص', 0)
     _populate_summary_sheet(ws_summary, state)
 
-    # Add all cases sheet
+    # Sheet 2: All Cases
     ws_all = wb.create_sheet('كل الحالات', 1)
     _populate_all_cases_sheet(ws_all, state.all_classified)
 
-    # Add category-specific sheets
-    wb.create_sheet('طلبات', 2)
-    wb.create_sheet('استفسارات', 3)
-    wb.create_sheet('متابعات', 4)
-    wb.create_sheet('مشاكل جهات أخرى', 5)
-    wb.create_sheet('استفسارات الموقع', 6)
-    wb.create_sheet('بلاغات تقنية', 7)
-    wb.create_sheet('استفسارات مالية', 8)
+    # Sheets 3–6: One per top-level type, filtered and populated
+    type_sheet_map = [
+        ('شكاوى',      'شكوى'),
+        ('طلبات',      'طلب'),
+        ('استفسارات',  'استفسار'),
+        ('شكر وثناء',  'شكر وثناء'),
+    ]
+    for idx, (sheet_name, type_value) in enumerate(type_sheet_map, 2):
+        subset = [c for c in state.all_classified if c.actual_contact_type == type_value]
+        ws_type = wb.create_sheet(sheet_name, idx)
+        _populate_all_cases_sheet(ws_type, subset)
 
-    # Add misclassified cases sheet
-    ws_misclass = wb.create_sheet('إعادة التصنيف', 9)
+    # Sheet 7: Reclassified cases
+    ws_misclass = wb.create_sheet('إعادة التصنيف', 6)
     misclassified = [c for c in state.all_classified if c.misclassification != 'OK']
     _populate_all_cases_sheet(ws_misclass, misclassified)
-
-    # Color misclassified tab
     ws_misclass.sheet_properties.tabColor = "C0392B"
 
-    # Save
     wb.save(output_path)
 
 
 def _populate_summary_sheet(ws, state: PipelineState) -> None:
-    """Populate summary sheet with metrics."""
-    ws.merge_cells('A1:E1')
+    """Populate summary sheet with all 5 sections matching sample output."""
+    # Enable RTL layout
+    ws.sheet_view.rightToLeft = True
+
+    total = len(state.all_classified)
+
+    ws.merge_cells('A1:D1')
     ws['A1'] = f"ملخص تحليل استفسارات شرطة الفجيرة — {state.month_year or 'Q1 2026'}"
     ws['A1'].font = Font(bold=True, size=14)
 
-    ws.merge_cells('A2:E2')
+    ws.merge_cells('A2:D2')
     ws['A2'] = f"تاريخ التقرير: {datetime.now().strftime('%Y-%m-%d')}"
 
-    # Total cases
+    # --- Section 1: Total cases ---
     row = 4
     ws[f'A{row}'] = "1. إجمالي الحالات"
     ws[f'A{row}'].font = Font(bold=True)
-
     row = 5
     ws[f'A{row}'] = "إجمالي الحالات المعالجة"
-    ws[f'B{row}'] = len(state.all_classified)
+    ws[f'B{row}'] = total
     ws[f'C{row}'] = "100.0%"
 
-    # Distribution by contact type
+    # --- Section 2: Distribution by classification type ---
     row = 7
     ws[f'A{row}'] = "2. توزيع حسب نوع التصنيف"
     ws[f'A{row}'].font = Font(bold=True)
-
-    contact_types = {}
+    type_counts = {}
     for case in state.all_classified:
         ct = case.actual_contact_type
-        contact_types[ct] = contact_types.get(ct, 0) + 1
-
+        type_counts[ct] = type_counts.get(ct, 0) + 1
     row = 8
-    total = len(state.all_classified)
-    for contact_type, count in sorted(contact_types.items(), key=lambda x: x[1], reverse=True):
-        ws[f'A{row}'] = contact_type
+    for ct, count in sorted(type_counts.items(), key=lambda x: x[1], reverse=True):
+        ws[f'A{row}'] = ct
         ws[f'B{row}'] = count
-        ws[f'C{row}'] = f"{(count/total*100):.1f}%"
+        ws[f'C{row}'] = f"{(count / total * 100):.1f}%" if total else "0.0%"
         row += 1
+
+    # --- Section 3: Distribution by channel ---
+    row += 1
+    ws[f'A{row}'] = "3. توزيع حسب قناة التقديم"
+    ws[f'A{row}'].font = Font(bold=True)
+    channel_counts = {}
+    for case in state.all_classified:
+        ch = (case.case_channel or '').strip() or 'غير محدد'
+        channel_counts[ch] = channel_counts.get(ch, 0) + 1
+    row += 1
+    for ch, count in sorted(channel_counts.items(), key=lambda x: x[1], reverse=True):
+        ws[f'A{row}'] = ch
+        ws[f'B{row}'] = count
+        ws[f'C{row}'] = f"{(count / total * 100):.1f}%" if total else "0.0%"
+        row += 1
+
+    # --- Section 4: SLA on-time rate ---
+    row += 1
+    ws[f'A{row}'] = "4. معدل الإغلاق في الوقت المحدد"
+    ws[f'A{row}'].font = Font(bold=True)
+    on_time = sum(1 for c in state.all_classified if str(c.sla_color).strip() == 'نعم')
+    late = total - on_time
+    row += 1
+    ws[f'A{row}'] = "تم الإغلاق في الوقت"
+    ws[f'B{row}'] = on_time
+    ws[f'C{row}'] = f"{(on_time / total * 100):.1f}%" if total else "0.0%"
+    row += 1
+    ws[f'A{row}'] = "تجاوز الوقت المحدد"
+    ws[f'B{row}'] = late
+    ws[f'C{row}'] = f"{(late / total * 100):.1f}%" if total else "0.0%"
+
+    # --- Section 5: Reclassification count ---
+    row += 2
+    reclassified_count = sum(1 for c in state.all_classified if c.misclassification != 'OK')
+    matched_count = total - reclassified_count
+    ws[f'A{row}'] = f"5. إعادة التصنيف ({reclassified_count} حالة)"
+    ws[f'A{row}'].font = Font(bold=True)
+    row += 1
+    ws[f'A{row}'] = "حالات أُعيد تصنيفها"
+    ws[f'B{row}'] = reclassified_count
+    ws[f'C{row}'] = f"{(reclassified_count / total * 100):.1f}%" if total else "0.0%"
+    row += 1
+    ws[f'A{row}'] = "حالات تطابقت مع التصنيف الأصلي"
+    ws[f'B{row}'] = matched_count
+    ws[f'C{row}'] = f"{(matched_count / total * 100):.1f}%" if total else "0.0%"
+
+    ws.column_dimensions['A'].width = 40
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 12
 
 
 def _populate_all_cases_sheet(ws, cases: List[CaseRow]) -> None:
-    """Populate sheet with case data."""
+    """Populate sheet with case data (RTL)."""
+    # Enable RTL layout
+    ws.sheet_view.rightToLeft = True
+
     headers = [
-        'رقم الطلب',
-        'تفاصيل الطلب',
+        'رقم_الطلب',
+        'تفاصيل_الطلب',
         'الحل',
         'الخدمة',
-        'الخدمة الرئيسية',
-        'نوع المكالمة',
-        'التصنيف الفعلي',
+        'الخدمة_الرئيسية',
+        'نوع_المكالمة',
+        'التصنيف_الفعلي',
+        'التصنيف_الفرعي',
         'السبب',
-        'إعادة التصنيف',
-        'قناة التقديم',
-        'حالة SLA',
-        'تاريخ الإنشاء',
-        'الإدارة',
+        'إعادة_التصنيف',
+        'قناة_تقديم_الخدمة',
+        'الحالة_SLA',
+        'تاريخ_الإنشاء',
+        'الإدارة_العامة',
     ]
 
-    # Write headers
     for col, header in enumerate(headers, 1):
         cell = ws.cell(1, col, header)
         cell.fill = HEADER_FILL
@@ -182,46 +235,41 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow]) -> None:
         cell.border = BORDER
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    # Write data
     for row_idx, case in enumerate(cases, 2):
+        # Convert misclassification to نعم/لا
+        reclassified = 'لا' if case.misclassification == 'OK' else 'نعم'
+
         data = [
             case.case_number,
-            case.case_title[:50],  # Truncate for display
-            case.resolution_response[:50],
+            case.case_title[:200],
+            case.resolution_response[:200],
             case.service_name,
             case.service_name,
             case.case_type,
             case.actual_contact_type,
+            case.sub_classification or '',
             case.classification_reason,
-            case.misclassification,
+            reclassified,
             case.case_channel,
             case.sla_color,
             case.date_opened,
-            '',  # Admin
+            case.admin or '',
         ]
 
         for col_idx, value in enumerate(data, 1):
             cell = ws.cell(row_idx, col_idx, value)
             cell.border = BORDER
-
-            # Alternate row coloring
             if row_idx % 2 == 0:
                 cell.fill = ALT_ROW_FILL
+            cell.alignment = Alignment(horizontal='right', vertical='top', wrap_text=True)
 
-            # RTL alignment for Arabic
-            cell.alignment = Alignment(horizontal='right' if col_idx <= 8 else 'left', vertical='top', wrap_text=True)
-
-    # Set column widths
     ws.column_dimensions['A'].width = 18
     ws.column_dimensions['B'].width = 50
     ws.column_dimensions['C'].width = 60
-    for col in range(4, 14):
+    for col in range(4, 15):
         ws.column_dimensions[get_column_letter(col)].width = 20
 
-    # Freeze header
     ws.freeze_panes = 'A2'
-
-    # Auto-filter
     ws.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{len(cases) + 1}'
 
 
@@ -241,7 +289,8 @@ def generate_word_report(
         api_key: Anthropic API key for LLM report generation
     """
     if WordBuilder is None:
-        raise ImportError("sword-word-builder not installed")
+        print(f"⚠️  Skipping Word report generation (sword-word-builder not installed)")
+        return
 
     # Build report content via LLM if not in state
     if not state.report_sections_ar and not state.report_sections_en:
@@ -353,95 +402,54 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     print(f"[GenSections] api_key length: {len(api_key) if api_key else 0}")
 
     if not api_key:
-        # Fallback to basic structure if no API key
-        _create_basic_report_sections(state)
-        return
+        raise ValueError("API key is required to generate report sections")
 
     try:
-        # Initialize both language dicts
+        # Initialize Arabic-only dict
         state.report_sections_ar = {}
-        state.report_sections_en = {}
 
         # 1. Generate Executive Summary (primary, detailed implementation)
         print("[Report Gen] Generating Executive Summary...")
         exec_summary = generate_executive_summary_section(state, api_key)
-        if exec_summary:
-            # Store in report_sections with proper structure for Word builder
-            state.report_sections_ar['executive_summary'] = {
-                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body': exec_summary.get('framing_paragraph_ar', ''),
-                'tables': [exec_summary.get('key_findings', [])],  # Will be formatted as table
-                'core_message': exec_summary.get('core_message_ar', ''),
-                'raw_data': exec_summary  # Store full response for later processing
-            }
-            state.report_sections_en['executive_summary'] = {
-                'heading': 'Executive Summary',
-                'body': exec_summary.get('framing_paragraph_en', ''),
-                'tables': [exec_summary.get('key_findings', [])],
-                'core_message': exec_summary.get('core_message_en', ''),
-                'raw_data': exec_summary
-            }
-        else:
-            print("[Report Gen] Warning: Executive summary generation failed, using fallback")
-            state.report_sections_ar['executive_summary'] = {
-                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body': 'جاري إنشاء الملخص التنفيذي...',
-            }
-            state.report_sections_en['executive_summary'] = {
-                'heading': 'Executive Summary',
-                'body': 'Generating executive summary...',
-            }
+        if not exec_summary:
+            raise RuntimeError("[Report Gen] Executive summary generation failed")
 
-        # BUG 1: 2. Generate Methodology section with correct keys and state dicts
+        # Store in report_sections with proper structure for Word builder
+        state.report_sections_ar['executive_summary'] = {
+            'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
+            'body': exec_summary['framing_paragraph'],
+            'tables': [exec_summary['key_findings']],  # Will be formatted as table
+            'core_message': exec_summary['core_message'],
+            'raw_data': exec_summary  # Store full response for later processing
+        }
+
+        # 2. Generate Methodology section with correct keys and state dicts
         print("[Report Gen] Generating Methodology section...")
         methodology = generate_methodology_section(state, api_key)
         if methodology:
-            # Build language-split sources tables
-            sources_raw = _build_sources_table(
-                state, methodology.get('sources_table', [])
-            )
+            # Build table dicts from Arabic LLM response
             sources_ar = {
-                'columns': sources_raw['columns_ar'],
-                'rows': sources_raw['rows_ar'],
-                'row_count': len(sources_raw['rows_ar']),
-                'col_count': len(sources_raw['columns_ar']),
+                'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'],
+                'rows': methodology.get('sources_table', []),
+                'row_count': len(methodology.get('sources_table', [])),
+                'col_count': 4,
             }
-            sources_en = {
-                'columns': sources_raw['columns_en'],
-                'rows': sources_raw['rows_en'],
-                'row_count': len(sources_raw['rows_en']),
-                'col_count': len(sources_raw['columns_en']),
-            }
+
+            # Validate table
+            if not _is_valid_table(sources_ar):
+                raise RuntimeError("[Report Gen] Arabic sources table is invalid or empty")
 
             state.report_sections_ar['methodology'] = {
                 'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-                'classification_method_ar': methodology.get('classification_method_ar', ''),
-                'analyzed_fields_ar': methodology.get('analyzed_fields_ar', ''),
+                'classification_method': methodology['classification_method'],
+                'analyzed_fields': methodology['analyzed_fields'],
                 'tables': [sources_ar],
                 'raw_data': methodology
             }
-            state.report_sections_en['methodology'] = {
-                'heading': 'Methodology and Data Sources',
-                'classification_method_en': methodology.get('classification_method_en', ''),
-                'analyzed_fields_en': methodology.get('analyzed_fields_en', ''),
-                'tables': [sources_en],
-                'raw_data': methodology
-            }
         else:
-            print("[Report Gen] Warning: Methodology generation failed, using fallback")
-            state.report_sections_ar['methodology'] = {
-                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-                'classification_method_ar': 'جاري إنشاء قسم المنهجية...',
-                'analyzed_fields_ar': '',
-                'tables': [],
-            }
-            state.report_sections_en['methodology'] = {
-                'heading': 'Methodology and Data Sources',
-                'classification_method_en': 'Generating methodology section...',
-                'analyzed_fields_en': '',
-                'tables': [],
-            }
+            raise RuntimeError("[Report Gen] Methodology generation failed")
 
+        # TODO: 3-9. Additional sections (not yet implemented)
         # TODO: 3. Workload Map (ثالثاً: خريطة عبء العمل الحقيقي)
         # TODO: 4. Customer Journey Challenges (رابعاً: التحديات في رحلة المتعامل)
         # TODO: 5. Digital Gaps (خامساً: تحليل الفجوات الرقمية)
@@ -449,29 +457,6 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         # TODO: 7. AI Use Cases (سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي)
         # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
         # TODO: 9. Conclusion (تاسعاً: الخلاصة)
-
-        # BUG 2: Fill in placeholders for remaining sections (methodology already handled above)
-        for section_key, heading_ar, heading_en in [
-            ('workload_map', 'ثالثاً: التحليل الأول — خريطة عبء العمل الحقيقي', 'Workload Map'),
-            ('journey_challenges', 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل', 'Customer Journey Challenges'),
-            ('digital_gaps', 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية', 'Digital Gaps Analysis'),
-            ('digital_transformation', 'سادساً: التحليل الرابع — خطة التحويل الرقمي', 'Digital Transformation Plan'),
-            ('ai_use_cases', 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي', 'AI-Powered Use Cases'),
-            ('improvement_roadmap', 'ثامناً: خارطة الطريق التحسينية المقترحة', 'Improvement Roadmap'),
-            ('conclusion', 'تاسعاً: الخلاصة — من البيانات إلى القرار', 'Conclusion'),
-        ]:
-            if section_key not in state.report_sections_ar:
-                state.report_sections_ar[section_key] = {
-                    'heading': heading_ar,
-                    'body': f'جاري إنشاء قسم {heading_ar}...',
-                    'status': 'pending'
-                }
-            if section_key not in state.report_sections_en:
-                state.report_sections_en[section_key] = {
-                    'heading': heading_en,
-                    'body': f'Generating {heading_en} section...',
-                    'status': 'pending'
-                }
 
     except Exception as e:
         print(f"Error in _generate_report_sections: {e}")
@@ -630,6 +615,8 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # Build the prompt
         prompt = f"""You are an expert CX strategist writing the executive summary of a formal Arabic government report on customer inquiry analysis.
 
+OUTPUT LANGUAGE: Arabic only. Do not generate English translations.
+
 INPUTS PROVIDED:
 - total_cases: {total_cases}
 - date_range: {date_range}
@@ -768,25 +755,20 @@ TONE AND STYLE RULES:
 ─────────────────────────────────────────────
 OUTPUT FORMAT:
 ─────────────────────────────────────────────
-Return a single bilingual JSON object:
+Return a single Arabic JSON object:
 {{
   "section": "executive_summary",
-  "framing_paragraph_ar": "...",
-  "framing_paragraph_en": "...",
+  "framing_paragraph": "...",
   "key_findings": [
     {{
       "number": 1,
-      "title_ar": "...",
-      "title_en": "...",
-      "description_ar": "...",
-      "description_en": "...",
-      "importance_ar": "🔴 حرجة",
-      "importance_en": "🔴 Critical"
+      "title": "...",
+      "description": "...",
+      "importance": "🔴 حرجة"
     }}
     // 5 total
   ],
-  "core_message_ar": "...",
-  "core_message_en": "..."
+  "core_message": "..."
 }}
 """
 
@@ -877,43 +859,80 @@ Return a single bilingual JSON object:
         return None
 
 
+def _is_valid_table(t: dict) -> bool:
+    """Validate that a table dict has required structure with non-empty rows."""
+    return (isinstance(t, dict)
+            and isinstance(t.get('rows'), list)
+            and len(t.get('rows', [])) > 0
+            and len(t.get('columns', [])) > 0)
+
+
 def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Build bilingual sources table for methodology section."""
+    """Build bilingual sources table for methodology section.
+
+    BUG 1 FIX: If the LLM returns a plain Arabic-only list (sources_input),
+    use it as rows_ar and build corresponding rows_en from state values.
+    """
     columns_ar = ["المصدر", "الطبيعة", "الحجم", "الفترة"]
     columns_en = ["Source", "Nature", "Size", "Period"]
 
-    # Build source rows
     case_count = state.total_cases if state and state.total_cases else 100
+    date_range = state.month_year or "January — July 2025"
+    guidebook_pages = getattr(state, 'guidebook_pages', 160)
+    guidebook_faq_count = getattr(state, 'guidebook_faq_count', 25)
+    guidebook_year = getattr(state, 'guidebook_year', '2025')
 
-    rows_ar = [
-        {
-            "المصدر": "تحليل الاستفسارات",
-            "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الطلب، الحلول، أسماء الخدمات، أوصاف الحالات)",
-            "الحجم": f"{case_count} حالة مغلقة",
-            "الفترة": "January — July 2025"
-        },
-        {
-            "المصدر": "دليل خدمات العملاء",
-            "الطبيعة": "الدليل الرسمي يغطي خدمات المرور والترخيص والأمن، مع التحقق من الأسئلة الشائعة وتحليل فجوات التغطية",
-            "الحجم": "160 صفحة، 25 سؤالاً",
-            "الفترة": "2025"
-        }
-    ]
+    # BUG 1: Check if LLM returned a plain Arabic-only list
+    if (isinstance(sources_input, list) and len(sources_input) >= 2
+            and isinstance(sources_input[0], dict)
+            and 'المصدر' in sources_input[0]):
+        # Use LLM's Arabic rows and build English equivalents from state
+        rows_ar = sources_input[:2]
+        rows_en = [
+            {
+                'Source': 'Inquiry Analysis',
+                'Nature': 'CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)',
+                'Size': f'{case_count} closed cases',
+                'Period': date_range
+            },
+            {
+                'Source': 'Customer Services Guidebook',
+                'Nature': 'Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis',
+                'Size': f'{guidebook_pages} pages, {guidebook_faq_count} FAQs',
+                'Period': guidebook_year
+            }
+        ]
+    else:
+        # Fallback: build default structure
+        rows_ar = [
+            {
+                "المصدر": "تحليل الاستفسارات",
+                "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الطلب، الحلول، أسماء الخدمات، أوصاف الحالات)",
+                "الحجم": f"{case_count} حالة مغلقة",
+                "الفترة": date_range
+            },
+            {
+                "المصدر": "دليل خدمات العملاء",
+                "الطبيعة": "الدليل الرسمي يغطي خدمات المرور والترخيص والأمن، مع التحقق من الأسئلة الشائعة وتحليل فجوات التغطية",
+                "الحجم": f"{guidebook_pages} صفحة، {guidebook_faq_count} سؤالاً",
+                "الفترة": guidebook_year
+            }
+        ]
 
-    rows_en = [
-        {
-            "Source": "Inquiry Analysis",
-            "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
-            "Size": f"{case_count} closed cases",
-            "Period": "January — July 2025"
-        },
-        {
-            "Source": "Customer Services Guidebook",
-            "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
-            "Size": "160 pages, 25 FAQs",
-            "Period": "2025"
-        }
-    ]
+        rows_en = [
+            {
+                "Source": "Inquiry Analysis",
+                "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+                "Size": f"{case_count} closed cases",
+                "Period": date_range
+            },
+            {
+                "Source": "Customer Services Guidebook",
+                "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+                "Size": f"{guidebook_pages} pages, {guidebook_faq_count} FAQs",
+                "Period": guidebook_year
+            }
+        ]
 
     return {
         'columns_ar': columns_ar,
@@ -921,6 +940,217 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
         'rows_ar': rows_ar,
         'rows_en': rows_en
     }
+
+
+def build_bilingual_report_sections(exec_summary: Dict[str, Any], methodology: Dict[str, Any], state: PipelineState = None) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Transform flat LLM responses into nested bilingual section structure.
+
+    Returns two dicts:
+    - report_sections_ar: all content in Arabic
+    - report_sections_en: all content in English
+
+    Each dict has structure: {"sections": [...]}
+    with nested subsections matching the expected format.
+    """
+    report_sections_ar = {"sections": []}
+    report_sections_en = {"sections": []}
+
+    # ========== SECTION 1: Executive Summary ==========
+    if exec_summary:
+        # Build key findings table for AR version
+        key_findings_table_ar = {
+            "columns": ["#", "الاكتشاف", "الوصف", "مستوى الأهمية"],
+            "rows": [],
+            "row_count": 0,
+            "col_count": 4,
+            "original_index": 0
+        }
+
+        # Build key findings table for EN version
+        key_findings_table_en = {
+            "columns": ["#", "Discovery", "Description", "Importance Level"],
+            "rows": [],
+            "row_count": 0,
+            "col_count": 4,
+            "original_index": 0
+        }
+
+        # Convert key_findings array to table rows
+        if "key_findings" in exec_summary and isinstance(exec_summary["key_findings"], list):
+            for finding in exec_summary["key_findings"]:
+                number = finding.get("number", "")
+
+                # AR row
+                key_findings_table_ar["rows"].append({
+                    "#": str(number),
+                    "الاكتشاف": finding.get("title_ar", ""),
+                    "الوصف": finding.get("description_ar", ""),
+                    "مستوى الأهمية": finding.get("importance_ar", "")
+                })
+
+                # EN row
+                key_findings_table_en["rows"].append({
+                    "#": str(number),
+                    "Discovery": finding.get("title_en", ""),
+                    "Description": finding.get("description_en", ""),
+                    "Importance Level": finding.get("importance_en", "")
+                })
+
+        key_findings_table_ar["row_count"] = len(key_findings_table_ar["rows"])
+        key_findings_table_en["row_count"] = len(key_findings_table_en["rows"])
+
+        # Executive Summary section - Arabic version
+        exec_summary_ar = {
+            "id": "section_15_أولا_الملخص_التنفيذي",
+            "title": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+            "title_en": "Executive Summary",
+            "level": 2,
+            "content": exec_summary.get("framing_paragraph_ar", ""),
+            "tables": [],
+            "charts": [],
+            "subsections": [
+                {
+                    "id": "section_16_النتائج_الرئيسية",
+                    "title": "النتائج الرئيسية",
+                    "title_en": "Key Findings",
+                    "level": 3,
+                    "content": exec_summary.get("core_message_ar", ""),
+                    "tables": [key_findings_table_ar] if key_findings_table_ar["rows"] else [],
+                    "charts": []
+                }
+            ]
+        }
+
+        # Executive Summary section - English version
+        exec_summary_en = {
+            "id": "section_15_أولا_الملخص_التنفيذي",
+            "title": "Executive Summary",
+            "title_en": "Executive Summary",
+            "level": 2,
+            "content": exec_summary.get("framing_paragraph_en", ""),
+            "tables": [],
+            "charts": [],
+            "subsections": [
+                {
+                    "id": "section_16_النتائج_الرئيسية",
+                    "title": "Key Findings",
+                    "title_en": "Key Findings",
+                    "level": 3,
+                    "content": exec_summary.get("core_message_en", ""),
+                    "tables": [key_findings_table_en] if key_findings_table_en["rows"] else [],
+                    "charts": []
+                }
+            ]
+        }
+
+        report_sections_ar["sections"].append(exec_summary_ar)
+        report_sections_en["sections"].append(exec_summary_en)
+
+    # ========== SECTION 2: Methodology ==========
+    if methodology:
+        # Build sources table from LLM response
+        sources_raw = _build_sources_table(state, methodology.get("sources_table_ar", []))
+
+        # Methodology section - Arabic version
+        sources_table_ar = {
+            "columns": sources_raw["columns_ar"],
+            "rows": sources_raw["rows_ar"],
+            "row_count": len(sources_raw["rows_ar"]),
+            "col_count": len(sources_raw["columns_ar"]),
+            "original_index": 0
+        }
+
+        sources_table_en = {
+            "columns": sources_raw["columns_en"],
+            "rows": sources_raw["rows_en"],
+            "row_count": len(sources_raw["rows_en"]),
+            "col_count": len(sources_raw["columns_en"]),
+            "original_index": 0
+        }
+
+        methodology_ar = {
+            "id": "section_17_ثانيا_المنهجية_وطبيعة",
+            "title": "ثانياً: المنهجية وطبيعة المصادر",
+            "title_en": "Methodology and Data Sources",
+            "level": 2,
+            "content": "",
+            "tables": [],
+            "charts": [],
+            "subsections": [
+                {
+                    "id": "section_18_21_المصادر_المحللة",
+                    "title": "2.1 المصادر المُحلَّلة",
+                    "title_en": "2.1 Sources Analyzed",
+                    "level": 3,
+                    "content": "",
+                    "tables": [sources_table_ar] if _is_valid_table(sources_table_ar) else [],
+                    "charts": []
+                },
+                {
+                    "id": "section_19_22_منهجية_التصنيف",
+                    "title": "2.2 منهجية التصنيف",
+                    "title_en": "2.2 Classification Methodology",
+                    "level": 3,
+                    "content": methodology.get("classification_method_ar", ""),
+                    "tables": [],
+                    "charts": []
+                },
+                {
+                    "id": "section_20_23_الحقول_المحللة",
+                    "title": "2.3 الحقول المُحلَّلة",
+                    "title_en": "2.3 Analyzed Fields",
+                    "level": 3,
+                    "content": methodology.get("analyzed_fields_ar", ""),
+                    "tables": [],
+                    "charts": []
+                }
+            ]
+        }
+
+        methodology_en = {
+            "id": "section_17_ثانيا_المنهجية_وطبيعة",
+            "title": "Methodology and Data Sources",
+            "title_en": "Methodology and Data Sources",
+            "level": 2,
+            "content": "",
+            "tables": [],
+            "charts": [],
+            "subsections": [
+                {
+                    "id": "section_18_21_المصادر_المحللة",
+                    "title": "2.1 Sources Analyzed",
+                    "title_en": "2.1 Sources Analyzed",
+                    "level": 3,
+                    "content": "",
+                    "tables": [sources_table_en] if _is_valid_table(sources_table_en) else [],
+                    "charts": []
+                },
+                {
+                    "id": "section_19_22_منهجية_التصنيف",
+                    "title": "2.2 Classification Methodology",
+                    "title_en": "2.2 Classification Methodology",
+                    "level": 3,
+                    "content": methodology.get("classification_method_en", ""),
+                    "tables": [],
+                    "charts": []
+                },
+                {
+                    "id": "section_20_23_الحقول_المحللة",
+                    "title": "2.3 Analyzed Fields",
+                    "title_en": "2.3 Analyzed Fields",
+                    "level": 3,
+                    "content": methodology.get("analyzed_fields_en", ""),
+                    "tables": [],
+                    "charts": []
+                }
+            ]
+        }
+
+        report_sections_ar["sections"].append(methodology_ar)
+        report_sections_en["sections"].append(methodology_en)
+
+    return report_sections_ar, report_sections_en
 
 
 def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
@@ -1099,8 +1329,8 @@ core_definitional_principle: >
 YOUR TASK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Write the three subsections below in formal Arabic. Do not invent numbers
-or details not present in the inputs above.
+Write the three subsections below in formal Arabic only. Do not generate English.
+Do not invent numbers or details not present in the inputs above.
 
 ───────────────────────────────────────────────
 2.1  المصادر المُحلَّلة
@@ -1127,7 +1357,7 @@ No prose paragraphs in this subsection — the table IS the content.
 ───────────────────────────────────────────────
 2.2  منهجية التصنيف
 ───────────────────────────────────────────────
-Write a prose paragraph that explains the two-stage pipeline.
+Write a prose paragraph in Arabic that explains the two-stage pipeline.
 
 STAGE 1 — Rule-based engine (stage2_rules.py):
   - Applied to all {total_cases} cases via a priority decision tree.
@@ -1154,7 +1384,7 @@ domain-specific sub-classifications (total {total_sub_count} sub-types).
 ───────────────────────────────────────────────
 2.3  الحقول المُحلَّلة
 ───────────────────────────────────────────────
-Write a single prose paragraph (no table) with two groups:
+Write a prose paragraph in Arabic with two groups:
 
 Group A — Structured fields (handled by dashboard/PowerBI, not this pipeline):
   List all fields from analyzed_fields.structured using their Arabic names.
@@ -1169,25 +1399,33 @@ Group B — Unstructured fields — the focus of this analysis:
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+Return a single flat JSON object with these exact keys:
+
 {{
-  "section": "methodology",
-  "subsections": {{
-    "sources_table": [
-      {{
-        "المصدر": "...",
-        "الطبيعة": "...",
-        "الحجم": "...",
-        "الفترة": "..."
-      }}
-    ],
-    "classification_method_ar": "...",
-    "analyzed_fields_ar": "..."
-  }}
+  "sources_table": [
+    {{
+      "المصدر": "...",
+      "الطبيعة": "...",
+      "الحجم": "...",
+      "الفترة": "..."
+    }},
+    {{
+      "المصدر": "...",
+      "الطبيعة": "...",
+      "الحجم": "...",
+      "الفترة": "..."
+    }}
+  ],
+  "classification_method": "...",
+  "analyzed_fields": "..."
 }}
 
-TONE: Methodological, precise, transparent. Arabic-only output.
-No bilingual fields — the report is Arabic-only.
-Do not reproduce or quote CRM case text verbatim."""
+Rules:
+- sources_table: exactly 2 row objects, Arabic column keys only
+- classification_method: single Arabic prose paragraph covering both pipeline stages and the core definitional principle quoted verbatim
+- analyzed_fields: single Arabic prose paragraph covering structured fields (list) then unstructured fields (تفاصيل_الطلب and الحل with avg chars and language distribution)
+- No markdown, no extra keys, no nesting beyond what is shown above
+- All content must be in Arabic only"""
 
         client = anthropic.Anthropic(api_key=api_key)
         print(f"[Methodology] Calling API, prompt length: {len(prompt)}")
@@ -1214,15 +1452,6 @@ Do not reproduce or quote CRM case text verbatim."""
             json_candidate = json_code_block.group(1).strip()
             try:
                 result = json.loads(json_candidate)
-                # Flatten the structure if it has subsections
-                if 'subsections' in result:
-                    flat_result = {
-                        'section': result.get('section', 'methodology'),
-                        'sources_table': result['subsections'].get('sources_table', []),
-                        'classification_method_ar': result['subsections'].get('classification_method_ar', ''),
-                        'analyzed_fields_ar': result['subsections'].get('analyzed_fields_ar', '')
-                    }
-                    return flat_result
                 return result
             except json.JSONDecodeError as e:
                 print(f"[Debug] Code block JSON parse error: {e}")
@@ -1236,15 +1465,6 @@ Do not reproduce or quote CRM case text verbatim."""
             json_str = response_text[first_brace:last_brace + 1]
             try:
                 result = json.loads(json_str)
-                # Flatten the structure if it has subsections
-                if 'subsections' in result:
-                    flat_result = {
-                        'section': result.get('section', 'methodology'),
-                        'sources_table': result['subsections'].get('sources_table', []),
-                        'classification_method_ar': result['subsections'].get('classification_method_ar', ''),
-                        'analyzed_fields_ar': result['subsections'].get('analyzed_fields_ar', '')
-                    }
-                    return flat_result
                 return result
             except json.JSONDecodeError as e:
                 print(f"Failed to parse methodology JSON (full range): {e}")
@@ -1253,14 +1473,6 @@ Do not reproduce or quote CRM case text verbatim."""
                 json_str_fixed = re.sub(r',(\s*[}\]])', r'\1', json_str)
                 try:
                     result = json.loads(json_str_fixed)
-                    if 'subsections' in result:
-                        flat_result = {
-                            'section': result.get('section', 'methodology'),
-                            'sources_table': result['subsections'].get('sources_table', []),
-                            'classification_method_ar': result['subsections'].get('classification_method_ar', ''),
-                            'analyzed_fields_ar': result['subsections'].get('analyzed_fields_ar', '')
-                        }
-                        return flat_result
                     return result
                 except json.JSONDecodeError as e2:
                     print(f"Failed to parse even after fix: {e2}")
@@ -1321,7 +1533,7 @@ def _build_summary_context(state: PipelineState) -> str:
 
 
 def _create_basic_report_sections(state: PipelineState) -> None:
-    """Create basic report structure without LLM — write to both language dicts."""
+    """Create basic report structure without LLM — Arabic only."""
     state.report_sections_ar = {
         'executive_summary': {
             'heading': 'الملخص التنفيذي',
@@ -1358,45 +1570,6 @@ def _create_basic_report_sections(state: PipelineState) -> None:
         'recommendations': {
             'heading': 'التوصيات',
             'body': 'بناءً على التحليل، يتم تقديم التوصيات التالية لتحسين جودة الخدمة ورضا المتعاملين.',
-        },
-    }
-
-    state.report_sections_en = {
-        'executive_summary': {
-            'heading': 'Executive Summary',
-            'body': f'This report analyzes {state.total_cases} customer inquiries and complaints. Key findings include identification of customer service patterns, friction points in the customer journey, and recommendations for service improvement.',
-        },
-        'methodology': {
-            'heading': 'Methodology',
-            'body': 'Analysis was conducted using a six-stage pipeline: (1) Schema validation, (2) Rule-based classification, (3) LLM-enhanced classification, (4) Pattern analysis, (5) Gap identification, and (6) Report generation.',
-            'tables': [{
-                'columns': ['Source', 'Nature', 'Size', 'Period'],
-                'rows': [
-                    {
-                        'Source': 'Inquiry Analysis',
-                        'Nature': 'CRM data — unstructured text fields',
-                        'Size': f'{state.total_cases} closed cases',
-                        'Period': state.month_year or 'Q1 2026'
-                    },
-                    {
-                        'Source': 'Customer Services Guidebook',
-                        'Nature': 'Official guidebook covering traffic, licensing, security services',
-                        'Size': '160 pages, 25 FAQs',
-                        'Period': '2025'
-                    }
-                ],
-                'row_count': 2,
-                'col_count': 4,
-                'original_index': 0
-            }],
-        },
-        'classification_summary': {
-            'heading': 'Classification Summary',
-            'body': 'Cases were classified into eight categories based on customer intent and interaction patterns.',
-        },
-        'recommendations': {
-            'heading': 'Recommendations',
-            'body': 'Based on the analysis, the following recommendations are provided for improving service delivery and customer satisfaction.',
         },
     }
 

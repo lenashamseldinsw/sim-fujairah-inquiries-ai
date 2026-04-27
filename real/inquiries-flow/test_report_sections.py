@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Test Stages 1-5 + Report Section Generation (Executive Summary & Methodology).
+Test Stages 1-6 + Report Section Generation.
 
-Loads 100 random rows from the inquiries file, runs the pipeline,
-and tests the implemented report sections.
+Loads 10 random rows from the inquiries file, runs the pipeline,
+and tests stages 1-5 + Stage 6 (Excel generation) + report sections.
 """
 
 import sys
@@ -41,12 +41,12 @@ def main():
         print(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
         print(f"   Columns: {list(df.columns)[:5]}...")
 
-        # Sample 50 random rows
-        if len(df) > 50:
-            df = df.sample(n=50, random_state=42)
-            print(f"✅ Sampled 50 random rows (seed=42 for reproducibility)")
+        # Sample 10 random rows
+        if len(df) > 10:
+            df = df.sample(n=10, random_state=42)
+            print(f"✅ Sampled 10 random rows (seed=42 for reproducibility)")
         else:
-            print(f"⚠️  Only {len(df)} rows available (less than 50)")
+            print(f"⚠️  Only {len(df)} rows available (less than 10)")
 
     except Exception as e:
         print(f"❌ Failed to load file: {e}")
@@ -93,6 +93,7 @@ def main():
         (3, "LLM CLASSIFICATION"),
         (4, "PATTERN ANALYSIS"),
         (5, "GAP ANALYSIS"),
+        (6, "EXCEL GENERATION"),
     ]
 
     results = {}
@@ -114,6 +115,10 @@ def main():
                 success, msg = orchestrator.run_stage4_analysis()
             elif stage_num == 5:
                 success, msg = orchestrator.run_stage5_gap_analysis()
+            elif stage_num == 6:
+                excel_path = str(output_dir / f"inquiries_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+                word_path = str(output_dir / f"inquiries_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx")
+                success, msg = orchestrator.run_stage6_artifacts(excel_path, word_path, language='ar')
 
             results[stage_num] = {'success': success, 'message': msg}
 
@@ -121,7 +126,7 @@ def main():
                 print(f"✅ {msg}")
             else:
                 print(f"❌ {msg}")
-                if stage_num < 5:
+                if stage_num < 6:
                     print(f"⚠️  Stopping pipeline (stage {stage_num} failed)")
                     break
         except Exception as e:
@@ -129,12 +134,12 @@ def main():
             import traceback
             traceback.print_exc()
             results[stage_num] = {'success': False, 'message': str(e)}
-            if stage_num < 5:
+            if stage_num < 6:
                 break
 
-    # Summary of stages 1-5
+    # Summary of stages 1-6
     print(f"\n{'=' * 80}")
-    print("PIPELINE STAGES 1-5 SUMMARY")
+    print("PIPELINE STAGES 1-6 SUMMARY")
     print(f"{'=' * 80}")
 
     for stage_num, stage_name in stages:
@@ -213,64 +218,14 @@ def main():
             print(f"❌ Methodology generation failed")
             methodology = {}
 
-        # Build state.report_sections_ar and report_sections_en
-        state.report_sections_ar = {}
-        state.report_sections_en = {}
+        # Build state.report_sections_ar and report_sections_en using bilingual builder
+        from pipeline.stage6_artifacts import build_bilingual_report_sections
 
-        if exec_summary:
-            state.report_sections_ar['executive_summary'] = {
-                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body': exec_summary.get('framing_paragraph_ar', ''),
-                'tables': [exec_summary.get('key_findings', [])],
-                'core_message': exec_summary.get('core_message_ar', ''),
-                'raw_data': exec_summary
-            }
-            state.report_sections_en['executive_summary'] = {
-                'heading': 'Executive Summary',
-                'body': exec_summary.get('framing_paragraph_en', ''),
-                'tables': [exec_summary.get('key_findings', [])],
-                'core_message': exec_summary.get('core_message_en', ''),
-                'raw_data': exec_summary
-            }
-
-        if methodology:
-            # Convert sources_table to language-specific format
-            sources_raw = methodology.get('sources_table', {})
-
-            # Arabic version
-            sources_ar = {}
-            if isinstance(sources_raw, dict) and 'rows_ar' in sources_raw:
-                sources_ar = {
-                    'columns': sources_raw.get('columns_ar', []),
-                    'rows': sources_raw.get('rows_ar', []),
-                    'row_count': len(sources_raw.get('rows_ar', [])),
-                    'col_count': len(sources_raw.get('columns_ar', [])),
-                }
-
-            # English version
-            sources_en = {}
-            if isinstance(sources_raw, dict) and 'rows_en' in sources_raw:
-                sources_en = {
-                    'columns': sources_raw.get('columns_en', []),
-                    'rows': sources_raw.get('rows_en', []),
-                    'row_count': len(sources_raw.get('rows_en', [])),
-                    'col_count': len(sources_raw.get('columns_en', [])),
-                }
-
-            state.report_sections_ar['methodology'] = {
-                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-                'body': methodology.get('classification_method_ar', ''),
-                'tables': [sources_ar] if sources_ar else [],
-                'analyzed_fields': methodology.get('analyzed_fields_ar', ''),
-                'raw_data': methodology
-            }
-            state.report_sections_en['methodology'] = {
-                'heading': 'Methodology and Data Sources',
-                'body': methodology.get('classification_method_en', ''),
-                'tables': [sources_en] if sources_en else [],
-                'analyzed_fields': methodology.get('analyzed_fields_en', ''),
-                'raw_data': methodology
-            }
+        state.report_sections_ar, state.report_sections_en = build_bilingual_report_sections(
+            exec_summary if exec_summary else {},
+            methodology if methodology else {},
+            state=state
+        )
 
         # Generate JSON report for display
         print(f"\n📋 Generating JSON report for display...")
@@ -280,6 +235,18 @@ def main():
 
         # Save to files
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # Print Arabic dict before saving
+        print(f"\n{'=' * 80}")
+        print("ARABIC REPORT SECTIONS DICT (before JSON save):")
+        print(f"{'=' * 80}")
+        print(json.dumps(state.report_sections_ar, ensure_ascii=False, indent=2))
+
+        # Print English dict before saving
+        print(f"\n{'=' * 80}")
+        print("ENGLISH REPORT SECTIONS DICT (before JSON save):")
+        print(f"{'=' * 80}")
+        print(json.dumps(state.report_sections_en, ensure_ascii=False, indent=2))
 
         # Save full report JSON
         output_file = output_dir / f"report_full_{timestamp}.json"
@@ -333,9 +300,11 @@ def main():
     all_success = all(r['success'] for r in results.values())
     print(f"\n{'=' * 80}")
     if all_success:
-        print("✅ PIPELINE STAGES 1-5 PASSED")
+        print("✅ PIPELINE STAGES 1-6 PASSED")
         if state.report_json:
             print("✅ REPORT SECTIONS GENERATED SUCCESSFULLY")
+        if results.get(6, {}).get('success'):
+            print("✅ EXCEL GENERATION COMPLETED SUCCESSFULLY")
     else:
         failed = [s for s, r in results.items() if not r['success']]
         print(f"❌ FAILED STAGES: {failed}")

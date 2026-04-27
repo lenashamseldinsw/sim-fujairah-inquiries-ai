@@ -6,6 +6,7 @@ so this display component works with analyzed data structures directly.
 
 import streamlit as st
 import json
+import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -142,6 +143,23 @@ HTML_STYLES = """
     .section-content p {
         margin: 0.5rem 0;
         color: #E4E4F0;
+    }
+
+    /* RTL Expander fix */
+    [data-testid="stExpander"] {
+        direction: rtl;
+    }
+    [data-testid="stExpander"] > div > button {
+        direction: rtl;
+        text-align: right;
+        padding-left: 2rem !important;
+        padding-right: 0.5rem !important;
+        white-space: nowrap;
+        overflow: visible;
+    }
+    [data-testid="stExpander"] > div > button span {
+        display: inline-block;
+        margin-left: 0.5rem;
     }
 </style>
 
@@ -460,15 +478,29 @@ class DynamicReportDisplay:
 
         # Display section content
         if current_section.get('content'):
-            st.markdown(self._convert_content_to_html(current_section['content']), unsafe_allow_html=True)
+            formatted_content = self._convert_content_to_html(current_section['content'])
+            st.markdown(
+                f'<div class="section-content">{formatted_content}</div>',
+                unsafe_allow_html=True
+            )
 
-        # Display section data
+        # Display section tables
+        if current_section.get('tables'):
+            for idx, table_data in enumerate(current_section['tables']):
+                if idx > 0:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                self._display_table(table_data)
+
+        # Display section data as table if it's a list of dicts
         if current_section.get('data'):
             data = current_section['data']
-            if isinstance(data, list) and data:
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                # Convert list of dicts to table
+                df = pd.DataFrame(data)
+                self._display_table_from_dataframe(df)
+            elif isinstance(data, list) and data:
+                # Just a list - show as is
                 st.write(data)
-            elif isinstance(data, dict) and data:
-                st.json(data)
 
         # Display charts for this section if linked
         for chart in all_charts:
@@ -660,6 +692,21 @@ class DynamicReportDisplay:
 
         html += '</table></div>'
         return html
+
+    def _display_table_from_dataframe(self, df: pd.DataFrame) -> None:
+        """Convert DataFrame to table format and display."""
+        if df.empty:
+            return
+
+        columns = list(df.columns)
+        rows = df.to_dict('records')
+
+        table_data = {
+            'columns': columns,
+            'rows': rows
+        }
+
+        self._display_table(table_data)
 
     def _render_chart(self, chart_data: Dict) -> str:
         """

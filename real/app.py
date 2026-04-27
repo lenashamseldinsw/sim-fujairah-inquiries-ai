@@ -114,10 +114,11 @@ T = {
         'login_button':      'تسجيل الدخول',
         'cancel_button':     'إلغاء',
         'login_error':       'اسم المستخدم أو كلمة المرور غير صحيحة',
-        'processing_title':  'معالجة الملف عبر خط الأنابيب',
+        'processing_title':  'جاري تحليل الملف',
         'initializing':      'جاري تهيئة خط الأنابيب...',
         'starting_analysis': 'جاري بدء التحليل...',
         'analyzing_file':    'جاري تحليل ملفك... قد يستغرق دقيقة واحدة.',
+        'artifacts_generating': 'جاري إنشاء المرفقات. سيتم إضافتها للتحميل عند الانتهاء.',
     },
     'en': {
         'nav_back':          '← Back to Home',
@@ -188,6 +189,7 @@ T = {
         'initializing':      'Initializing pipeline...',
         'starting_analysis': 'Starting analysis...',
         'analyzing_file':    'Analyzing your file... This may take a minute.',
+        'artifacts_generating': 'Generating artifacts. Download will include them once ready.',
     }
 }
 
@@ -1529,10 +1531,40 @@ def get_analyzer():
 
 ANALYZER = get_analyzer()
 
+# ── Custom Progress Bar for RTL/LTR Support ──────────────────────────────────
+def create_custom_progress_bar(current_pct=0, lang='ar'):
+    """Create a custom HTML progress bar that supports RTL/LTR."""
+    DIR = 'rtl' if lang == 'ar' else 'ltr'
+    percentage = current_pct * 100
+
+    progress_html = f"""
+    <div style="direction: {DIR}; width: 100%; margin: 0;">
+        <div style="
+            width: 100%;
+            height: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        ">
+            <div style="
+                height: 100%;
+                background: linear-gradient(90deg, #B68A35, #E2B95A, #F0D080);
+                width: {percentage}%;
+                border-radius: 10px;
+                transition: width 0.4s ease;
+            "></div>
+        </div>
+    </div>
+    """
+    return progress_html
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 def validate_file(uploaded_file, lang='ar'):
     tx = T[lang]
+    print(f"[Validate] Checking file: {uploaded_file.name}")
     is_valid, error_msg = ANALYZER.validate_file(uploaded_file)
+    print(f"[Validate] Result: valid={is_valid}, error={error_msg}")
     if not is_valid:
         return False, error_msg or tx['err_bad_type']
     return True, ""
@@ -1679,34 +1711,51 @@ def process_with_analyzer(uploaded_files, lang='ar'):
     2. Return report immediately with analysis results
     3. Artifact generation (Excel + Word) happens in background
     """
+    print(f"[process_with_analyzer] Starting function")
     tx = T[lang]
+    print(f"[process_with_analyzer] Got translations")
 
     try:
+        print(f"[process_with_analyzer] Processing {len(uploaded_files)} files")
         # Process first file
         uploaded_file = uploaded_files[0] if uploaded_files else None
+        print(f"[process_with_analyzer] Got file: {uploaded_file.name if uploaded_file else 'None'}")
         if not uploaded_file:
             st.error(tx['err_no_file'])
             return None
 
+        print(f"[process_with_analyzer] Creating UI elements")
         # Show persistent progress area during analysis
         processing_title = tx['processing_title'] if lang == 'ar' else "Processing File Through Pipeline"
-        st.markdown(f"### <span style='color: #B68A35;'>{processing_title}</span>", unsafe_allow_html=True)
+        title_dir = "rtl" if lang == 'ar' else "ltr"
+        st.markdown(f"### <span style='color: #B68A35; direction: {title_dir};'>{processing_title}</span>", unsafe_allow_html=True)
 
-        progress_bar = st.progress(0, text=tx.get('initializing', 'Initializing pipeline...'))
+        print(f"[process_with_analyzer] Creating progress bar")
+        # Create custom progress bar placeholder for RTL/LTR support
+        progress_placeholder = st.empty()
         status_area = st.empty()
-
-        # Get analyzer's processing stages for reference
-        analyzer_stages = ANALYZER.get_processing_stages()
+        print(f"[process_with_analyzer] Progress bar and status area created")
 
         # Show that processing has started
-        starting_text = tx.get('starting_analysis', 'Starting analysis...')
-        progress_bar.progress(5, text=starting_text)
-
         analyzing_text = tx.get('analyzing_file', 'Analyzing your file... This may take a minute.')
-        status_area.info(f"<span style='color: #B68A35;'>{analyzing_text}</span>", unsafe_allow_html=True)
+        status_area.markdown(f"<span style='color: #B68A35;'>{analyzing_text}</span>", unsafe_allow_html=True)
+        progress_placeholder.markdown(create_custom_progress_bar(0.05, lang), unsafe_allow_html=True)
 
+        print(f"[process_with_analyzer] Creating progress callback")
+        # Create progress callback that updates the UI with language-aware messages
+        def progress_callback(progress_pct, message_ar, message_en):
+            """Update progress bar and status with language-aware messages."""
+            message = message_ar if lang == 'ar' else message_en
+            print(f"[UI Callback] Progress: {progress_pct:.0%} | {message_en}")
+            progress_placeholder.markdown(create_custom_progress_bar(progress_pct, lang), unsafe_allow_html=True)
+            status_area.markdown(f"<div style='margin-top: 1.5rem; color: #B68A35;'>{message}</div>", unsafe_allow_html=True)
+
+        print(f"[process_with_analyzer] Callback created, about to call analyzer")
         # Run the analyzer - this executes stages 1-5 and queues stage 6 in background
-        report = ANALYZER.analyze(uploaded_file)
+        print(f"[App] Starting analysis with file: {uploaded_file.name}")
+        report = ANALYZER.analyze(uploaded_file, progress_callback=progress_callback)
+        print(f"[process_with_analyzer] Analyzer returned, got report")
+        print(f"[App] Analysis complete, got report with {len(report.get('sections', {}))} sections")
 
         # Store report and output files in session state
         st.session_state.report_data = report
@@ -1727,33 +1776,14 @@ def process_with_analyzer(uploaded_files, lang='ar'):
             st.session_state.output_files['excel_ready'] = artifacts_status.get('excel_ready', False)
             st.session_state.output_files['word_ready'] = artifacts_status.get('word_ready', False)
 
-        # Calculate progress based on actual sections created
-        # (stage6_artifacts may appear later when background generation completes)
-        stage_sequence = [
-            'stage1_validation',
-            'stage2_classification',
-            'stage3_llm',
-            'stage4_patterns',
-            'stage4_faqs',
-            'stage5_gaps',
-            'stage5_validated_faqs',
-        ]
-
-        completed_sections = list(report.get('sections', {}).keys())
-        num_completed = len([s for s in stage_sequence if s in completed_sections])
-        current_pct = min(1.0, num_completed / len(stage_sequence))
-
-        # Update progress to 100% complete (analysis done, artifacts generating)
-        final_stage = analyzer_stages[-1] if analyzer_stages else None
-        stage_label = final_stage.get('label_en', final_stage.get('label', 'Complete')) if lang == 'en' else final_stage.get('label', 'Complete')
-        progress_bar.progress(1.0, text=f"✅ {stage_label}")
-
         # Show completion status with artifact generation notice
         artifacts_status = report.get('artifacts_status', {})
         if artifacts_status.get('excel_ready') and artifacts_status.get('word_ready'):
-            status_area.success(f"✅ Analysis complete with all artifacts ready.")
+            completion_text = tx.get('complete_with_artifacts', 'Analysis complete with all artifacts ready.')
+            status_area.markdown(f"<span style='color: #B68A35;'>✅ {completion_text}</span>", unsafe_allow_html=True)
         else:
-            status_area.info(f"✅ Analysis complete. Generating artifacts in background...")
+            completion_text = tx.get('complete_generating_artifacts', 'Analysis complete. Generating artifacts in background...')
+            status_area.markdown(f"<span style='color: #B68A35;'>✅ {completion_text}</span>", unsafe_allow_html=True)
 
         return report
 
@@ -2048,9 +2078,15 @@ def inquiries_page(lang):
             st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
+            # Store files in session state (preserve across reruns)
             st.session_state.uploaded_file = uploaded_files
-            
-            for uploaded_file in uploaded_files:
+            print(f"[Upload-INQ] Stored {len(uploaded_files)} file(s) in session state")
+
+        # Use files from session state if available (handles post-rerun case)
+        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
+
+        if files_to_display:
+            for uploaded_file in files_to_display:
                 file_size = uploaded_file.size / 1024
                 size_str  = (f"{file_size:.1f} {tx['size_kb']}" if file_size < 1024
                              else f"{file_size/1024:.2f} {tx['size_mb']}")
@@ -2077,22 +2113,27 @@ def inquiries_page(lang):
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button(tx['btn_start_inq'], use_container_width=True, type="primary", key="inq_start"):
+                        print(f"[Button] Inquiries button clicked, validating {len(files_to_display)} files")
                         all_valid = True
                         error_msg = ""
-                        for uploaded_file in uploaded_files:
+                        for uploaded_file in files_to_display:
                             ok, msg = validate_file(uploaded_file, lang)
                             if not ok:
                                 all_valid = False
                                 error_msg = msg
                                 break
+                        print(f"[Button] Validation complete: valid={all_valid}, error={error_msg}")
                         if all_valid:
+                            print(f"[Button] Setting processing=True and calling st.rerun()")
                             st.session_state.processing = True
                             st.rerun()
                         else:
+                            print(f"[Button] Validation failed: {error_msg}")
                             st.markdown(f'<div class="error-panel">❌ {error_msg}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.processing:
+            print(f"[Flow] Processing flag is True, starting analysis")
             st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
             st.markdown(f"""
             <div class="stage-panel">
@@ -2103,7 +2144,15 @@ def inquiries_page(lang):
             """, unsafe_allow_html=True)
 
             try:
-                report = process_with_analyzer(uploaded_files, lang)
+                # Use session state files (from previous upload)
+                files_to_process = st.session_state.get('uploaded_file', [])
+                print(f"[Flow] Got {len(files_to_process) if files_to_process else 0} files from session state")
+                if not files_to_process:
+                    st.error("❌ No files to process. Please upload files first.")
+                    st.session_state.processing = False
+                    st.rerun()
+
+                report = process_with_analyzer(files_to_process, lang)
                 st.session_state.processing = False
                 st.session_state.completed = True
                 if report:
@@ -2175,7 +2224,7 @@ def inquiries_page(lang):
 
             if not artifacts_complete and 'report_data' in st.session_state:
                 # Show status while artifacts are generating
-                st.info("📄 Artifacts still generating. Download will include them once ready.")
+                st.info("📄 " + tx['artifacts_generating'])
 
             zip_data = create_download_zip(flow_type='inquiries')
             if zip_data:
@@ -2253,9 +2302,15 @@ def complaints_page(lang):
             st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
+            # Store files in session state (preserve across reruns)
             st.session_state.uploaded_file = uploaded_files
-            
-            for uploaded_file in uploaded_files:
+            print(f"[Upload-CMP] Stored {len(uploaded_files)} file(s) in session state")
+
+        # Use files from session state if available (handles post-rerun case)
+        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
+
+        if files_to_display:
+            for uploaded_file in files_to_display:
                 file_size = uploaded_file.size / 1024
                 size_str  = (f"{file_size:.1f} {tx['size_kb']}" if file_size < 1024
                              else f"{file_size/1024:.2f} {tx['size_mb']}")
@@ -2283,18 +2338,22 @@ def complaints_page(lang):
                 with col2:
                     st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
                     if st.button(tx['btn_start_cmp'], use_container_width=True, key="cmp_start"):
+                        print(f"[Button-CMP] Complaints button clicked, validating {len(files_to_display)} files")
                         all_valid = True
                         error_msg = ""
-                        for uploaded_file in uploaded_files:
+                        for uploaded_file in files_to_display:
                             ok, msg = validate_file(uploaded_file, lang)
                             if not ok:
                                 all_valid = False
                                 error_msg = msg
                                 break
+                        print(f"[Button-CMP] Validation complete: valid={all_valid}, error={error_msg}")
                         if all_valid:
+                            print(f"[Button-CMP] Setting processing=True and calling st.rerun()")
                             st.session_state.processing = True
                             st.rerun()
                         else:
+                            print(f"[Button-CMP] Validation failed: {error_msg}")
                             st.markdown(f'<div class="error-panel">❌ {error_msg}</div>', unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -2310,7 +2369,14 @@ def complaints_page(lang):
             """, unsafe_allow_html=True)
 
             try:
-                report = process_with_analyzer(uploaded_files, lang)
+                # Use session state files (from previous upload)
+                files_to_process = st.session_state.get('uploaded_file', [])
+                if not files_to_process:
+                    st.error("❌ No files to process. Please upload files first.")
+                    st.session_state.processing = False
+                    st.rerun()
+
+                report = process_with_analyzer(files_to_process, lang)
                 st.session_state.processing = False
                 st.session_state.completed = True
                 if report:
@@ -2382,7 +2448,7 @@ def complaints_page(lang):
 
             if not artifacts_complete and 'report_data' in st.session_state:
                 # Show status while artifacts are generating
-                st.info("📄 Artifacts still generating. Download will include them once ready.")
+                st.info("📄 " + tx['artifacts_generating'])
 
             zip_data = create_download_zip(flow_type='complaints')
             if zip_data:

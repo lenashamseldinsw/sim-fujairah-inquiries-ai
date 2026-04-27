@@ -1,0 +1,135 @@
+{
+  "executive_summary": {
+    "heading": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+    "body": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 50 حالة تفاعل مُستخلصة من منظومة إدارة علاقات العملاء لشرطة الفجيرة، تغطي الفترة الممتدة من يناير إلى ديسمبر 2025، استناداً إلى مصدرَين أساسيَّين هما: «تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة» و«دليل الخدمات والأسئلة الشائعة»، بهدف تحويل البيانات الخام إلى قرارات تشغيلية وتوصيات استراتيجية قابلة للتنفيذ. المُستجد الجوهري: النظام يُصنّف 100% من الحالات باعتبارها «استفسارات»، في حين كشف إعادة التصنيف أن 68% منها شكاوى فعلية — وهو ما يعني أن عبء الخلل التشغيلي كان مُخفيًا كليًا خلف تصنيف مُضلِّل، يحجب الأولويات الحقيقية عن متخذي القرار.",
+    "tables": [
+      [
+        {
+          "number": 1,
+          "title_ar": "تصنيف غير دقيق بنسبة 100%: كل حالة كانت مُصنَّفة خطأً",
+          "title_en": "100% Misclassification Rate: Every Single Case Was Incorrectly Labelled",
+          "description_ar": "أُدرجت الـ 50 حالة الخمسون بالكامل تحت تصنيف «استفسار» في نظام إدارة علاقات العملاء، غير أن إعادة التصنيف كشفت أن التوزيع الفعلي هو: 34 شكوى (68%)، و10 استفسارات حقيقية (20%)، و6 طلبات (12%). لا تتوفر بيانات مقارنة بفترات سابقة في هذا التقرير، مما يجعل هذه الفجوة بنسبة 100% مؤشراً حرجاً قائماً بذاته على ضعف جودة البيانات التشغيلية وغياب منهجية تصنيف موثوقة.",
+          "description_en": "All 50 cases were recorded as 'inquiries' in the CRM system; however, reclassification revealed the true distribution to be: 34 complaints (68%), 10 genuine inquiries (20%), and 6 requests (12%). No comparative data from prior periods is available in this report, making this 100% misclassification rate a standalone critical indicator of weak operational data quality and the absence of a reliable classification methodology.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ 68% على عبء العمل الفعلي",
+          "title_en": "Complaints Dominate 68% of Actual Workload",
+          "description_ar": "بلغت الشكاوى 34 حالة من أصل 50، أي ما يعادل 68% من إجمالي التفاعلات، في مقابل تصنيف نظام إدارة علاقات العملاء لجميعها كاستفسارات — وهو تناقض جذري يُقوّض أي قراءة تشغيلية مبنية على بيانات النظام. وتتمركز الشكاوى بشكل رئيسي حول مخالفات مرورية مسجلة بشكل خاطئ (9 حالات) وعدم القدرة على الاستعلام الذاتي عن المخالفات وملكية المركبات (7 حالات)، مما يكشف أن محور الإخفاق التشغيلي الأول هو منظومة المخالفات المرورية برمّتها.",
+          "description_en": "Complaints accounted for 34 out of 50 cases, representing 68% of all interactions, against a CRM classification of 100% inquiries — a radical contradiction that undermines any operational reading built on system data. Complaints are primarily concentrated around incorrectly registered traffic violations (9 cases) and inability to self-serve for violation and vehicle ownership enquiries (7 cases), revealing that the core operational failure nexus is the traffic violation ecosystem in its entirety.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "9 حالات بلا مسار رقمي: إشعار المخالفة يصل لغير صاحبها دون آلية تصحيح ذاتية",
+          "title_en": "9 Cases With No Digital Path: Violation Notices Reach Wrong Recipients With No Self-Correction Mechanism",
+          "description_ar": "يستلم 9 متعاملين إشعارات مخالفات مرورية لمركبات لا تخصهم أو في أوقات لم يكونوا فيها بالفجيرة، ويضطرون في كل مرة إلى التواصل المباشر مع الشرطة للتحقق والإلغاء، في غياب تام لأي قناة رقمية للاعتراض الذاتي. السبب الجذري هو انعدام الإشعار الاستباقي، إذ لا يتلقى المتعامل في لحظة تسجيل المخالفة أي بلاغ يتيح له التحقق الفوري، فيتحول ما كان يمكن حسمه آلياً إلى عبء تشغيلي يستنزف موارد بشرية.",
+          "description_en": "Nine customers receive traffic violation notices for vehicles they do not own or during periods when they were not in Fujairah, and are forced each time to contact the police directly for verification and cancellation, with a complete absence of any digital self-dispute channel. The root cause is the lack of proactive notification: at the moment of violation registration, no alert reaches the customer to enable immediate verification, converting what could be resolved automatically into an operational burden consuming human resources.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 4,
+          "title_ar": "13 حالة ناتجة عن فجوة معلوماتية حرجة: جهل بسياسة السرعة وتشتت في الاختصاصات",
+          "title_en": "13 Cases Driven by Critical Information Gap: Unknown Speed Policy and Jurisdictional Confusion",
+          "description_ar": "يتشارك نقطتا احتكاك رئيسيتان في السبب الجذري ذاته — غياب المعلومات — إذ تضم 5 حالات اعتراضاً على مخالفات صحيحة بسبب جهل المتعامل بحدود السرعة المعتمدة في الفجيرة مقارنةً بالإمارات الأخرى، فيما تُمثّل 6 حالات إضافية توجّه متعاملين إلى شرطة الفجيرة في قضايا خارج اختصاصها لغياب دليل توجيه واضح. الحل الفوري المشار إليه في بيانات الدليل الإرشادي هو نشر دليل مرئي لحدود السرعة وخريطة اختصاصات تفاعلية، وهما إجراءان قادران على درء ما لا يقل عن 11 حالة تواصل غير مُبرَّرة سنوياً.",
+          "description_en": "Two primary friction points share the identical root cause — missing information — with 5 cases involving objections to valid violations due to customers' unawareness of Fujairah's speed limits compared to other emirates, and 6 additional cases where customers approach Fujairah Police for matters outside its jurisdiction due to the absence of a clear jurisdictional guide. The immediate fix indicated by guidebook data is publishing a visual speed limit guide and an interactive jurisdiction map — two actions capable of preventing no fewer than 11 unjustified contact cases annually.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد: طاقة تنفيذية عالية في غياب توجيه استراتيجي سليم",
+          "title_en": "98% On-Time Closure Rate: High Execution Capacity Without Sound Strategic Direction",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن المدة الزمنية المحددة، بمعدل امتثال للمستوى الخدمي بلغ 98%، مما يُثبت امتلاك الفريق التشغيلي لطاقة تنفيذية عالية. غير أن هذا الأداء الإيجابي لا يُعالج الخلل البنيوي الناجم عن فجوة التصنيف؛ فالفريق يُغلق الحالات بكفاءة، لكنه يعمل على بيانات تُصوّر 100% من عبء العمل الشكوائي على أنه استفسارات، مما يُفقد أي مبادرة تحسين وجهتها الحقيقية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a service level compliance rate of 98%, demonstrating that the operational team possesses high execution capacity. However, this positive performance does not address the structural dysfunction arising from the classification gap; the team closes cases efficiently, but operates on data that portrays 100% of the complaint workload as inquiries, causing any improvement initiative to lose its true direction.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ]
+    ],
+    "core_message": "الرسالة الجوهرية: الإخفاق الجذري الذي يكشفه هذا التقرير ليس في جودة الاستجابة — إذ تبلغ نسبة الإغلاق في الوقت المحدد 98% — بل في انعدام الرؤية الحقيقية لطبيعة الطلب، حيث أخفى تصنيف «استفسار» المُطبَّق على 100% من الحالات 34 شكوى فعلية تعكس خللاً تشغيلياً ممنهجاً في منظومة المخالفات المرورية والخدمات الرقمية. معالجة المحركات الثلاثة الكبرى — الإشعار الاستباقي (22 حالة، 44%)، وإتاحة المعلومات (13 حالة)، والخدمة الذاتية الرقمية (7 حالات) — كفيلة بتحويل ما لا يقل عن 42 حالة من تواصل تفاعلي مُكلف إلى قنوات ذاتية صامتة دون تدخل بشري. إعادة التصنيف هذه تُحوّل بيانات شرطة الفجيرة لأول مرة من سجلات إدارية إلى أداة استراتيجية تُمكّن من توجيه الاستثمار التشغيلي بدقة نحو الأسباب الجذرية، لا نحو الأعراض.",
+    "raw_data": {
+      "section": "executive_summary",
+      "framing_paragraph_ar": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 50 حالة تفاعل مُستخلصة من منظومة إدارة علاقات العملاء لشرطة الفجيرة، تغطي الفترة الممتدة من يناير إلى ديسمبر 2025، استناداً إلى مصدرَين أساسيَّين هما: «تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة» و«دليل الخدمات والأسئلة الشائعة»، بهدف تحويل البيانات الخام إلى قرارات تشغيلية وتوصيات استراتيجية قابلة للتنفيذ. المُستجد الجوهري: النظام يُصنّف 100% من الحالات باعتبارها «استفسارات»، في حين كشف إعادة التصنيف أن 68% منها شكاوى فعلية — وهو ما يعني أن عبء الخلل التشغيلي كان مُخفيًا كليًا خلف تصنيف مُضلِّل، يحجب الأولويات الحقيقية عن متخذي القرار.",
+      "framing_paragraph_en": "This report presents an in-depth analysis of 50 customer interaction cases extracted from Fujairah Police's customer relationship management system, covering the period from January to December 2025, drawing on two primary sources: 'CRM System Export — Unformatted Text' and the 'Services Guide and FAQ', with the explicit purpose of transforming raw data into operational decisions and actionable strategic recommendations. Core Discovery: The system classifies 100% of cases as 'inquiries', whereas reclassification reveals that 68% are in fact complaints — meaning the full weight of operational dysfunction was entirely concealed behind a misleading label that obscures real priorities from decision-makers.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title_ar": "تصنيف غير دقيق بنسبة 100%: كل حالة كانت مُصنَّفة خطأً",
+          "title_en": "100% Misclassification Rate: Every Single Case Was Incorrectly Labelled",
+          "description_ar": "أُدرجت الـ 50 حالة الخمسون بالكامل تحت تصنيف «استفسار» في نظام إدارة علاقات العملاء، غير أن إعادة التصنيف كشفت أن التوزيع الفعلي هو: 34 شكوى (68%)، و10 استفسارات حقيقية (20%)، و6 طلبات (12%). لا تتوفر بيانات مقارنة بفترات سابقة في هذا التقرير، مما يجعل هذه الفجوة بنسبة 100% مؤشراً حرجاً قائماً بذاته على ضعف جودة البيانات التشغيلية وغياب منهجية تصنيف موثوقة.",
+          "description_en": "All 50 cases were recorded as 'inquiries' in the CRM system; however, reclassification revealed the true distribution to be: 34 complaints (68%), 10 genuine inquiries (20%), and 6 requests (12%). No comparative data from prior periods is available in this report, making this 100% misclassification rate a standalone critical indicator of weak operational data quality and the absence of a reliable classification methodology.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الشكاوى تهيمن بـ 68% على عبء العمل الفعلي",
+          "title_en": "Complaints Dominate 68% of Actual Workload",
+          "description_ar": "بلغت الشكاوى 34 حالة من أصل 50، أي ما يعادل 68% من إجمالي التفاعلات، في مقابل تصنيف نظام إدارة علاقات العملاء لجميعها كاستفسارات — وهو تناقض جذري يُقوّض أي قراءة تشغيلية مبنية على بيانات النظام. وتتمركز الشكاوى بشكل رئيسي حول مخالفات مرورية مسجلة بشكل خاطئ (9 حالات) وعدم القدرة على الاستعلام الذاتي عن المخالفات وملكية المركبات (7 حالات)، مما يكشف أن محور الإخفاق التشغيلي الأول هو منظومة المخالفات المرورية برمّتها.",
+          "description_en": "Complaints accounted for 34 out of 50 cases, representing 68% of all interactions, against a CRM classification of 100% inquiries — a radical contradiction that undermines any operational reading built on system data. Complaints are primarily concentrated around incorrectly registered traffic violations (9 cases) and inability to self-serve for violation and vehicle ownership enquiries (7 cases), revealing that the core operational failure nexus is the traffic violation ecosystem in its entirety.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "9 حالات بلا مسار رقمي: إشعار المخالفة يصل لغير صاحبها دون آلية تصحيح ذاتية",
+          "title_en": "9 Cases With No Digital Path: Violation Notices Reach Wrong Recipients With No Self-Correction Mechanism",
+          "description_ar": "يستلم 9 متعاملين إشعارات مخالفات مرورية لمركبات لا تخصهم أو في أوقات لم يكونوا فيها بالفجيرة، ويضطرون في كل مرة إلى التواصل المباشر مع الشرطة للتحقق والإلغاء، في غياب تام لأي قناة رقمية للاعتراض الذاتي. السبب الجذري هو انعدام الإشعار الاستباقي، إذ لا يتلقى المتعامل في لحظة تسجيل المخالفة أي بلاغ يتيح له التحقق الفوري، فيتحول ما كان يمكن حسمه آلياً إلى عبء تشغيلي يستنزف موارد بشرية.",
+          "description_en": "Nine customers receive traffic violation notices for vehicles they do not own or during periods when they were not in Fujairah, and are forced each time to contact the police directly for verification and cancellation, with a complete absence of any digital self-dispute channel. The root cause is the lack of proactive notification: at the moment of violation registration, no alert reaches the customer to enable immediate verification, converting what could be resolved automatically into an operational burden consuming human resources.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 4,
+          "title_ar": "13 حالة ناتجة عن فجوة معلوماتية حرجة: جهل بسياسة السرعة وتشتت في الاختصاصات",
+          "title_en": "13 Cases Driven by Critical Information Gap: Unknown Speed Policy and Jurisdictional Confusion",
+          "description_ar": "يتشارك نقطتا احتكاك رئيسيتان في السبب الجذري ذاته — غياب المعلومات — إذ تضم 5 حالات اعتراضاً على مخالفات صحيحة بسبب جهل المتعامل بحدود السرعة المعتمدة في الفجيرة مقارنةً بالإمارات الأخرى، فيما تُمثّل 6 حالات إضافية توجّه متعاملين إلى شرطة الفجيرة في قضايا خارج اختصاصها لغياب دليل توجيه واضح. الحل الفوري المشار إليه في بيانات الدليل الإرشادي هو نشر دليل مرئي لحدود السرعة وخريطة اختصاصات تفاعلية، وهما إجراءان قادران على درء ما لا يقل عن 11 حالة تواصل غير مُبرَّرة سنوياً.",
+          "description_en": "Two primary friction points share the identical root cause — missing information — with 5 cases involving objections to valid violations due to customers' unawareness of Fujairah's speed limits compared to other emirates, and 6 additional cases where customers approach Fujairah Police for matters outside its jurisdiction due to the absence of a clear jurisdictional guide. The immediate fix indicated by guidebook data is publishing a visual speed limit guide and an interactive jurisdiction map — two actions capable of preventing no fewer than 11 unjustified contact cases annually.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 5,
+          "title_ar": "98% إغلاق في الوقت المحدد: طاقة تنفيذية عالية في غياب توجيه استراتيجي سليم",
+          "title_en": "98% On-Time Closure Rate: High Execution Capacity Without Sound Strategic Direction",
+          "description_ar": "أُغلقت 49 حالة من أصل 50 ضمن المدة الزمنية المحددة، بمعدل امتثال للمستوى الخدمي بلغ 98%، مما يُثبت امتلاك الفريق التشغيلي لطاقة تنفيذية عالية. غير أن هذا الأداء الإيجابي لا يُعالج الخلل البنيوي الناجم عن فجوة التصنيف؛ فالفريق يُغلق الحالات بكفاءة، لكنه يعمل على بيانات تُصوّر 100% من عبء العمل الشكوائي على أنه استفسارات، مما يُفقد أي مبادرة تحسين وجهتها الحقيقية.",
+          "description_en": "49 out of 50 cases were closed within the defined timeframe, achieving a service level compliance rate of 98%, demonstrating that the operational team possesses high execution capacity. However, this positive performance does not address the structural dysfunction arising from the classification gap; the team closes cases efficiently, but operates on data that portrays 100% of the complaint workload as inquiries, causing any improvement initiative to lose its true direction.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ],
+      "core_message_ar": "الرسالة الجوهرية: الإخفاق الجذري الذي يكشفه هذا التقرير ليس في جودة الاستجابة — إذ تبلغ نسبة الإغلاق في الوقت المحدد 98% — بل في انعدام الرؤية الحقيقية لطبيعة الطلب، حيث أخفى تصنيف «استفسار» المُطبَّق على 100% من الحالات 34 شكوى فعلية تعكس خللاً تشغيلياً ممنهجاً في منظومة المخالفات المرورية والخدمات الرقمية. معالجة المحركات الثلاثة الكبرى — الإشعار الاستباقي (22 حالة، 44%)، وإتاحة المعلومات (13 حالة)، والخدمة الذاتية الرقمية (7 حالات) — كفيلة بتحويل ما لا يقل عن 42 حالة من تواصل تفاعلي مُكلف إلى قنوات ذاتية صامتة دون تدخل بشري. إعادة التصنيف هذه تُحوّل بيانات شرطة الفجيرة لأول مرة من سجلات إدارية إلى أداة استراتيجية تُمكّن من توجيه الاستثمار التشغيلي بدقة نحو الأسباب الجذرية، لا نحو الأعراض.",
+      "core_message_en": "Core Message: The fundamental failure this report exposes is not in response quality — given a 98% on-time closure rate — but in the complete absence of genuine demand visibility, where the 'inquiry' label applied to 100% of cases concealed 34 actual complaints reflecting a systemic operational dysfunction across the traffic violation and digital services ecosystem. Addressing the three primary drivers — proactive notification (22 cases, 44%), information accessibility (13 cases), and digital self-service (7 cases) — is sufficient to redirect no fewer than 42 cases from costly reactive contact into silent self-service channels requiring no human intervention. This reclassification transforms Fujairah Police's data for the first time from administrative records into a strategic instrument that enables operational investment to be directed with precision toward root causes, not symptoms."
+    }
+  },
+  "methodology": {
+    "heading": "ثانياً: المنهجية وطبيعة المصادر",
+    "body": "اعتمد التحليل على منظومة تصنيف آلية مكوّنة من مرحلتين متتاليتين. تمثّلت المرحلة الأولى في محرك قواعدي (stage2_rules.py) طُبِّق على جميع الحالات الخمسين، إذ يعمل وفق شجرة قرار ذات أولويات مرتّبة كالآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، ثم تُستكمل باقي الحالات بالاستناد إلى تصنيف نوع_المكالمة الأصلي في النظام عند توفّره. وتُحدَّد درجة ثقة لكل تصنيف، فإن بلغت حدّ الثقة المحدد (0.75) أو تجاوزته، أُثبت التصنيف مباشرةً؛ أما الحالات التي تقل درجة ثقتها عن هذا الحد فتُحال إلى المرحلة الثانية. أما المرحلة الثانية فتستعين بنموذج اللغة الكبير (claude-haiku-4-5-20251001) عبر آلية tool-use (stage3_llm.py)، ولم تُحَل إليه أي حالة في هذه الدراسة (0 حالات)، نظراً لأن جميع الحالات الخمسين استوفت حد الثقة في المرحلة الأولى. وفي حال تطبيق هذه المرحلة، تُحال الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 إلى طابور المراجعة البشرية وتُستثنى من إحصاءات التقرير (0 حالات في الدراسة الحالية). يرتكز التصنيف في كلتا المرحلتين على تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: شكوى، وطلب، واستفسار، وشكر وثناء؛ تتفرّع عنها خمسة وعشرون تصنيفاً فرعياً متخصصاً تغطي مختلف نطاقات الخدمة. والمبدأ الجوهري الذي يحكم عملية التصنيف برمّتها هو أن «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+    "tables": [],
+    "analyzed_fields": "تنقسم الحقول المُستخدمة في هذا التحليل إلى مجموعتين: تضم المجموعة الأولى الحقول المنظمة التي يعالجها نظام لوحة المعلومات (PowerBI) باستقلالية عن هذه المنهجية، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. أما المجموعة الثانية، وهي محور هذا التحليل، فتشمل الحقول النصية غير المنظمة، إذ يبلغ متوسط طول حقل تفاصيل_الطلب 363 حرفاً موزّعة بنسبة 72% عربي و28% إنجليزي، فيما يبلغ متوسط طول حقل الحل 102 حرف بالتوزيع اللغوي ذاته. وتكمن أهمية هذين الحقلين في كونهما يكشفان عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي المُسجَّل في نظام CRM تحت حقل نوع_المكالمة.",
+    "raw_data": {
+      "section": "methodology",
+      "sources_table": [
+        {
+          "المصدر": "تحليل الاستفسارات",
+          "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تتضمن حقول نصية غير منظمة تشمل: تفاصيل الحالة، والحلول المتخذة، وأسماء الخدمات، وأوصاف الحالات",
+          "الحجم": "50 حالة مغلقة",
+          "الفترة": "يناير — ديسمبر 2025"
+        },
+        {
+          "المصدر": "دليل خدمات العملاء",
+          "الطبيعة": "دليل رسمي يغطي خدمات المرور والترخيص والخدمات الأمنية، ويُستخدم مرجعاً للتحقق من الأسئلة الشائعة وتحليل فجوات الخدمة",
+          "الحجم": "160 صفحة، 25 سؤالاً شائعاً",
+          "الفترة": "2025"
+        }
+      ],
+      "classification_method_ar": "اعتمد التحليل على منظومة تصنيف آلية مكوّنة من مرحلتين متتاليتين. تمثّلت المرحلة الأولى في محرك قواعدي (stage2_rules.py) طُبِّق على جميع الحالات الخمسين، إذ يعمل وفق شجرة قرار ذات أولويات مرتّبة كالآتي: (1) اعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء، ثم تُستكمل باقي الحالات بالاستناد إلى تصنيف نوع_المكالمة الأصلي في النظام عند توفّره. وتُحدَّد درجة ثقة لكل تصنيف، فإن بلغت حدّ الثقة المحدد (0.75) أو تجاوزته، أُثبت التصنيف مباشرةً؛ أما الحالات التي تقل درجة ثقتها عن هذا الحد فتُحال إلى المرحلة الثانية. أما المرحلة الثانية فتستعين بنموذج اللغة الكبير (claude-haiku-4-5-20251001) عبر آلية tool-use (stage3_llm.py)، ولم تُحَل إليه أي حالة في هذه الدراسة (0 حالات)، نظراً لأن جميع الحالات الخمسين استوفت حد الثقة في المرحلة الأولى. وفي حال تطبيق هذه المرحلة، تُحال الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 إلى طابور المراجعة البشرية وتُستثنى من إحصاءات التقرير (0 حالات في الدراسة الحالية). يرتكز التصنيف في كلتا المرحلتين على تصنيف ثنائي المستوى يضم أربعة أنواع رئيسية هي: شكوى، وطلب، واستفسار، وشكر وثناء؛ تتفرّع عنها خمسة وعشرون تصنيفاً فرعياً متخصصاً تغطي مختلف نطاقات الخدمة. والمبدأ الجوهري الذي يحكم عملية التصنيف برمّتها هو أن «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.»",
+      "analyzed_fields_ar": "تنقسم الحقول المُستخدمة في هذا التحليل إلى مجموعتين: تضم المجموعة الأولى الحقول المنظمة التي يعالجها نظام لوحة المعلومات (PowerBI) باستقلالية عن هذه المنهجية، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة المختصة. أما المجموعة الثانية، وهي محور هذا التحليل، فتشمل الحقول النصية غير المنظمة، إذ يبلغ متوسط طول حقل تفاصيل_الطلب 363 حرفاً موزّعة بنسبة 72% عربي و28% إنجليزي، فيما يبلغ متوسط طول حقل الحل 102 حرف بالتوزيع اللغوي ذاته. وتكمن أهمية هذين الحقلين في كونهما يكشفان عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي المُسجَّل في نظام CRM تحت حقل نوع_المكالمة."
+    }
+  }
+}

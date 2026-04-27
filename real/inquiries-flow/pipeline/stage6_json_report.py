@@ -11,8 +11,7 @@ Structure:
 
 Each section has:
 - id: Unique identifier (section_<num>_<slug>)
-- title: Arabic title
-- title_en: English title
+- title: Section title (language-appropriate for AR/EN versions)
 - level: Heading level (1-3)
 - content: Narrative text
 - tables: Array of data tables
@@ -136,7 +135,10 @@ class JSONReportBuilder:
                 )
         content = body
 
-        core_message = exec_data.get('core_message', '')
+        core_message = (
+            exec_data.get('core_message')
+            or exec_data.get('raw_data', {}).get('core_message_ar', '')
+        )
 
         # Read key_findings from tables[0] (stored as raw list by artifacts)
         # or from raw_data if available
@@ -188,9 +190,8 @@ class JSONReportBuilder:
             ),
             "title": (
                 "أولاً: الملخص التنفيذي — التحليلات الرئيسية"
-                if lang == "ar" else "Executive Summary"
+                if lang == "ar" else "Executive Summary — Key Analyses"
             ),
-            "title_en": "Executive Summary",
             "level": 2,
             "content": content,
             "tables": [],
@@ -204,12 +205,10 @@ class JSONReportBuilder:
                     "النتائج_الرئيسية" if lang == "ar" else "key_findings"
                 ),
                 "title": "النتائج الرئيسية" if lang == "ar" else "Key Findings",
-                "title_en": "Key Findings",
                 "level": 2,
                 "content": core_message,
                 "tables": [findings_table],
-                "charts": [],
-                "subsections": []
+                "charts": []
             }]
 
         return result
@@ -263,16 +262,14 @@ class JSONReportBuilder:
         return {
             "id": self.next_section_id("ثالثا_التحليل_الأول"),
             "title": "ثالثاً: التحليل الأول — خريطة تصنيف الطلبات",
-            "title_en": "Analysis First",
             "level": 2,
             "content": "",
             "tables": [],
             "charts": [],
             "subsections": [
                 {
-                    "id": self.next_section_id("التوزيع_الفعلي"),
+                    "id": self.next_section_id("31_التوزيع_الفعلي"),
                     "title": "3.1 التوزيع الفعلي لأنواع التواصل",
-                    "title_en": "3.1 التوزيع الفعلي لأنواع التواصل",
                     "level": 2,
                     "content": distribution_text,
                     "tables": [distribution_table] if distribution_table else [],
@@ -334,7 +331,6 @@ class JSONReportBuilder:
         return {
             "id": self.next_section_id("خامسا_التحليل_الثالث"),
             "title": "خامساً: التحليل الثالث — تحليل الفجوات الرقمية",
-            "title_en": "Analysis Third",
             "level": 2,
             "content": "تحليل الفجوات الرقمية في الخدمات المتاحة.",
             "tables": [gap_table],
@@ -368,7 +364,6 @@ class JSONReportBuilder:
         return {
             "id": self.next_section_id("سادسا_التحليل_الرابع"),
             "title": "سادساً: التحليل الرابع — الأسئلة الشائعة",
-            "title_en": "FAQs",
             "level": 2,
             "content": "الأسئلة الشائعة المستخرجة من بيانات المتعاملين.",
             "tables": [faq_table],
@@ -377,7 +372,7 @@ class JSONReportBuilder:
         }
 
     def build_methodology_section(self, lang: str = "ar") -> Optional[Dict[str, Any]]:
-        """BUG 1: Build methodology section from stage6 report generation with language support."""
+        """Build methodology section from stage6 report generation with language support."""
         report_sections = self.state.report_sections_en if lang == "en" else self.state.report_sections_ar
         if not report_sections or 'methodology' not in report_sections:
             return None
@@ -397,64 +392,45 @@ class JSONReportBuilder:
 
         if sources_table:
             subsections.append({
-                "id": self.next_section_id("المصادر_المحللة" if lang == "ar" else "sources_analyzed"),
-                "title": "2.1 المصادر المُحلَّلة" if lang == "ar" else "Sources Analyzed",
-                "title_en": "Sources Analyzed",
-                "level": 3,
+                "id": self.next_section_id("21_المصادر_المحللة" if lang == "ar" else "21_sources_analyzed"),
+                "title": "2.1  المصادر المُحلَّلة" if lang == "ar" else "2.1  Sources Analyzed",
+                "level": 2,
                 "content": "",
                 "tables": [sources_table],
-                "charts": [],
-                "subsections": []
+                "charts": []
             })
 
-        # BUG 2: 2.2 Classification methodology — prioritize LLM content keys
-        if lang == "ar":
-            classification_content = (
-                method_data.get('classification_method_ar') or
-                method_data.get('body', '')
-            )
-        else:
-            classification_content = (
-                method_data.get('classification_method_en') or
-                method_data.get('body', '')
-            )
+        # 2.2 Classification methodology — read from language-appropriate dict
+        classification_content = (
+            method_data.get('classification_method') or
+            method_data.get('body', '')
+        )
         subsections.append({
-            "id": self.next_section_id("منهجية_التصنيف" if lang == "ar" else "classification_methodology"),
-            "title": "2.2 منهجية التصنيف" if lang == "ar" else "Classification Methodology",
-            "title_en": "Classification Methodology",
-            "level": 3,
+            "id": self.next_section_id("22_منهجية_التصنيف" if lang == "ar" else "22_classification_methodology"),
+            "title": "2.2 منهجية التصنيف" if lang == "ar" else "2.2 Classification Methodology",
+            "level": 2,
             "content": classification_content,
             "tables": [],
-            "charts": [],
-            "subsections": []
+            "charts": []
         })
 
-        # BUG 2: 2.3 Analyzed fields — prioritize LLM content keys
-        if lang == "ar":
-            fields_content = (
-                method_data.get('analyzed_fields_ar') or
-                method_data.get('analyzed_fields', '')
-            )
-        else:
-            fields_content = (
-                method_data.get('analyzed_fields_en') or
-                method_data.get('analyzed_fields', '')
-            )
+        # 2.3 Analyzed fields — read from language-appropriate dict
+        fields_content = (
+            method_data.get('analyzed_fields') or
+            method_data.get('body', '')
+        )
         subsections.append({
-            "id": self.next_section_id("الحقول_المحللة" if lang == "ar" else "analyzed_fields"),
-            "title": "2.3 الحقول المُحلَّلة" if lang == "ar" else "Analyzed Fields",
-            "title_en": "Analyzed Fields",
-            "level": 3,
+            "id": self.next_section_id("23_الحقول_المحللة" if lang == "ar" else "23_analyzed_fields"),
+            "title": "2.3 الحقول المُحلَّلة" if lang == "ar" else "2.3 Analyzed Fields",
+            "level": 2,
             "content": fields_content,
             "tables": [],
-            "charts": [],
-            "subsections": []
+            "charts": []
         })
 
         return {
-            "id": self.next_section_id("ثانيا_المنهجية" if lang == "ar" else "methodology"),
+            "id": self.next_section_id("ثانيا_المنهجية_وطبيعة" if lang == "ar" else "methodology"),
             "title": "ثانياً: المنهجية وطبيعة المصادر" if lang == "ar" else "Methodology and Data Sources",
-            "title_en": "Methodology",
             "level": 2,
             "content": "",
             "tables": [],
@@ -513,10 +489,9 @@ class JSONReportBuilder:
             type_title = type_titles.get(top_level, f"أنماط {top_level}")
 
             subsections.append({
-                "id": self.next_section_id(f"أنماط_{top_level}"),
+                "id": self.next_section_id(f"3_{len(subsections)+1}_أنماط_{top_level}"),
                 "title": f"3.{len(subsections)+1} {type_title}",
-                "title_en": f"Patterns - {top_level}",
-                "level": 3,
+                "level": 2,
                 "content": f"أنماط {type_title} الرئيسية ({type_total} حالة إجمالية)",
                 "tables": [pattern_table],
                 "charts": [],
@@ -530,10 +505,9 @@ class JSONReportBuilder:
         return {
             "id": self.next_section_id("ثالثا_تحليل_الأنماط"),
             "title": "ثالثاً: تفصيل الأنماط حسب نوع التصنيف",
-            "title_en": "Patterns Analysis by Type",
             "level": 2,
             "content": "الأنماط الرئيسية المكتشفة في البيانات، مجمعة حسب نوع التصنيف (شكوى، طلب، استفسار).",
-            "tables": [],  # Tables in subsections
+            "tables": [],
             "charts": [],
             "subsections": subsections
         }

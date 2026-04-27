@@ -1,0 +1,379 @@
+{
+  "extraction_version": 1,
+  "document_name": "تقرير تحليل استفسارات المتعاملين — January — December 2025",
+  "document_path": "",
+  "metadata": {
+    "title": "تقرير تحليل استفسارات المتعاملين — January — December 2025",
+    "author": "AI Analysis Pipeline",
+    "created": "2026-04-23T22:50:57.285405",
+    "modified": "2026-04-23T22:50:57.285727",
+    "total_paragraphs": 100,
+    "total_tables": 8
+  },
+  "charts": [
+    {
+      "type": "bar",
+      "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
+      "categories": [
+        "شكوى",
+        "استفسار",
+        "طلب",
+        "شكر وثناء"
+      ],
+      "series": [
+        {
+          "name": "التصنيف الأصلي",
+          "data": [
+            0.0,
+            78.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "التصنيف الصحيح",
+          "data": [
+            40.0,
+            46.0,
+            13.0,
+            1.0
+          ]
+        }
+      ],
+      "colors": [
+        "#2E5090",
+        "#B68A35"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "id": "section_1_أولا_الملخص_التنفيذي",
+      "title": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+      "title_en": "Executive Summary",
+      "level": 2,
+      "content": "يُقدّم هذا التقرير تحليلاً ذكياً مُندمجاً لـ 100 حالة مغلقة من بيانات CRM لشرطة الفجيرة January — December 2025 (يناير—مارس). الهدف ليس عرض الأرقام، بل تحويل البيانات إلى قرارات ورؤى قابلة للتنفيذ. المُستجد الجوهري: بعد تطبيق معايير التصنيف الدقيقة التي تُميّز بين الشكوى والطلب والاستفسار، تغيّرت الصورة بالكامل — الشكاوى باتت تُمثّل 40.0% من عبء العمل الفعلي.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_2_النتائج_الرئيسية",
+          "title": "النتائج الرئيسية",
+          "title_en": "النتائج الرئيسية",
+          "level": 2,
+          "content": "الرسالة الجوهرية: بعد إعادة تصنيف دقيقة باستخدام معايير واضحة، تغيرت الصورة بالكامل عن الواقع الأصلي.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "الاكتشاف",
+                "الوصف",
+                "مستوى الأهمية"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "الاكتشاف": "تصنيف غير دقيق بنسبة 22.0%",
+                  "الوصف": "22 من 100 حالة كانت مُصنَّفة أصلاً بشكل غير صحيح.",
+                  "مستوى الأهمية": "🔴 حرجة"
+                },
+                {
+                  "#": "2",
+                  "الاكتشاف": "الشكاوى تهيمن بـ 40.0% على عبء العمل",
+                  "الوصف": "الشكاوى تُمثّل 40 حالة (40.0%) من العبء الفعلي.",
+                  "مستوى الأهمية": "🔴 حرجة"
+                }
+              ],
+              "row_count": 2,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": [],
+          "subsections": []
+        }
+      ]
+    },
+    {
+      "id": "section_6_ثانيا_المنهجية",
+      "title": "ثانياً: المنهجية وطبيعة المصادر",
+      "title_en": "Methodology",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_3_المصادر_المحللة",
+          "title": "2.1 المصادر المُحلَّلة",
+          "title_en": "Sources Analyzed",
+          "level": 3,
+          "content": "",
+          "tables": [
+            [
+              {
+                "المصدر": "تحليل الاستفسارات",
+                "الطبيعة": "بيانات نظام إدارة علاقات العملاء (CRM)، تشمل حقولاً نصية غير منظمة تتضمن تفاصيل الحالات، والحلول المتخذة، وأسماء الخدمات، وأوصاف الطلبات",
+                "الحجم": "100 حالة مغلقة",
+                "الفترة": "يناير — ديسمبر 2025"
+              },
+              {
+                "المصدر": "دليل خدمات العملاء",
+                "الطبيعة": "دليل رسمي يغطي خدمات المرور والترخيص والأمن، ويُستخدم مرجعاً للتحقق من صحة الأسئلة الشائعة وتحليل الفجوات في الخدمات المقدمة",
+                "الحجم": "160 صفحة، 25 سؤالاً وجواباً",
+                "الفترة": "2025"
+              }
+            ]
+          ],
+          "charts": [],
+          "subsections": []
+        },
+        {
+          "id": "section_4_منهجية_التصنيف",
+          "title": "2.2 منهجية التصنيف",
+          "title_en": "Classification Methodology",
+          "level": 3,
+          "content": "اعتمدت منهجية التصنيف على خط معالجة مكوَّن من مرحلتين متتاليتين، يُطبَّقان وفق تسلسل محدد على جميع الحالات المُحلَّلة. يستند التصنيف في مجمله إلى المبدأ التعريفي الجوهري الآتي: \"طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء.\" وتتألف منظومة التصنيف من أربعة أنواع رئيسية هي: الشكوى، والطلب، والاستفسار، وشكر وثناء، يندرج تحتها خمسة وعشرون تصنيفاً فرعياً متخصصاً موزَّعاً على هذه الأنواع الأربعة.\n\nالمرحلة الأولى — محرك القواعد (stage2_rules.py): طُبِّق هذا المحرك على جميع الحالات المئة عبر شجرة قرارات ذات أولويات مرتَّبة تنازلياً على النحو الآتي: (1) الاعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء. وفي حال تعذَّر تحديد التصنيف وفق هذه الأولويات، يُعتمد تصنيف حقل \"نوع_المكالمة\" الوارد في نظام CRM مرجعاً احتياطياً. تُصنَّف الحالة مباشرةً إذا بلغت درجة الثقة عتبة 0.75 أو تجاوزتها، وتُحال الحالات التي تقل درجة ثقتها عن هذه العتبة إلى المرحلة الثانية.\n\nالمرحلة الثانية — التصنيف بالنموذج اللغوي الكبير (stage3_llm.py): تُطبَّق هذه المرحلة حصراً على الحالات التي رفضها محرك القواعد، وقد بلغ عددها صفراً في الدورة الحالية. يعتمد النموذج المستخدم (claude-haiku-4-5-20251001) على آلية استدعاء الأدوات (tool-use) لتطبيق منظومة التصنيف ثنائية المستوى ذاتها. وتُحال الحالات التي تقل درجة ثقة النموذج فيها عن 0.65 إلى قائمة المراجعة البشرية وتُستثنى من إحصاءات التقرير؛ وقد بلغ عدد هذه الحالات صفراً في المرحلة الراهنة.",
+          "tables": [],
+          "charts": [],
+          "subsections": []
+        },
+        {
+          "id": "section_5_الحقول_المحللة",
+          "title": "2.3 الحقول المُحلَّلة",
+          "title_en": "Analyzed Fields",
+          "level": 3,
+          "content": "شملت عملية التحليل مجموعتين من الحقول المستخرجة من نظام إدارة علاقات العملاء: تضم المجموعة الأولى الحقول المنظمة التي تُعالجها لوحة المتابعة (PowerBI) بصورة مستقلة عن خط المعالجة الحالي، وهي: رقم_الطلب، وتاريخ_الإنشاء، وقناة_تقديم_الخدمة، والخدمة_الرئيسية، ونوع_المكالمة، والجنسية، والإدارة_المختصة. أما المجموعة الثانية فتشمل الحقول النصية غير المنظمة التي تُمثِّل محور هذا التحليل، وتتكوَّن من حقلَين اثنين: حقل تفاصيل_الطلب بمتوسط طول يبلغ 378 حرفاً بتوزيع لغوي قدره 72% عربي و28% إنجليزي، وحقل الحل بمتوسط طول يبلغ 112 حرفاً بالتوزيع اللغوي ذاته. وتكمن أهمية هذين الحقلين في كونهما يكشفان عن الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف المبدئي المسجَّل في حقل نوع_المكالمة بنظام CRM.",
+          "tables": [],
+          "charts": [],
+          "subsections": []
+        }
+      ]
+    },
+    {
+      "id": "section_7_ثالثا_التحليل_الأول",
+      "title": "ثالثاً: التحليل الأول — خريطة تصنيف الطلبات",
+      "title_en": "Analysis First",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_8_التوزيع_الفعلي",
+          "title": "3.1 التوزيع الفعلي لأنواع التواصل",
+          "title_en": "3.1 التوزيع الفعلي لأنواع التواصل",
+          "level": 2,
+          "content": "تحليل 100 حالة مغلقة يكشف صورةً مغايرةً تماماً للتصنيف الأصلي. بعد تطبيق معيار التمييز الدقيق بين الشكوى والطلب والاستفسار:",
+          "tables": [
+            {
+              "columns": [
+                "نوع التواصل",
+                "العدد",
+                "النسبة",
+                "تغيُّر التصنيف",
+                "قابلية التحويل الرقمي"
+              ],
+              "rows": [
+                {
+                  "نوع التواصل": "شكوى",
+                  "العدد": "40",
+                  "النسبة": "40.0%",
+                  "تغيُّر التصنيف": "تم إعادة تصنيف 40 حالة",
+                  "قابلية التحويل الرقمي": "مسار رقمي"
+                },
+                {
+                  "نوع التواصل": "استفسار",
+                  "العدد": "46",
+                  "النسبة": "46.0%",
+                  "تغيُّر التصنيف": "تم إعادة تصنيف 46 حالة",
+                  "قابلية التحويل الرقمي": "خدمة ذاتية"
+                },
+                {
+                  "نوع التواصل": "طلب",
+                  "العدد": "13",
+                  "النسبة": "13.0%",
+                  "تغيُّر التصنيف": "تم إعادة تصنيف 13 حالة",
+                  "قابلية التحويل الرقمي": "خدمة ذاتية"
+                },
+                {
+                  "نوع التواصل": "شكر وثناء",
+                  "العدد": "1",
+                  "النسبة": "1.0%",
+                  "تغيُّر التصنيف": "تم إعادة تصنيف 1 حالة",
+                  "قابلية التحويل الرقمي": "خدمة ذاتية"
+                }
+              ],
+              "row_count": 4,
+              "col_count": 5,
+              "original_index": 1
+            }
+          ],
+          "charts": [
+            {
+              "type": "bar",
+              "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
+              "categories": [
+                "شكوى",
+                "استفسار",
+                "طلب",
+                "شكر وثناء"
+              ],
+              "series": [
+                {
+                  "name": "التصنيف الأصلي",
+                  "data": [
+                    0.0,
+                    78.0,
+                    0.0,
+                    0.0
+                  ]
+                },
+                {
+                  "name": "التصنيف الصحيح",
+                  "data": [
+                    40.0,
+                    46.0,
+                    13.0,
+                    1.0
+                  ]
+                }
+              ],
+              "colors": [
+                "#2E5090",
+                "#B68A35"
+              ]
+            }
+          ],
+          "subsections": []
+        }
+      ]
+    },
+    {
+      "id": "section_9_خامسا_التحليل_الثالث",
+      "title": "خامساً: التحليل الثالث — تحليل الفجوات الرقمية",
+      "title_en": "Analysis Third",
+      "level": 2,
+      "content": "تحليل الفجوات الرقمية في الخدمات المتاحة.",
+      "tables": [
+        {
+          "columns": [
+            "الموضوع",
+            "الحالات",
+            "وضع التطبيق / الموقع الحالي",
+            "نوع الفجوة",
+            "التوصية"
+          ],
+          "rows": [
+            {
+              "الموضوع": "Traffic Violations Inquiry",
+              "الحالات": "5",
+              "وضع التطبيق / الموقع الحالي": "Partially Covered",
+              "نوع الفجوة": "🔴 حرجة",
+              "التوصية": "1. Add a dedicated FAQ section explaining how to check traffic violations digitally via the MOI app. 2. Publish a clear, step-by-step guide for querying violations, understanding validity, and applying for a discount — in plain language. 3. Implement proactive SMS/push notifications to vehicle owners immediately upon violation issuance, including violation type, date, amount, and discount eligibility window. 4. The discount service (خفض المخالفات) is only listed as a service center channel — expand to digital channels and document clearly in the guidebook. 5. Add a digital self-service lookup tool reference prominently in the guidebook."
+            },
+            {
+              "الموضوع": "Vehicle & License Plate Services",
+              "الحالات": "5",
+              "وضع التطبيق / الموقع الحالي": "Partially Covered",
+              "نوع الفجوة": "🔴 حرجة",
+              "التوصية": "1. Create a dedicated, illustrated step-by-step in-app guide for the plate selection and payment flow, including screenshots of each screen. 2. Add a clear section on vehicle ownership document (ملكية) delivery timelines: specify estimated delivery days by channel (delivery company vs. service center pickup). 3. Add an FAQ entry: 'How do I select and pay for a license plate in the app?' with numbered steps. 4. Send proactive SMS/email notifications at each stage: application received, plate manufactured, plate dispatched, document ready for pickup/delivery. 5. Clarify the difference between plate collection via 'مصنع الأرقام' vs. home delivery in plain language."
+            },
+            {
+              "الموضوع": "Weapons Permit Status",
+              "الحالات": "4",
+              "وضع التطبيق / الموقع الحالي": "Missing",
+              "نوع الفجوة": "🔴 حرجة",
+              "التوصية": "1. Add a dedicated weapons permit (ترخيص السلاح) section to the guidebook covering: application steps, documents required, coordinating authority (Weapons & Explosives Directorate), and typical approval timelines. 2. Implement an automated status notification system (SMS/email) at each stage: application submitted, under review, approved/rejected, ready for collection. 3. Provide a self-service status inquiry link or in-app tracker so customers do not need to call. 4. Add a clear FAQ: 'How long does a weapons permit approval take?' and 'How will I be notified of my application status?'. 5. Document the inter-directorate coordination process so agents can provide consistent answers."
+            },
+            {
+              "الموضوع": "Technical & Application Issues",
+              "الحالات": "2",
+              "وضع التطبيق / الموقع الحالي": "Missing",
+              "نوع الفجوة": "🟡 عالية",
+              "التوصية": "1. Add a 'Troubleshooting' or 'Common Technical Issues' section to the guidebook and app help center, addressing: how to correct a wrong selection before submission, how to resolve UAE PASS / digital identity linking errors, and what to do if the app throws an error mid-transaction. 2. Introduce an in-app guided correction flow that allows users to cancel or amend selections within a defined window without agent intervention. 3. Add a visible 'Help' or 'Chat Support' button in the app for technical issues with a clear escalation path. 4. Train agents with a standardized script for the most common app errors so resolution is faster and consistent. 5. Collect and log error types systematically to feed into app release fixes."
+            },
+            {
+              "الموضوع": "Driving License Replacement Eligibility",
+              "الحالات": "1",
+              "وضع التطبيق / الموقع الحالي": "Partially Covered",
+              "نوع الفجوة": "🟡 عالية",
+              "التوصية": "1. Add a clear eligibility matrix or table to the guidebook specifying which nationalities are eligible to exchange their foreign license directly, which must take the full driving test, and which fall under GCC special rules — referencing the applicable federal traffic regulation. 2. Add a prominent FAQ: 'Can I exchange my foreign driving license? What are the nationality requirements?' with a simple yes/no eligibility checker concept. 3. Publish the list of approved countries for direct license exchange on the app, website, and guidebook in plain language (avoid bureaucratic phrasing). 4. Add a pre-qualification step in the app before the service application so ineligible customers are informed immediately with the correct alternative action. 5. Ensure the 6-month post-expiry rule for GCC licenses is prominently highlighted as a key condition."
+            }
+          ],
+          "row_count": 5,
+          "col_count": 5,
+          "original_index": 2
+        }
+      ],
+      "charts": [],
+      "subsections": []
+    },
+    {
+      "id": "section_10_سادسا_التحليل_الرابع",
+      "title": "سادساً: التحليل الرابع — الأسئلة الشائعة",
+      "title_en": "FAQs",
+      "level": 2,
+      "content": "الأسئلة الشائعة المستخرجة من بيانات المتعاملين.",
+      "tables": [
+        {
+          "columns": [
+            "#",
+            "السؤال",
+            "الإجابة المقترحة",
+            "التكرار"
+          ],
+          "rows": [
+            {
+              "#": "1",
+              "السؤال": "I received a traffic fine in Fujairah but I was not there — what should I do?",
+              "الإجابة المقترحة": "File a complaint through the MOI portal with your fine number. The traffic department will verify the vehicle data against their records. In many cases, fines are found to be data-entry errors and are cleared automatically after investigation.",
+              "التكرار": "16"
+            },
+            {
+              "#": "2",
+              "السؤال": "My traffic fine is confirmed — can I get a discount?",
+              "الإجابة المقترحة": "Yes. You can visit the Traffic Administration in person and submit a formal discount request. Discounts are not available online and require an in-person application.",
+              "التكرار": "8"
+            },
+            {
+              "#": "3",
+              "السؤال": "Is a Fujairah driving licence valid across all UAE emirates?",
+              "الإجابة المقترحة": "Yes. A Fujairah driving licence is valid and recognised in all UAE emirates.",
+              "التكرار": "1"
+            },
+            {
+              "#": "4",
+              "السؤال": "I paid the vehicle registration fee but cannot complete registration on the MOI app — what should I do?",
+              "الإجابة المقترحة": "The issue is usually related to missing or outdated insurance data in the system. Contact the traffic department to update your vehicle data and you can then complete the registration.",
+              "التكرار": "10"
+            },
+            {
+              "#": "5",
+              "السؤال": "I renewed my driving licence but did not receive it — why?",
+              "الإجابة المقترحة": "Your licence cannot be issued until you upload a valid personal photo to your profile in the MOI system. Check your registered mobile number for an SMS notification requesting the photo upload, then complete this step to receive your licence.",
+              "التكرار": "5"
+            },
+            {
+              "#": "6",
+              "السؤال": "I applied for a weapon permit but the request has been pending for months — what is the status?",
+              "الإجابة المقترحة": "Weapon permit approvals are decided by the specialised committee at the Weapons and Explosives Directorate. The process requires inter-departmental coordination. You may follow up by contacting the directorate directly. If the request is blocking a new application, coordinate with the department to cancel or update it.",
+              "التكرار": "3"
+            },
+            {
+              "#": "7",
+              "السؤال": "How do I file a criminal complaint (fraud, theft, assault)?",
+              "الإجابة المقترحة": "Criminal complaints must be filed through the police station directly or via the designated criminal reporting channel, not through the MOI general complaints portal. Visit the nearest police station or use the official smart app criminal reporting feature.",
+              "التكرار": "7"
+            }
+          ],
+          "row_count": 7,
+          "col_count": 4,
+          "original_index": 3
+        }
+      ],
+      "charts": [],
+      "subsections": []
+    }
+  ]
+}

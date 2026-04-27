@@ -1,0 +1,132 @@
+{
+  "sections": [
+    {
+      "id": "section_15_أولا_الملخص_التنفيذي",
+      "title": "Executive Summary",
+      "title_en": "Executive Summary",
+      "level": 2,
+      "content": "This report presents an in-depth analysis of 10 contact cases received between May and December 2025, drawn from two primary sources: the CRM system export of unformatted texts and the Services Guidebook and FAQ; with the explicit purpose of converting raw data into actionable operational decisions — not presenting numbers for their own sake. The core discovery: reclassification revealed that 60% of cases were entirely mislabelled as 'Inquiries' in the CRM, while actual review showed that complaints and requests account for 60% of real contact volume — meaning the operational system was responding to a distorted picture of customer needs.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_16_النتائج_الرئيسية",
+          "title": "Key Findings",
+          "title_en": "Key Findings",
+          "level": 3,
+          "content": "Core Message: The systemic failure the data exposes is not in operational response — it is in information: 60% of cases were mislabelled because the services guidebook fully covers zero out of 7 identified gaps, with an average coverage of only 23.75%, forcing customers to call rather than self-serve. Addressing these information gaps and activating the proactive notification framework — which applies to 4 of the 7 identified gaps — has the capacity to redirect a substantial share of inbound contact volume toward self-sufficient digital pathways. What this corrected reclassification enables for the first time is a service strategy built on the actual reality of customer needs — not on distorted CRM data that was concealing two-thirds of the real complaint and request volume.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Discovery",
+                "Description",
+                "Importance Level"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Discovery": "60% Misclassification Rate — Critical Data Quality Gap",
+                  "Description": "6 out of 10 cases were originally labelled as 'Inquiry' in the CRM system; however, reclassification revealed that the actual distribution comprises 4 complaints, 4 inquiries, and 2 requests — meaning the system failed to distinguish between one-third of contact types correctly. No comparative data from prior periods is available for this report, and accordingly the 60% rate stands as a self-evident data quality gap requiring immediate systematic remediation.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "2",
+                  "Discovery": "Inquiries and Complaints Tied at 40% Each — Critical Workload Concentration",
+                  "Description": "The 'Inquiry' type leads with 4 cases representing 40% of total contacts post-reclassification, compared to 100% in the system's original labelling — exposing a severe bias in frontline data recording. The top complaint topics cluster around inter-emirate license procedures and discount mechanisms (3 cases) and Fujairah speed limits with vehicle data verification (2 cases), revealing that informational ambiguity in traffic-related matters is the primary driver of contact volume.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "3",
+                  "Discovery": "3 Cases with No Clear Digital Path — Critical Gap in License and Fine Procedures",
+                  "Description": "Three cases concern customers' lack of knowledge regarding inter-emirate approved license procedures and the mechanism for paying fines and applying discounts — representing the single highest-volume friction cluster at 30% of total cases. The root cause is 'missing information': the current services guidebook covers only 35% of this topic with a critically weak match confidence of 0.45, forcing customers into direct contact rather than self-serving through published content.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "4",
+                  "Discovery": "3 Cases Driven by Absence of Proactive Notification — An Operationally Fixable Gap",
+                  "Description": "The two friction points concerning lack of briefing on weapons license committee review stages (1 case) and absence of automatic status notifications for long-pending applications (1 case) share a single root cause — 'no proactive notification' — and both are rated as high severity. The data indicates that 4 out of 7 identified gaps (57%) are addressable through a multi-channel automated notification system, meaning a single technical investment could absorb a substantial portion of incoming contact volume.",
+                  "Importance Level": "🟡 High"
+                },
+                {
+                  "#": "5",
+                  "Discovery": "100% On-Time Case Closure — Strong Execution Capacity Awaiting Strategic Direction",
+                  "Description": "All 10 cases were closed within defined time standards at a rate of 100%, demonstrating strong operational efficiency in frontline execution. However, this positive performance does not address the structural gap of the 60% misclassification rate; responding quickly to distorted data does not correct planning decisions — rather, it confirms that the system possesses the execution capacity needed to implement reform once the correct strategic direction is established.",
+                  "Importance Level": "🟢 Positive"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_17_ثانيا_المنهجية_وطبيعة",
+      "title": "Methodology and Data Sources",
+      "title_en": "Methodology and Data Sources",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_18_21_المصادر_المحللة",
+          "title": "2.1 Sources Analyzed",
+          "title_en": "2.1 Sources Analyzed",
+          "level": 3,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Source",
+                "Nature",
+                "Size",
+                "Period"
+              ],
+              "rows": [
+                {
+                  "Source": "Inquiry Analysis",
+                  "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+                  "Size": "10 closed cases",
+                  "Period": "May — December 2025"
+                },
+                {
+                  "Source": "Customer Services Guidebook",
+                  "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+                  "Size": "160 pages, 25 FAQs",
+                  "Period": "2025"
+                }
+              ],
+              "row_count": 2,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_19_22_منهجية_التصنيف",
+          "title": "2.2 Classification Methodology",
+          "title_en": "2.2 Classification Methodology",
+          "level": 3,
+          "content": "The classification methodology employed a two-stage pipeline applied to all ten cases. In Stage 1, the rule-based engine (stage2_rules.py) processed every case through a priority decision tree ordered as follows: (1) Objection to a traffic violation, (2) Submission of a security or traffic report, (3) Request for a weapons permit or licence, (4) Complaint of non-receipt of service, (5) Complaint of a technical or system error, (6) Complaint of processing delay, (7) Enquiry about licences and vehicles, (8) Commendation and appreciation; where none of these priorities applied, the CRM field نوع_المكالمة was used as the default mapping. Cases reaching a confidence score of 0.75 or above were classified directly; those falling below this threshold were queued for Stage 2. In Stage 2, the large language model (stage3_llm.py) — utilising the claude-haiku-4-5-20251001 model — classified referred cases via tool-use against a two-level taxonomy comprising four top-level types (Complaint, Request, Enquiry, and Commendation) distributed across twenty-five domain-specific sub-classifications. No cases were referred to this stage in the current batch, and no cases were routed to the human review queue reserved for instances where the model's confidence falls below 0.65 and which are excluded from report counts. The following core definitional principle governs all classification stages: «The nature of what is requested — not the wording — is the decisive criterion. A case expressing dissatisfaction is classified as a complaint even if it contains a request for action.»",
+          "tables": [],
+          "charts": []
+        },
+        {
+          "id": "section_20_23_الحقول_المحللة",
+          "title": "2.3 Analyzed Fields",
+          "title_en": "2.3 Analyzed Fields",
+          "level": 3,
+          "content": "The data analysed encompassed two groups of fields. The first group comprises structured fields — namely: رقم_الطلب (case number), تاريخ_الإنشاء (creation date), قناة_تقديم_الخدمة (service submission channel), الخدمة_الرئيسية (primary service), نوع_المكالمة (call type), الجنسية (nationality), and الإدارة المختصة (responsible department) — which are handled through interactive dashboards (PowerBI) and fall outside the scope of the current pipeline. The second group comprises the unstructured fields that constitute the focus of this analysis: the field تفاصيل_الطلب (case details), averaging 434 characters per case with a language distribution of 72% Arabic and 28% English, and the field الحل (resolution), averaging 102 characters per case with an identical language distribution of 72% Arabic and 28% English; together, these two fields reveal the true nature of each case beyond the original classification label recorded in the CRM field نوع_المكالمة.",
+          "tables": [],
+          "charts": []
+        }
+      ]
+    }
+  ]
+}

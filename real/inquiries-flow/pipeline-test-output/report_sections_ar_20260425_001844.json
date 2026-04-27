@@ -1,0 +1,110 @@
+{
+  "executive_summary": {
+    "heading": "أولاً: الملخص التنفيذي — التحليلات الرئيسية",
+    "body": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 10 حالات تواصل مسجّلة خلال الفترة الممتدة من مايو حتى ديسمبر 2025، مستقاةً من مصدرَين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة؛ بهدف تحويل البيانات الخام إلى قرارات تشغيلية قابلة للتنفيذ، لا مجرد إحصاءات. المُستجد الجوهري: النظام يُصنّف 100% من الحالات على أنها «استفسارات»، غير أن إعادة التصنيف كشفت أن 60% منها تنطوي فعلياً على شكاوى وطلبات — مما يعني أن المنظومة تُخفي عبئاً تشغيلياً حقيقياً خلف تصنيف مُضلِّل.",
+    "tables": [
+      [
+        {
+          "number": 1,
+          "title_ar": "فجوة جودة البيانات بنسبة 60%: نظام الـ CRM يُخفي الشكاوى والطلبات",
+          "title_en": "60% Data Quality Gap: CRM System Conceals Complaints and Requests",
+          "description_ar": "سجّل نظام الـ CRM جميع الحالات العشر باعتبارها «استفسارات»، إلا أن إعادة التصنيف أثبتت أن 6 حالات من أصل 10 تنتمي إلى فئات مغايرة: 4 شكاوى و2 طلبات — أي أن التصنيف الأصلي كان مخطئاً بنسبة 60% من إجمالي الحالات. لا تتوفر بيانات مقارنة لفترات سابقة، مما يجعل هذا الخلل قيمةً مرجعية حرجة تكشف عن غياب منهجية تصنيف موثوقة في المنظومة الحالية.",
+          "description_en": "The CRM system recorded all ten cases as 'inquiries', yet reclassification demonstrated that 6 out of 10 cases belong to different categories: 4 complaints and 2 requests — meaning the original classification was incorrect for 60% of total cases. No comparative data from prior periods is available, making this deficiency a critical baseline that exposes the absence of a reliable classification methodology within the current system.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الاستفسارات تهيمن بـ 40% بعد التصحيح — مع تكتّل شكاوى بنفس الحجم",
+          "title_en": "Inquiries Lead at 40% Post-Reclassification — Matched by Equal Complaint Cluster",
+          "description_ar": "بعد إعادة التصنيف، أصبحت الاستفسارات النوع الأكثر شيوعاً بواقع 4 حالات من أصل 10 (40%)، مقارنةً بتصنيف CRM الأصلي الذي نسب 100% من الحالات إليها — فارقٌ جوهري يكشف عن تشوّه هيكلي عميق. اللافت للنظر أن الشكاوى جاءت بنفس الحجم (4 حالات — 40%) وتتمحور حول فئتَين محوريّتَين: المخالفات المرورية وترخيص الأسلحة، مما يُشير إلى أن جُلّ الاحتكاك التشغيلي مُتمركز في خدمتَين بعينهما تستدعيان أولوية فورية.",
+          "description_en": "Following reclassification, inquiries became the most frequent type with 4 out of 10 cases (40%), compared to the original CRM labelling of 100% — a structural distortion of significant magnitude. Notably, complaints arrived at an identical volume (4 cases — 40%) and centre on two focal subcategories: traffic violations and weapons licensing, indicating that the bulk of operational friction is concentrated in precisely two services requiring immediate priority.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "3 حالات حرجة: غياب آلية الاعتراض الإلكتروني على المخالفات يُجبر المتعامل على الحضور الشخصي",
+          "title_en": "3 Critical Cases: Absence of Electronic Violation Dispute Channel Forces In-Person Attendance",
+          "description_ar": "ثلاث حالات تعكس نقطة احتكاك واحدة بالغة الأثر: المتعامل لا يعلم بسبب المخالفة أو يعتقد أنها خاطئة، ولا توجد آلية إلكترونية واضحة للاعتراض، مع تغطية لا تتجاوز 35% في الدليل الإرشادي ومعامل مطابقة بلغ 0.65 فحسب. السبب الجذري هو غياب قناة إلكترونية (missing_info)، إذ يقتصر الدليل على إحالة المتعامل إلى مراكز الخدمة بساعات عمل محدودة (07:30–15:30)، مما يُشكّل حاجزاً فعلياً للوصول يدفع إلى تكرار التواصل مع الدعم بدلاً من التسوية الذاتية.",
+          "description_en": "Three cases reflect a single high-impact friction point: the customer is unaware of the violation reason or believes it to be erroneous, with no clear electronic dispute mechanism available, guidebook coverage not exceeding 35%, and a match confidence of only 0.65. The root cause is a missing information and absent digital channel (missing_info), as the guidebook restricts customers to physical service centres during limited hours (07:30–15:30), creating a tangible access barrier that drives repeated support contacts instead of self-service resolution.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "6 حالات ناتجة عن غياب الإشعار الاستباقي: الطلبات المعلقة وأخطاء الدفع تُعطّل رحلة المتعامل",
+          "title_en": "6 Cases Driven by Absence of Proactive Notification: Pending Requests and Payment Errors Disrupt the Customer Journey",
+          "description_ar": "نقطتا احتكاك مترابطتان تُفسّران 6 حالات: الطلبات المعلقة لفترات طويلة دون رد واضح (3 حالات، غياب إشعار استباقي) وأخطاء الدفع الإلكتروني دون إصدار الوثيقة (3 حالات، خلل في المنصة)، مع تغطية لا تتعدى 5% و30% على التوالي في الدليل الإرشادي. البيانات تُظهر أن تفعيل نظام إشعارات تلقائية بحالة الطلبات — المُتاح تقنياً في 4 من أصل 5 فجوات محددة (80%) — كفيل بإزالة الدافع الرئيسي للتواصل المتكرر وتخفيف الضغط على قنوات الدعم بصورة فورية.",
+          "description_en": "Two interconnected friction points account for 6 cases: pending requests without clear response for extended periods (3 cases, no proactive notification) and electronic payment errors without document issuance (3 cases, platform bug), with guidebook coverage not exceeding 5% and 30% respectively. The data shows that activating an automated application-status notification system — technically feasible across 4 out of 5 identified gaps (80%) — is sufficient to eliminate the primary driver of repeated contact and immediately reduce pressure on support channels.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 5,
+          "title_ar": "100% إغلاق في الوقت المحدد — طاقة تنفيذية موجودة لم تُوجَّه بعد نحو الإصلاح الهيكلي",
+          "title_en": "100% On-Time Closure — Execution Capacity Exists but Has Not Yet Been Directed Toward Structural Reform",
+          "description_ar": "أُغلقت جميع الحالات العشر ضمن مستوى الخدمة المحدد، محققةً معدل امتثال 100% — وهو مؤشر أداء تشغيلي استثنائي يعكس كفاءة الفرق الميدانية في الاستجابة. غير أن هذا الأداء المتميز لا يُعالج الخلل الجذري المتمثل في تصنيف مضلل بنسبة 60% وفجوات دليل إرشادي بمتوسط تغطية 24% فحسب؛ بل يُثبت أن المنظومة تمتلك الطاقة التنفيذية اللازمة لتحويل هذه الرؤى إلى إصلاح حقيقي إذا ما وُجِّهت التوصيات الصحيحة.",
+          "description_en": "All ten cases were closed within the defined service level, achieving a 100% compliance rate — an exceptional operational performance indicator reflecting the efficiency of frontline teams in responding to cases. However, this strong performance does not address the structural deficiency of a 60% misclassification rate and guidebook gaps averaging only 24% coverage; rather, it confirms that the system possesses the execution capacity required to convert these insights into genuine reform, provided the right recommendations are directed toward it.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ]
+    ],
+    "core_message": "الرسالة الجوهرية: الفشل المنظومي الذي تكشفه البيانات ليس في ضعف الاستجابة — إذ أثبت معدل الإغلاق بنسبة 100% عكس ذلك — بل في أن المنظومة تعمى عن طبيعة ما تتلقّاه: نظام يُصنّف 60% من الحالات تصنيفاً خاطئاً، ودليل إرشادي لا يُغطّي سوى 24% في المتوسط من فجوات خدمة المتعامل الفعلية، يعني أن القرارات التشغيلية والتخطيطية تُبنى على صورة مشوّهة للواقع. معالجة هذه الثغرة — بدءاً بتفعيل الإشعارات الاستباقية التي تُعالج 70% من الحالات وصولاً إلى إضافة قنوات اعتراض رقمية — ستُحوّل بيانات التواصل من سجل استجابة إلى رادار استراتيجي يُمكّن المنظمة من الاستباق لا الاستجابة.",
+    "raw_data": {
+      "section": "executive_summary",
+      "framing_paragraph_ar": "يُقدّم هذا التقرير تحليلاً معمّقاً لـ 10 حالات تواصل مسجّلة خلال الفترة الممتدة من مايو حتى ديسمبر 2025، مستقاةً من مصدرَين: تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة، ودليل الخدمات والأسئلة الشائعة؛ بهدف تحويل البيانات الخام إلى قرارات تشغيلية قابلة للتنفيذ، لا مجرد إحصاءات. المُستجد الجوهري: النظام يُصنّف 100% من الحالات على أنها «استفسارات»، غير أن إعادة التصنيف كشفت أن 60% منها تنطوي فعلياً على شكاوى وطلبات — مما يعني أن المنظومة تُخفي عبئاً تشغيلياً حقيقياً خلف تصنيف مُضلِّل.",
+      "framing_paragraph_en": "This report presents an in-depth analysis of 10 contact cases recorded between May and December 2025, drawn from two sources: CRM System Export — Unformatted Text, and the Services Guide and FAQ; with the explicit purpose of converting raw data into actionable operational decisions — not presenting numbers. Key structural discovery: the CRM system labelled 100% of cases as 'inquiries', yet reclassification revealed that 60% in fact constitute complaints and requests — meaning the system conceals a genuine operational burden behind a misleading classification layer.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title_ar": "فجوة جودة البيانات بنسبة 60%: نظام الـ CRM يُخفي الشكاوى والطلبات",
+          "title_en": "60% Data Quality Gap: CRM System Conceals Complaints and Requests",
+          "description_ar": "سجّل نظام الـ CRM جميع الحالات العشر باعتبارها «استفسارات»، إلا أن إعادة التصنيف أثبتت أن 6 حالات من أصل 10 تنتمي إلى فئات مغايرة: 4 شكاوى و2 طلبات — أي أن التصنيف الأصلي كان مخطئاً بنسبة 60% من إجمالي الحالات. لا تتوفر بيانات مقارنة لفترات سابقة، مما يجعل هذا الخلل قيمةً مرجعية حرجة تكشف عن غياب منهجية تصنيف موثوقة في المنظومة الحالية.",
+          "description_en": "The CRM system recorded all ten cases as 'inquiries', yet reclassification demonstrated that 6 out of 10 cases belong to different categories: 4 complaints and 2 requests — meaning the original classification was incorrect for 60% of total cases. No comparative data from prior periods is available, making this deficiency a critical baseline that exposes the absence of a reliable classification methodology within the current system.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 2,
+          "title_ar": "الاستفسارات تهيمن بـ 40% بعد التصحيح — مع تكتّل شكاوى بنفس الحجم",
+          "title_en": "Inquiries Lead at 40% Post-Reclassification — Matched by Equal Complaint Cluster",
+          "description_ar": "بعد إعادة التصنيف، أصبحت الاستفسارات النوع الأكثر شيوعاً بواقع 4 حالات من أصل 10 (40%)، مقارنةً بتصنيف CRM الأصلي الذي نسب 100% من الحالات إليها — فارقٌ جوهري يكشف عن تشوّه هيكلي عميق. اللافت للنظر أن الشكاوى جاءت بنفس الحجم (4 حالات — 40%) وتتمحور حول فئتَين محوريّتَين: المخالفات المرورية وترخيص الأسلحة، مما يُشير إلى أن جُلّ الاحتكاك التشغيلي مُتمركز في خدمتَين بعينهما تستدعيان أولوية فورية.",
+          "description_en": "Following reclassification, inquiries became the most frequent type with 4 out of 10 cases (40%), compared to the original CRM labelling of 100% — a structural distortion of significant magnitude. Notably, complaints arrived at an identical volume (4 cases — 40%) and centre on two focal subcategories: traffic violations and weapons licensing, indicating that the bulk of operational friction is concentrated in precisely two services requiring immediate priority.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 3,
+          "title_ar": "3 حالات حرجة: غياب آلية الاعتراض الإلكتروني على المخالفات يُجبر المتعامل على الحضور الشخصي",
+          "title_en": "3 Critical Cases: Absence of Electronic Violation Dispute Channel Forces In-Person Attendance",
+          "description_ar": "ثلاث حالات تعكس نقطة احتكاك واحدة بالغة الأثر: المتعامل لا يعلم بسبب المخالفة أو يعتقد أنها خاطئة، ولا توجد آلية إلكترونية واضحة للاعتراض، مع تغطية لا تتجاوز 35% في الدليل الإرشادي ومعامل مطابقة بلغ 0.65 فحسب. السبب الجذري هو غياب قناة إلكترونية (missing_info)، إذ يقتصر الدليل على إحالة المتعامل إلى مراكز الخدمة بساعات عمل محدودة (07:30–15:30)، مما يُشكّل حاجزاً فعلياً للوصول يدفع إلى تكرار التواصل مع الدعم بدلاً من التسوية الذاتية.",
+          "description_en": "Three cases reflect a single high-impact friction point: the customer is unaware of the violation reason or believes it to be erroneous, with no clear electronic dispute mechanism available, guidebook coverage not exceeding 35%, and a match confidence of only 0.65. The root cause is a missing information and absent digital channel (missing_info), as the guidebook restricts customers to physical service centres during limited hours (07:30–15:30), creating a tangible access barrier that drives repeated support contacts instead of self-service resolution.",
+          "importance_ar": "🔴 حرجة",
+          "importance_en": "🔴 Critical"
+        },
+        {
+          "number": 4,
+          "title_ar": "6 حالات ناتجة عن غياب الإشعار الاستباقي: الطلبات المعلقة وأخطاء الدفع تُعطّل رحلة المتعامل",
+          "title_en": "6 Cases Driven by Absence of Proactive Notification: Pending Requests and Payment Errors Disrupt the Customer Journey",
+          "description_ar": "نقطتا احتكاك مترابطتان تُفسّران 6 حالات: الطلبات المعلقة لفترات طويلة دون رد واضح (3 حالات، غياب إشعار استباقي) وأخطاء الدفع الإلكتروني دون إصدار الوثيقة (3 حالات، خلل في المنصة)، مع تغطية لا تتعدى 5% و30% على التوالي في الدليل الإرشادي. البيانات تُظهر أن تفعيل نظام إشعارات تلقائية بحالة الطلبات — المُتاح تقنياً في 4 من أصل 5 فجوات محددة (80%) — كفيل بإزالة الدافع الرئيسي للتواصل المتكرر وتخفيف الضغط على قنوات الدعم بصورة فورية.",
+          "description_en": "Two interconnected friction points account for 6 cases: pending requests without clear response for extended periods (3 cases, no proactive notification) and electronic payment errors without document issuance (3 cases, platform bug), with guidebook coverage not exceeding 5% and 30% respectively. The data shows that activating an automated application-status notification system — technically feasible across 4 out of 5 identified gaps (80%) — is sufficient to eliminate the primary driver of repeated contact and immediately reduce pressure on support channels.",
+          "importance_ar": "🟡 عالية",
+          "importance_en": "🟡 High"
+        },
+        {
+          "number": 5,
+          "title_ar": "100% إغلاق في الوقت المحدد — طاقة تنفيذية موجودة لم تُوجَّه بعد نحو الإصلاح الهيكلي",
+          "title_en": "100% On-Time Closure — Execution Capacity Exists but Has Not Yet Been Directed Toward Structural Reform",
+          "description_ar": "أُغلقت جميع الحالات العشر ضمن مستوى الخدمة المحدد، محققةً معدل امتثال 100% — وهو مؤشر أداء تشغيلي استثنائي يعكس كفاءة الفرق الميدانية في الاستجابة. غير أن هذا الأداء المتميز لا يُعالج الخلل الجذري المتمثل في تصنيف مضلل بنسبة 60% وفجوات دليل إرشادي بمتوسط تغطية 24% فحسب؛ بل يُثبت أن المنظومة تمتلك الطاقة التنفيذية اللازمة لتحويل هذه الرؤى إلى إصلاح حقيقي إذا ما وُجِّهت التوصيات الصحيحة.",
+          "description_en": "All ten cases were closed within the defined service level, achieving a 100% compliance rate — an exceptional operational performance indicator reflecting the efficiency of frontline teams in responding to cases. However, this strong performance does not address the structural deficiency of a 60% misclassification rate and guidebook gaps averaging only 24% coverage; rather, it confirms that the system possesses the execution capacity required to convert these insights into genuine reform, provided the right recommendations are directed toward it.",
+          "importance_ar": "🟢 إيجابية",
+          "importance_en": "🟢 Positive"
+        }
+      ],
+      "core_message_ar": "الرسالة الجوهرية: الفشل المنظومي الذي تكشفه البيانات ليس في ضعف الاستجابة — إذ أثبت معدل الإغلاق بنسبة 100% عكس ذلك — بل في أن المنظومة تعمى عن طبيعة ما تتلقّاه: نظام يُصنّف 60% من الحالات تصنيفاً خاطئاً، ودليل إرشادي لا يُغطّي سوى 24% في المتوسط من فجوات خدمة المتعامل الفعلية، يعني أن القرارات التشغيلية والتخطيطية تُبنى على صورة مشوّهة للواقع. معالجة هذه الثغرة — بدءاً بتفعيل الإشعارات الاستباقية التي تُعالج 70% من الحالات وصولاً إلى إضافة قنوات اعتراض رقمية — ستُحوّل بيانات التواصل من سجل استجابة إلى رادار استراتيجي يُمكّن المنظمة من الاستباق لا الاستجابة.",
+      "core_message_en": "Core Message: The systemic failure exposed by the data does not lie in weak responsiveness — the 100% closure rate proves otherwise — but in the fact that the system is blind to the true nature of what it receives: a CRM that misclassifies 60% of cases, and a guidebook that covers on average only 24% of actual customer service gaps, means that operational and planning decisions are built on a distorted picture of reality. Addressing this gap — beginning with activating proactive notifications that can resolve 70% of cases through to adding digital dispute channels — will transform contact data from a response log into a strategic radar that enables the organisation to anticipate rather than react."
+    }
+  }
+}

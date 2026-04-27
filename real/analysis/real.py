@@ -6,6 +6,7 @@ All required dependencies must be installed.
 
 import os
 import sys
+import json
 import tempfile
 import threading
 from pathlib import Path
@@ -14,12 +15,10 @@ import pandas as pd
 from io import BytesIO
 
 from .base import Analyzer
-from pipeline.guidebook import GuidebookSearchIndex
 
 # Check all required dependencies at import time
 _REQUIRED_PACKAGES = {
     'pandera': 'Schema validation',
-    'chromadb': 'Vector embeddings/semantic search',
     'pdfplumber': 'PDF table extraction',
     'openpyxl': 'Excel file generation',
     'anthropic': 'Claude API client',
@@ -41,11 +40,9 @@ if _MISSING_PACKAGES:
     )
 
 # Import pipeline after verifying dependencies
-try:
-    from pipeline.orchestrator import PipelineOrchestrator
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from pipeline.orchestrator import PipelineOrchestrator
+# Add inquiries-flow to path since it has a hyphen and can't be imported as a module
+sys.path.insert(0, str(Path(__file__).parent.parent / "inquiries-flow"))
+from pipeline.orchestrator import PipelineOrchestrator
 
 
 class RealAnalyzer(Analyzer):
@@ -113,12 +110,13 @@ class RealAnalyzer(Analyzer):
         """Return the processing stages for real analysis."""
         return self.PROCESSING_STAGES
 
-    def analyze(self, uploaded_file) -> Dict[str, Any]:
+    def analyze(self, uploaded_file, progress_callback=None) -> Dict[str, Any]:
         """
         Analyze an uploaded file using the 6-stage pipeline.
 
         Args:
             uploaded_file: Streamlit UploadedFile object
+            progress_callback: Optional function(progress_pct, message_ar, message_en) for UI updates
 
         Returns:
             Dictionary containing report structure with sections and tables
@@ -128,12 +126,17 @@ class RealAnalyzer(Analyzer):
             raise ValueError(error_msg)
 
         try:
-            print(f"[RealAnalyzer] Parsing file: {uploaded_file.name}")
+            msg_ar = "جاري تحليل الملف..."
+            msg_en = f"Parsing file: {uploaded_file.name}"
+            print(f"[RealAnalyzer] {msg_en}")
+            if progress_callback:
+                progress_callback(0.05, msg_ar, msg_en)
+
             df = self._parse_file(uploaded_file)
             print(f"[RealAnalyzer] Parsed {len(df)} rows")
 
             print(f"[RealAnalyzer] Starting pipeline analysis...")
-            result = self._analyze_with_pipeline(df)
+            result = self._analyze_with_pipeline(df, progress_callback)
             print(f"[RealAnalyzer] Pipeline complete, returning report")
             return result
         except Exception as e:
@@ -212,9 +215,13 @@ class RealAnalyzer(Analyzer):
         except Exception as e:
             raise ValueError(f"PDF parsing failed: {str(e)}")
 
-    def _analyze_with_pipeline(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def _analyze_with_pipeline(self, df: pd.DataFrame, progress_callback=None) -> Dict[str, Any]:
         """
         Analyze using 6-stage pipeline with parallel artifact generation.
+
+        Args:
+            df: DataFrame to analyze
+            progress_callback: Optional function(progress_pct, message_ar, message_en) for UI updates
 
         Returns immediately after stage 5 with analysis results.
         Stage 6 (artifact generation) runs in background thread.
@@ -258,7 +265,9 @@ class RealAnalyzer(Analyzer):
             print(f"[Pipeline] Orchestrator initialized")
 
             # Stage 1: Schema Validation
-            print(f"[Pipeline] Running Stage 1: Schema Validation")
+            msg_ar = "التحقق من صيغة البيانات"
+            msg_en = "Stage 1: File Validation"
+            print(f"[Pipeline] Running {msg_en}")
             success, msg, schema_data = self.orchestrator.run_stage1_validator(df)
             if not success:
                 raise ValueError(f"Stage 1: {msg}")
@@ -267,77 +276,116 @@ class RealAnalyzer(Analyzer):
                 "content": msg,
                 "data": schema_data or {}
             }
+            if progress_callback:
+                progress_callback(0.10, msg_ar, msg_en)
 
             # Stage 2: Rule-based Classification
-            print(f"[Pipeline] Running Stage 2: Rule-based Classification")
+            msg_ar = "تصنيف القواعد"
+            msg_en = "Stage 2: Rule Classification"
+            print(f"[Pipeline] Running {msg_en}")
             success, msg = self.orchestrator.run_stage2_classifier()
             if not success:
                 raise ValueError(f"Stage 2: {msg}")
-            print(f"[Pipeline] Stage 2 complete: {msg}")
+            print(f"[Pipeline] {msg_en} complete: {msg}")
 
             classified_count = len(self.orchestrator.state.rule_classified) if self.orchestrator.state else 0
+            classified_sample = self.orchestrator.state.rule_classified[:10] if self.orchestrator.state else []
             report["sections"]["stage2_classification"] = {
                 "title": "Rule-Based Classification",
-                "content": f"Classified {classified_count} cases with decision tree rules",
-                "data": self.orchestrator.state.rule_classified[:10] if self.orchestrator.state else []
+                "content": f"Classified {classified_count} cases with decision tree rules. Showing top 10 results.",
+                "tables": [self._convert_data_to_table(classified_sample)] if classified_sample else []
             }
+            if progress_callback:
+                progress_callback(0.30, msg_ar, msg_en)
 
-            # Stage 3: LLM Classification
-            print(f"[Pipeline] Running Stage 3: LLM Classification")
-            success, msg = self.orchestrator.run_stage3_llm_classifier()
+            # Stage 3: LLM Classification (with per-batch progress)
+            msg_ar = "معالجة الذكاء الاصطناعي"
+            msg_en = "Stage 3: AI Classification"
+            print(f"[Pipeline] Running {msg_en}")
+
+            def stage3_progress(batch_num, total_batches):
+                """Callback for stage 3 per-batch progress."""
+                progress = 0.30 + (batch_num / max(total_batches, 1)) * 0.20
+                # Show main report section names instead of batch numbers
+                section_names_ar = ['ملخص', 'كل الحالات', 'طلبات', 'استفسارات', 'متابعات', 'مشاكل جهات أخرى', 'استفسارات الموقع', 'بلاغات تقنية', 'استفسارات مالية']
+                section_names_en = ['Summary', 'All Cases', 'Service Requests', 'Information Inquiries', 'Status Follow-ups', 'Cross-Entity', 'Location Inquiries', 'Tech Incidents', 'Financial Inquiries']
+                # Cycle through sections based on batch progress
+                section_idx = min(int((batch_num / max(total_batches, 1)) * len(section_names_ar)), len(section_names_ar) - 1)
+                batch_msg_ar = f"تنظيم البيانات: {section_names_ar[section_idx]}"
+                batch_msg_en = f"Organizing data: {section_names_en[section_idx]}"
+                if progress_callback:
+                    progress_callback(progress, batch_msg_ar, batch_msg_en)
+
+            success, msg = self.orchestrator.run_stage3_llm_classifier(progress_callback=stage3_progress)
             if not success:
                 raise ValueError(f"Stage 3: {msg}")
-            print(f"[Pipeline] Stage 3 complete: {msg}")
+            print(f"[Pipeline] {msg_en} complete: {msg}")
 
             llm_classified_count = len(self.orchestrator.state.llm_classified) if self.orchestrator.state else 0
+            llm_sample = self.orchestrator.state.llm_classified[:10] if self.orchestrator.state else []
             report["sections"]["stage3_llm"] = {
                 "title": "AI-Based Classification",
-                "content": f"LLM classified {llm_classified_count} low-confidence cases",
-                "data": self.orchestrator.state.llm_classified[:10] if self.orchestrator.state else []
+                "content": f"LLM classified {llm_classified_count} low-confidence cases using Claude API. Showing top 10 results.",
+                "tables": [self._convert_data_to_table(llm_sample)] if llm_sample else []
             }
+            if progress_callback:
+                progress_callback(0.50, msg_ar, msg_en)
 
             # Stage 4: Pattern Analysis
-            print(f"[Pipeline] Running Stage 4: Pattern Analysis")
+            msg_ar = "تحليل الأنماط"
+            msg_en = "Stage 4: Pattern Analysis"
+            print(f"[Pipeline] Running {msg_en}")
             success, msg = self.orchestrator.run_stage4_analysis()
             if not success:
                 raise ValueError(f"Stage 4: {msg}")
-            print(f"[Pipeline] Stage 4 complete: {msg}")
+            print(f"[Pipeline] {msg_en} complete: {msg}")
 
             patterns = self.orchestrator.state.patterns if self.orchestrator.state else []
             faqs = self.orchestrator.state.faq_candidates if self.orchestrator.state else []
 
+            patterns_sample = patterns[:5] if patterns else []
+            faqs_sample = faqs[:10] if faqs else []
+
             report["sections"]["stage4_patterns"] = {
                 "title": "Pattern Analysis",
-                "content": f"Found {len(patterns)} inquiry patterns and {len(faqs)} FAQ candidates",
-                "data": patterns[:5]
+                "content": f"Identified {len(patterns)} inquiry patterns. Showing top 5 patterns.",
+                "tables": [self._convert_data_to_table(patterns_sample)] if patterns_sample else []
             }
             report["sections"]["stage4_faqs"] = {
                 "title": "FAQ Candidates",
-                "content": "Frequently asked questions extracted from inquiries",
-                "data": faqs[:10]
+                "content": f"Extracted {len(faqs)} frequently asked questions from inquiry patterns. Showing top 10.",
+                "tables": [self._convert_data_to_table(faqs_sample)] if faqs_sample else []
             }
+            if progress_callback:
+                progress_callback(0.70, msg_ar, msg_en)
 
             # Stage 5: Gap Analysis
-            print(f"[Pipeline] Running Stage 5: Gap Analysis")
-            search_index = self._load_guidebook_search()
-            success, msg = self.orchestrator.run_stage5_gap_analysis(search_index)
+            msg_ar = "تحليل الفجوات"
+            msg_en = "Stage 5: Gap Analysis"
+            print(f"[Pipeline] Running {msg_en}")
+            success, msg = self.orchestrator.run_stage5_gap_analysis()
             if not success:
                 raise ValueError(f"Stage 5: {msg}")
-            print(f"[Pipeline] Stage 5 complete: {msg}")
+            print(f"[Pipeline] {msg_en} complete: {msg}")
 
             gaps = self.orchestrator.state.gap_table if self.orchestrator.state else []
             validated_faqs = self.orchestrator.state.validated_faqs if self.orchestrator.state else []
 
+            gaps_sample = gaps[:10] if gaps else []
+            faqs_validated_sample = validated_faqs[:10] if validated_faqs else []
+
             report["sections"]["stage5_gaps"] = {
                 "title": "Service Gaps Identified",
-                "content": f"Identified {len(gaps)} service gaps based on guidebook analysis",
-                "data": gaps[:10]
+                "content": f"Identified {len(gaps)} service gaps by analyzing customer inquiries against the service guidebook. Showing top 10.",
+                "tables": [self._convert_data_to_table(gaps_sample)] if gaps_sample else []
             }
             report["sections"]["stage5_validated_faqs"] = {
                 "title": "Validated FAQs",
-                "content": f"Validated {len(validated_faqs)} FAQ candidates against guidelines",
-                "data": validated_faqs[:10]
+                "content": f"Validated {len(validated_faqs)} FAQ candidates against service guidelines. These are recommended for the FAQ system.",
+                "tables": [self._convert_data_to_table(faqs_validated_sample)] if faqs_validated_sample else []
             }
+            if progress_callback:
+                progress_callback(0.85, msg_ar, msg_en)
 
             # Update metadata with analysis results (before artifacts are ready)
             report["metadata"]["total_classified"] = len(self.orchestrator.state.all_classified) if self.orchestrator.state else 0
@@ -349,7 +397,12 @@ class RealAnalyzer(Analyzer):
             # Stage 6: Queue artifact generation in background thread
             # This allows UI to display results immediately while artifacts are generated
             # ============================================================================
-            print(f"[Pipeline] Stage 6: Queuing artifact generation in background")
+            msg_ar = "توليد التقرير"
+            msg_en = "Stage 6: Report Generation"
+            print(f"[Pipeline] {msg_en}: Queuing artifact generation in background")
+            if progress_callback:
+                progress_callback(0.90, f"جاري {msg_ar}...", f"{msg_en}...")
+
             excel_path = Path(self.temp_dir) / "analysis_results.xlsx"
             word_path = Path(self.temp_dir) / "analysis_report.docx"
 
@@ -369,6 +422,8 @@ class RealAnalyzer(Analyzer):
 
             # Return report immediately (UI can display while artifacts generate)
             print(f"[Pipeline] Analysis complete! Report returned with {len(report.get('sections', {}))} sections")
+            if progress_callback:
+                progress_callback(1.0, "✅ اكتمل التحليل", "✅ Analysis Complete")
             return report
 
         except Exception as e:
@@ -435,24 +490,33 @@ class RealAnalyzer(Analyzer):
 
 
 
-    def _load_guidebook_search(self) -> GuidebookSearchIndex:
-        """Load pre-computed guidebook search index from .guidebook_cache."""
-        try:
-            guidebook_path = Path(__file__).parent.parent / 'inquiries-flow' / 'inquiries-supporting-files' / 'customer_services_guidebook.pdf'
-            persist_dir = Path(__file__).parent.parent / '.guidebook_cache'
+    def _convert_data_to_table(self, data: list) -> dict:
+        """Convert list of dicts to table format with columns and rows."""
+        if not data or not isinstance(data, list):
+            return {"columns": [], "rows": []}
 
-            if not persist_dir.exists():
-                print(f"[GuidebookLoader] ⚠️ Cache not found. Run: python real/precompute_guidebook.py")
-                return None
+        if not isinstance(data[0], dict):
+            return {"columns": [], "rows": []}
 
-            print(f"[GuidebookLoader] Loading pre-computed search index from {persist_dir}")
-            search_index = GuidebookSearchIndex(str(guidebook_path), persist_dir=str(persist_dir))
-            # Load from cache without recomputing
-            search_index.collection = search_index.client.get_collection(name="guidebook")
-            return search_index
-        except Exception as e:
-            print(f"[GuidebookLoader] Error loading search index: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # Get all unique keys across all items
+        columns = list(set().union(*(item.keys() for item in data)))
+        columns = sorted(columns)  # Sort for consistency
+
+        # Convert items to rows
+        rows = []
+        for item in data:
+            row = {}
+            for col in columns:
+                val = item.get(col, '')
+                # Convert to string, handle special types
+                if isinstance(val, (list, dict)):
+                    row[col] = json.dumps(val, ensure_ascii=False)[:100]  # Truncate long JSON
+                else:
+                    row[col] = str(val)
+            rows.append(row)
+
+        return {
+            "columns": columns,
+            "rows": rows
+        }
 

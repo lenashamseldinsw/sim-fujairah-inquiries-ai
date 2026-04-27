@@ -1,0 +1,132 @@
+{
+  "sections": [
+    {
+      "id": "section_15_أولا_الملخص_التنفيذي",
+      "title": "Executive Summary",
+      "title_en": "Executive Summary",
+      "level": 2,
+      "content": "This report presents an in-depth analysis of 10 customer contact cases received through the CRM system between May and December 2025, drawing on two primary sources: the CRM system export of unformatted text and the Services & FAQ Guidebook, with the explicit purpose of converting raw data into actionable operational decisions rather than descriptive statistics. Core Discovery: 60% of cases were misclassified in the system — all originally labelled as 'inquiries' — while reclassification revealed that complaints and requests together constitute 60% of the actual volume, meaning the organisation has been measuring its true operational pressure with fundamentally misleading instruments.",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_16_النتائج_الرئيسية",
+          "title": "Key Findings",
+          "title_en": "Key Findings",
+          "level": 3,
+          "content": "Core Message: The fundamental failure the data exposes is not in response but in visibility — the system managed 60% of actual complaint and request volume under the label of 'inquiries', concealing 9 critical friction points from the priority radar, 6 of which are entirely absent from the service guidebook with an average coverage rate of no more than 23.75%, while 5 of them could have been prevented through proactive notifications that were never activated. Addressing the classification gap and activating a proactive notification framework together are sufficient to convert no less than 60% of incoming cases into proactive experiences rather than reactive operational responses. This report does not document what happened — it establishes the data foundation from which a service strategy built on truth, not guesswork, can be launched.",
+          "tables": [
+            {
+              "columns": [
+                "#",
+                "Discovery",
+                "Description",
+                "Importance Level"
+              ],
+              "rows": [
+                {
+                  "#": "1",
+                  "Discovery": "60% Misclassification Rate — Six in Every Ten Cases Carry the Wrong Label",
+                  "Description": "A case-by-case review of all 10 records revealed that 6 were incorrectly labelled as 'inquiries' in the CRM, while accurate reclassification shows the true distribution is 4 complaints, 4 inquiries, and 2 requests — meaning complaints and requests were entirely absent from system records. In the absence of comparative data from prior periods, this 60% rate stands as a critical data quality gap whose trajectory — whether improving or deteriorating — cannot be assessed without establishing an immediate classification baseline.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "2",
+                  "Discovery": "Inquiries Lead at 40% of Actual Workload — Complaints Match Them Exactly",
+                  "Description": "Post-reclassification, inquiries rank first at 4 cases representing 40% of the total; however, complaints are exactly equal at 4 cases as well — a stark contrast to the original CRM data which labelled all 10 cases as inquiries with no exceptions. The friction points classified as complaints cluster around failures in the electronic payment system and traffic violation verification, revealing that the highest operational pressure is concentrated in digital services and traffic enforcement, not informational inquiries.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "3",
+                  "Discovery": "Electronic Payment System Bug — Double Charge with No Certificate Issued",
+                  "Description": "The data documents one case in which a customer was subjected to a double charge due to an electronic payment platform error, without the requested certificate being issued, and in the complete absence of any automatic detection mechanism, real-time customer alert, or documented refund pathway. The root cause is a platform bug compounded by the absence of a refund procedure in the service guidebook, creating a direct barrier that prevents customers from resolving the issue independently or verifying their financial rights without manual intervention.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "4",
+                  "Discovery": "Two Cases Expose a Critical Information Gap: Fujairah License Validity and Inter-Emirate Speed Limits",
+                  "Description": "Two independent friction points share a single root cause — missing information: the first concerns a customer's unawareness that a Fujairah-issued driving license is valid across all UAE emirates (1 case), and the second concerns unawareness of inter-emirate speed limit differences (1 case); both are entirely absent from the service guidebook with 0% coverage and critically low match confidence scores of 0.1 and 0.05 respectively. Analysis shows that immediately adding proactive notifications and incorporating this content into the service guidebook is sufficient to prevent both cases recurrently, as both topics fall within categories addressable through proactive customer communications.",
+                  "Importance Level": "🔴 Critical"
+                },
+                {
+                  "#": "5",
+                  "Discovery": "100% On-Time Closure Rate — Execution Performance Contradicts Structural Data Weakness",
+                  "Description": "All 10 cases were closed within the specified timeframe, representing a 100% response rate according to the available operational performance indicator. However, this positive metric must not obscure the fundamental structural failure of a 60% misclassification rate, since 'case closure' does not necessarily equate to 'solving the right problem'; this equation reveals that the organisation possesses capable execution capacity that needs to be redirected toward the true priorities exposed by the reclassified data.",
+                  "Importance Level": "🟢 Positive"
+                }
+              ],
+              "row_count": 5,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        }
+      ]
+    },
+    {
+      "id": "section_17_ثانيا_المنهجية_وطبيعة",
+      "title": "Methodology and Data Sources",
+      "title_en": "Methodology and Data Sources",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_18_21_المصادر_المحللة",
+          "title": "2.1 Sources Analyzed",
+          "title_en": "2.1 Sources Analyzed",
+          "level": 3,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Source",
+                "Nature",
+                "Size",
+                "Period"
+              ],
+              "rows": [
+                {
+                  "Source": "Inquiry Analysis",
+                  "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+                  "Size": "10 closed cases",
+                  "Period": "May — December 2025"
+                },
+                {
+                  "Source": "Customer Services Guidebook",
+                  "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+                  "Size": "160 pages, 25 FAQs",
+                  "Period": "2025"
+                }
+              ],
+              "row_count": 2,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_19_22_منهجية_التصنيف",
+          "title": "2.2 Classification Methodology",
+          "title_en": "2.2 Classification Methodology",
+          "level": 3,
+          "content": "The classification methodology applied in this report relies on a two-stage sequential processing pipeline. In the first stage, a rule-based engine (stage2_rules.py) was applied to all ten cases via a priority decision tree ordered as follows: (1) objection to a traffic violation, (2) submission of a security or traffic report, (3) request for a weapons permit or licence, (4) complaint regarding non-receipt of service, (5) complaint regarding a technical or system error, (6) complaint regarding processing delay, (7) inquiry about licences and vehicles, (8) commendation — with fallback to the CRM's نوع_المكالمة label where no higher-priority rule matched. Cases meeting or exceeding a confidence threshold of 0.75 were classified directly; those falling below were queued for Stage 2. In the second stage, the large language model claude-haiku-4-5-20251001 classified referred cases via tool-use, drawing on a two-level taxonomy comprising four top-level types — complaint (شكوى), request (طلب), inquiry (استفسار), and commendation (شكر وثناء) — distributed across twenty-five domain-specific sub-classifications. Zero cases were referred to this stage; cases in which the model's confidence fell below 0.65 were routed to a human review queue and excluded from report counts — zero cases reached this threshold. All classification decisions are governed by the following core definitional principle: the nature of what is sought — not the phrasing — is the decisive criterion; a case expressing dissatisfaction is classified as a complaint even if it also contains a request for action.",
+          "tables": [],
+          "charts": []
+        },
+        {
+          "id": "section_20_23_الحقول_المحللة",
+          "title": "2.3 Analyzed Fields",
+          "title_en": "2.3 Analyzed Fields",
+          "level": 3,
+          "content": "The analysis drew on two groups of fields extracted from the Customer Relationship Management system. The first group comprised structured fields — namely رقم_الطلب (case number), تاريخ_الإنشاء (creation date), قناة_تقديم_الخدمة (service channel), الخدمة_الرئيسية (primary service), نوع_المكالمة (call type), الجنسية (nationality), and الإدارة المختصة (responsible department) — which are handled within operational dashboards (PowerBI) and were not the focus of the processing pipeline described in this report. The second group comprised unstructured fields, which formed the primary focus of this analysis: the تفاصيل_الطلب (case details) field, with an average length of 434 characters and a language distribution of 72% Arabic and 28% English, and the الحل (resolution) field, with an average length of 102 characters and an identical language distribution of 72% Arabic and 28% English. These two fields reveal the true nature of each case beyond the original label assigned by the CRM system under نوع_المكالمة.",
+          "tables": [],
+          "charts": []
+        }
+      ]
+    }
+  ]
+}

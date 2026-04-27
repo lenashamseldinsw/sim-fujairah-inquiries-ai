@@ -1,0 +1,68 @@
+{
+  "sections": [
+    {
+      "id": "section_17_ثانيا_المنهجية_وطبيعة",
+      "title": "Methodology and Data Sources",
+      "title_en": "Methodology and Data Sources",
+      "level": 2,
+      "content": "",
+      "tables": [],
+      "charts": [],
+      "subsections": [
+        {
+          "id": "section_18_21_المصادر_المحللة",
+          "title": "2.1 Sources Analyzed",
+          "title_en": "2.1 Sources Analyzed",
+          "level": 3,
+          "content": "",
+          "tables": [
+            {
+              "columns": [
+                "Source",
+                "Nature",
+                "Size",
+                "Period"
+              ],
+              "rows": [
+                {
+                  "Source": "Inquiry Analysis",
+                  "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
+                  "Size": "10 closed cases",
+                  "Period": "May — December 2025"
+                },
+                {
+                  "Source": "Customer Services Guidebook",
+                  "Nature": "Official reference covering traffic, licensing, and security services, plus FAQ validation and gap analysis",
+                  "Size": "160 pages, 25 FAQs",
+                  "Period": "2025"
+                }
+              ],
+              "row_count": 2,
+              "col_count": 4,
+              "original_index": 0
+            }
+          ],
+          "charts": []
+        },
+        {
+          "id": "section_19_22_منهجية_التصنيف",
+          "title": "2.2 Classification Methodology",
+          "title_en": "2.2 Classification Methodology",
+          "level": 3,
+          "content": "The analysis employed a two-stage classification pipeline applied to all ten cases. In Stage 1, a rule-based engine (stage2_rules.py) processed every case through a prioritised decision tree in the following order: (1) اعتراض على مخالفة مرورية — contesting a traffic violation, (2) تقديم بلاغ أمني أو مروري — filing a security or traffic report, (3) طلب تصريح سلاح أو ترخيص — requesting a weapons permit or licence, (4) شكوى عن عدم استلام الخدمة — complaint of non-receipt of service, (5) شكوى على خطأ تقني أو في النظام — complaint of a technical or system error, (6) شكوى على تأخر المعالجة — complaint of processing delay, (7) استفسار عن الرخص والمركبات — inquiry about licences and vehicles, (8) شكر وثناء — commendation, with fallback to the CRM's original نوع_المكالمة label when no priority rule applies. The confidence threshold was set at 0.75; cases meeting or exceeding this threshold were classified directly, while cases falling below it were forwarded to Stage 2. In Stage 2, the large language model claude-haiku-4-5-20251001, operating via tool-use, classified any referred cases — zero cases in this analytical cycle — using a two-level taxonomy comprising four top-level types (شكوى, طلب, استفسار, شكر وثناء) and twenty-five domain-specific sub-classifications. Cases for which the model's confidence fell below 0.65 were routed to a human review queue and excluded from report counts; zero cases reached this threshold in the current cycle. The entire framework is governed by the following core definitional principle: «طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء» — meaning that the nature of what is sought, not the phrasing, is the decisive criterion, and any case expressing dissatisfaction is classified as a complaint even if it also contains a request for action.",
+          "tables": [],
+          "charts": []
+        },
+        {
+          "id": "section_20_23_الحقول_المحللة",
+          "title": "2.3 Analyzed Fields",
+          "title_en": "2.3 Analyzed Fields",
+          "level": 3,
+          "content": "The data incorporated in this analysis comprised two categories of fields. The first category consists of structured fields managed by the dashboard and PowerBI environment and falling outside the scope of the current classification pipeline, namely: رقم_الطلب (case number), تاريخ_الإنشاء (creation date), قناة_تقديم_الخدمة (service submission channel), الخدمة_الرئيسية (primary service), نوع_المكالمة (call type), الجنسية (nationality), and الإدارة_المختصة (responsible department). The second category consists of unstructured fields that form the analytical core of this study and carry the principal interpretive weight; these are: تفاصيل_الطلب (case details), with an average of 434 characters per case, and الحل (resolution), with an average of 102 characters per case, both exhibiting a language distribution of 72% Arabic and 28% English. Together, these two unstructured fields reveal the true nature of each case beyond the original label recorded in the CRM system under the نوع_المكالمة field.",
+          "tables": [],
+          "charts": []
+        }
+      ]
+    }
+  ]
+}
