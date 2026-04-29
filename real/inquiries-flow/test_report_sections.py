@@ -9,6 +9,7 @@ and tests stages 1-5 + Stage 6 (Excel generation) + report sections.
 import sys
 import os
 import json
+import traceback
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -16,7 +17,7 @@ from datetime import datetime
 # Add real folder to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pipeline.orchestrator import PipelineOrchestrator
+from pipeline.orchestrator import PipelineOrchestrator  # type: ignore[import-untyped]
 
 
 def main():
@@ -64,15 +65,18 @@ def main():
 
     if not api_key:
         try:
-            import tomllib  # Python 3.11+
-        except ImportError:
-            import tomli as tomllib  # Fallback for Python < 3.11
+            try:
+                import tomllib  # Python 3.11+
+            except ImportError:
+                import tomli as tomllib  # type: ignore[import-untyped]  # Fallback for Python < 3.11
 
-        secrets_path = Path.home() / '.streamlit' / 'secrets.toml'
-        if secrets_path.exists():
-            with open(secrets_path, 'rb') as f:
-                secrets = tomllib.load(f)
-                api_key = secrets.get('ANTHROPIC_API_KEY', '')
+            secrets_path = Path.home() / '.streamlit' / 'secrets.toml'
+            if secrets_path.exists():
+                with open(secrets_path, 'rb') as f:
+                    secrets = tomllib.load(f)
+                    api_key = secrets.get('ANTHROPIC_API_KEY', '')
+        except ImportError:
+            pass  # tomli not available, skip secrets.toml loading
 
     if not api_key:
         print("❌ ANTHROPIC_API_KEY not found in environment, Streamlit, or ~/.streamlit/secrets.toml")
@@ -131,7 +135,6 @@ def main():
                     break
         except Exception as e:
             print(f"❌ Exception: {e}")
-            import traceback
             traceback.print_exc()
             results[stage_num] = {'success': False, 'message': str(e)}
             if stage_num < 6:
@@ -186,11 +189,12 @@ def main():
 
     # Now test report section generation
     print(f"\n{'=' * 80}")
-    print("REPORT SECTION GENERATION TEST")
+    print("REPORT SECTION GENERATION TEST (Executive Summary → Methodology → Workload Map → Customer Journey)")
     print(f"{'=' * 80}")
 
     try:
-        from pipeline.stage6_artifacts import generate_executive_summary_section, generate_methodology_section
+        from pipeline.stage6_artifacts import generate_executive_summary_section, generate_methodology_section  # type: ignore[import-untyped]
+        from pipeline.stage6_json_report import JSONReportBuilder  # type: ignore[import-untyped]
 
         print(f"\n📄 Generating Executive Summary section...")
         exec_summary = generate_executive_summary_section(state, api_key)
@@ -218,78 +222,116 @@ def main():
             print(f"❌ Methodology generation failed")
             methodology = {}
 
-        # Build state.report_sections_ar and report_sections_en using bilingual builder
-        from pipeline.stage6_artifacts import build_bilingual_report_sections
+        # Build Arabic report sections only (LLM now outputs Arabic-only)
+        state.report_sections_ar = {
+            'executive_summary': {
+                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
+                'body': exec_summary.get('framing_paragraph_ar', '') if exec_summary else '',
+                'core_message': exec_summary.get('core_message_ar', '') if exec_summary else '',
+                'tables': [exec_summary.get('key_findings', [])] if exec_summary and exec_summary.get('key_findings') else [],
+                'raw_data': exec_summary,
+            },
+            'methodology': {
+                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
+                'classification_method': methodology.get('classification_method', '') if methodology else '',
+                'analyzed_fields': methodology.get('analyzed_fields', '') if methodology else '',
+                'tables': [{'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'], 'rows': methodology.get('sources_table', [])}] if methodology else [],
+                'raw_data': methodology,
+            }
+        }
 
-        state.report_sections_ar, state.report_sections_en = build_bilingual_report_sections(
-            exec_summary if exec_summary else {},
-            methodology if methodology else {},
-            state=state
-        )
+        # Generate Workload Map section
+        print(f"\n📄 Generating Workload Map section...")
+        from pipeline.generate_workload_map_section import generate_workload_map_section  # type: ignore[import-untyped]
 
-        # Generate JSON report for display
-        print(f"\n📋 Generating JSON report for display...")
-        from pipeline.stage6_json_report import generate_json_report
+        workload_map_raw = generate_workload_map_section(state, api_key)
+        if workload_map_raw:
+            # Store as JSONReportBuilder expects it
+            state.report_sections_ar['workload_map'] = {
+                'heading': 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات',
+                'raw_data': workload_map_raw,
+            }
+            print(f"✅ Workload Map raw data generated successfully")
+        else:
+            print(f"❌ Workload Map generation failed")
+
+        # Generate Customer Journey Challenges section
+        print(f"\n📄 Generating Customer Journey Challenges section...")
+        from pipeline.generate_customer_journey_section import generate_customer_journey_section  # type: ignore[import-untyped]
+
+        customer_journey = generate_customer_journey_section(state, api_key)
+        if customer_journey:
+            state.report_sections_ar['customer_journey'] = {
+                'heading': 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل',
+                'raw_data': customer_journey,
+            }
+            print(f"✅ Customer Journey generated successfully")
+            print(f"   📊 Friction table rows: {len(customer_journey.get('friction_table', []))}")
+        else:
+            print(f"⚠️  Customer Journey generation failed (will be skipped in report)")
+
+        # Generate Digital Gaps section
+        print(f"\n📄 Generating Digital Gaps section...")
+        from pipeline.generate_digital_gaps_section import generate_digital_gaps_section  # type: ignore[import-untyped]
+
+        digital_gaps = generate_digital_gaps_section(state, api_key)
+        if digital_gaps:
+            state.report_sections_ar['digital_gaps'] = {
+                'heading': 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية',
+                'raw_data': digital_gaps,
+            }
+            print(f"✅ Digital Gaps generated successfully")
+        else:
+            print(f"⚠️  Digital Gaps generation failed (will be skipped in report)")
+
+        # No English sections (Arabic-only output per new prompts)
+        state.report_sections_en = None
+
+        # Generate complete report JSON using JSONReportBuilder
+        print(f"\n📄 Assembling complete report structure via JSONReportBuilder...")
+        from pipeline.stage6_json_report import generate_json_report  # type: ignore[import-untyped]
         state.report_json = generate_json_report(state)
-        print(f"✅ JSON report generated")
 
-        # Save to files
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        # Print Arabic dict before saving
-        print(f"\n{'=' * 80}")
-        print("ARABIC REPORT SECTIONS DICT (before JSON save):")
-        print(f"{'=' * 80}")
-        print(json.dumps(state.report_sections_ar, ensure_ascii=False, indent=2))
-
-        # Print English dict before saving
-        print(f"\n{'=' * 80}")
-        print("ENGLISH REPORT SECTIONS DICT (before JSON save):")
-        print(f"{'=' * 80}")
-        print(json.dumps(state.report_sections_en, ensure_ascii=False, indent=2))
-
-        # Save full report JSON
-        output_file = output_dir / f"report_full_{timestamp}.json"
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(state.report_json, f, ensure_ascii=False, indent=2)
-        print(f"\n💾 Saved full report JSON to: {output_file}")
-        print(f"   File size: {output_file.stat().st_size} bytes")
-
-        # Save report sections (Arabic)
-        ar_file = output_dir / f"report_sections_ar_{timestamp}.json"
-        with open(ar_file, 'w', encoding='utf-8') as f:
-            json.dump(state.report_sections_ar, f, ensure_ascii=False, indent=2)
-        print(f"💾 Saved Arabic report sections to: {ar_file}")
-        print(f"   File size: {ar_file.stat().st_size} bytes")
-
-        # Save report sections (English)
-        en_file = output_dir / f"report_sections_en_{timestamp}.json"
-        with open(en_file, 'w', encoding='utf-8') as f:
-            json.dump(state.report_sections_en, f, ensure_ascii=False, indent=2)
-        print(f"💾 Saved English report sections to: {en_file}")
-        print(f"   File size: {en_file.stat().st_size} bytes")
-
-        # Print summary of report_json structure
         if state.report_json:
-            print(f"\n📊 Report JSON Structure:")
-            print(f"   Sections: {list(state.report_json.keys())}")
-            for section_key, section_data in state.report_json.items():
-                if isinstance(section_data, dict):
-                    print(f"   - {section_key}: {list(section_data.keys())}")
+            print(f"✅ Report JSON assembled successfully")
+            if 'ar' in state.report_json:
+                ar_report = state.report_json['ar']
+                sections = ar_report.get('sections', [])
+                print(f"   📊 Sections in final report: {len(sections)}")
+                for section in sections:
+                    print(f"     - {section.get('title', 'Untitled')}")
+                    if section.get('subsections'):
+                        for subsection in section['subsections']:
+                            print(f"       - {subsection.get('title', 'Untitled')} (level {subsection.get('level', '?')})")
+        else:
+            print(f"⚠️  Report JSON not generated")
 
-        # Print summary of report_sections
-        print(f"\n📊 Report Sections Structure:")
-        print(f"   Arabic sections: {list(state.report_sections_ar.keys())}")
-        if state.report_sections_ar:
-            for section_key, section_data in state.report_sections_ar.items():
-                if isinstance(section_data, dict):
-                    print(f"   - {section_key}: {list(section_data.keys())}")
+        # Save final report JSON (Arabic-only, production version)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if state.report_json and 'ar' in state.report_json:
+            ar_report = state.report_json['ar']
 
-        print(f"   English sections: {list(state.report_sections_en.keys())}")
-        if state.report_sections_en:
-            for section_key, section_data in state.report_sections_en.items():
-                if isinstance(section_data, dict):
-                    print(f"   - {section_key}: {list(section_data.keys())}")
+            # Print summary before save
+            print(f"\n{'=' * 80}")
+            print("FINAL REPORT STRUCTURE (from JSONReportBuilder):")
+            print(f"{'=' * 80}")
+            print(f"Metadata: {json.dumps(ar_report.get('metadata', {}), ensure_ascii=False, indent=2)}")
+            print(f"\nSections ({len(ar_report.get('sections', []))} total):")
+            for i, section in enumerate(ar_report.get('sections', []), 1):
+                print(f"{i}. {section.get('title', 'Untitled')}")
+                if section.get('subsections'):
+                    for subsection in section['subsections']:
+                        print(f"   {subsection.get('title', 'Untitled')}")
+
+            # Save to file
+            ar_file = output_dir / f"report_final_ar_{timestamp}.json"
+            with open(ar_file, 'w', encoding='utf-8') as f:
+                json.dump(ar_report, f, ensure_ascii=False, indent=2)
+            print(f"\n💾 Saved final Arabic report to: {ar_file}")
+            print(f"   File size: {ar_file.stat().st_size} bytes")
+            print(f"   Sections in file: {len(ar_report.get('sections', []))}")
+        else:
+            print(f"\n⚠️  No final report JSON to save")
 
     except Exception as e:
         print(f"❌ Report generation error: {e}")
@@ -301,8 +343,7 @@ def main():
     print(f"\n{'=' * 80}")
     if all_success:
         print("✅ PIPELINE STAGES 1-6 PASSED")
-        if state.report_json:
-            print("✅ REPORT SECTIONS GENERATED SUCCESSFULLY")
+        print("✅ REPORT SECTIONS GENERATED (Executive Summary + Methodology + Workload Map + Customer Journey)")
         if results.get(6, {}).get('success'):
             print("✅ EXCEL GENERATION COMPLETED SUCCESSFULLY")
     else:
