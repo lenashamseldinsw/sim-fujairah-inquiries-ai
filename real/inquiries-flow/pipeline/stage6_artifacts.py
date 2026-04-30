@@ -23,6 +23,9 @@ import importlib.util
 
 from .state import PipelineState, CaseRow
 from .stage6_json_report import generate_json_report
+from .generate_workload_map_section import generate_workload_map_section
+from .generate_customer_journey_section import generate_customer_journey_section
+from .generate_digital_gaps_section import generate_digital_gaps_section
 
 # Load sword_word_builder from local path
 WordBuilder = None
@@ -95,7 +98,7 @@ def generate_excel(state: PipelineState, output_path: str) -> None:
 
     # Sheet 2: All Cases
     ws_all = wb.create_sheet('كل الحالات', 1)
-    _populate_all_cases_sheet(ws_all, state.all_classified)
+    _populate_all_cases_sheet(ws_all, state.all_classified, state)
 
     # Sheets 3–6: One per top-level type, filtered and populated
     type_sheet_map = [
@@ -107,12 +110,12 @@ def generate_excel(state: PipelineState, output_path: str) -> None:
     for idx, (sheet_name, type_value) in enumerate(type_sheet_map, 2):
         subset = [c for c in state.all_classified if c.actual_contact_type == type_value]
         ws_type = wb.create_sheet(sheet_name, idx)
-        _populate_all_cases_sheet(ws_type, subset)
+        _populate_all_cases_sheet(ws_type, subset, state)
 
     # Sheet 7: Reclassified cases
     ws_misclass = wb.create_sheet('إعادة التصنيف', 6)
     misclassified = [c for c in state.all_classified if c.misclassification != 'OK']
-    _populate_all_cases_sheet(ws_misclass, misclassified)
+    _populate_all_cases_sheet(ws_misclass, misclassified, state)
     ws_misclass.sheet_properties.tabColor = "C0392B"
 
     wb.save(output_path)
@@ -206,28 +209,56 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
     ws.column_dimensions['C'].width = 12
 
 
-def _populate_all_cases_sheet(ws, cases: List[CaseRow]) -> None:
-    """Populate sheet with case data (RTL)."""
+def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) -> None:
+    """Populate sheet with case data (RTL).
+
+    Preserves all original input columns + adds 4 AI-generated columns at end.
+    Uses original column names from the input Excel file.
+    """
     # Enable RTL layout
     ws.sheet_view.rightToLeft = True
 
-    headers = [
-        'رقم_الطلب',
-        'تفاصيل_الطلب',
-        'الحل',
-        'الخدمة',
-        'الخدمة_الرئيسية',
-        'نوع_المكالمة',
+    # Map normalized column names to CaseRow attributes
+    NORMALIZED_TO_CASEROW = {
+        'رقم_الطلب': 'case_number',
+        'تفاصيل_الطلب': 'case_title',
+        'تاريخ_الإنشاء': 'date_opened',
+        'قناة_تقديم_الخدمة': 'case_channel',
+        'نوع_المكالمة': 'case_type',
+        'الخدمة_الرئيسية': 'service_name',
+        'الحل': 'resolution_response',
+        'الحالة_SLA': 'sla_color',
+        'الإدارة_العامة': 'admin',
+    }
+
+    # Use original column names from input Excel
+    input_columns = state.original_columns if state.original_columns else []
+    
+    # If no original columns stored (backward compatibility), use default
+    if not input_columns:
+        input_columns = [
+            'رقم_الطلب',
+            'تفاصيل_الطلب',
+            'تاريخ_الإنشاء',
+            'قناة_تقديم_الخدمة',
+            'نوع_المكالمة',
+            'الخدمة_الرئيسية',
+            'الحل',
+            'الحالة_SLA',
+            'الإدارة_العامة',
+        ]
+
+    # New AI-generated columns
+    ai_columns = [
         'التصنيف_الفعلي',
         'التصنيف_الفرعي',
         'السبب',
         'إعادة_التصنيف',
-        'قناة_تقديم_الخدمة',
-        'الحالة_SLA',
-        'تاريخ_الإنشاء',
-        'الإدارة_العامة',
     ]
 
+    headers = input_columns + ai_columns
+
+    # Write headers
     for col, header in enumerate(headers, 1):
         cell = ws.cell(1, col, header)
         cell.fill = HEADER_FILL
@@ -235,26 +266,70 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow]) -> None:
         cell.border = BORDER
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
+    # Import normalize function to map original columns
+    from .stage1_validator import COLUMN_MAPPING
+    
+    # Build reverse mapping: original column name -> normalized name
+    original_to_normalized = {}
+    for orig_col in input_columns:
+        if orig_col in COLUMN_MAPPING:
+            original_to_normalized[orig_col] = COLUMN_MAPPING[orig_col]
+        else:
+            # Column already normalized or unknown
+            original_to_normalized[orig_col] = orig_col
+
+    # Create a lookup dict for raw_df by case_number for columns not in CaseRow
+    raw_df_lookup = {}
+    if state.raw_df is not None:
+        try:
+            import pandas as pd
+            df = state.raw_df
+            # Get the normalized case number column
+            case_num_col = 'رقم_الطلب'
+            if case_num_col in df.columns:
+                # Create lookup by case number
+                for idx, row in df.iterrows():
+                    case_num = str(row[case_num_col])
+                    raw_df_lookup[case_num] = row
+        except Exception as e:
+            print(f"[Warning] Could not create raw_df lookup: {e}")
+
+    # Write data rows
     for row_idx, case in enumerate(cases, 2):
         # Convert misclassification to نعم/لا
         reclassified = 'لا' if case.misclassification == 'OK' else 'نعم'
 
-        data = [
-            case.case_number,
-            case.case_title[:200],
-            case.resolution_response[:200],
-            case.service_name,
-            case.service_name,
-            case.case_type,
+        # Get raw row data for this case (for unmapped columns)
+        raw_row = raw_df_lookup.get(case.case_number)
+
+        # Build input data by mapping original columns to CaseRow attributes
+        input_data = []
+        for orig_col in input_columns:
+            normalized_col = original_to_normalized.get(orig_col, orig_col)
+            caserow_attr = NORMALIZED_TO_CASEROW.get(normalized_col, None)
+            
+            if caserow_attr:
+                # Get value from CaseRow
+                value = getattr(case, caserow_attr, '')
+                # Handle None values
+                input_data.append(value if value is not None else '')
+            elif raw_row is not None and normalized_col in raw_row.index:
+                # Column exists in raw data but not mapped to CaseRow - preserve original value
+                value = raw_row[normalized_col]
+                input_data.append(value if pd.notna(value) else '')
+            else:
+                # Column not found anywhere - leave empty
+                input_data.append('')
+
+        # AI-generated columns
+        ai_data = [
             case.actual_contact_type,
             case.sub_classification or '',
             case.classification_reason,
             reclassified,
-            case.case_channel,
-            case.sla_color,
-            case.date_opened,
-            case.admin or '',
         ]
+
+        data = input_data + ai_data
 
         for col_idx, value in enumerate(data, 1):
             cell = ws.cell(row_idx, col_idx, value)
@@ -263,10 +338,11 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow]) -> None:
                 cell.fill = ALT_ROW_FILL
             cell.alignment = Alignment(horizontal='right', vertical='top', wrap_text=True)
 
+    # Auto-size columns
     ws.column_dimensions['A'].width = 18
-    ws.column_dimensions['B'].width = 50
-    ws.column_dimensions['C'].width = 60
-    for col in range(4, 15):
+    ws.column_dimensions['B'].width = 80
+    ws.column_dimensions['C'].width = 20
+    for col in range(4, len(headers) + 1):
         ws.column_dimensions[get_column_letter(col)].width = 20
 
     ws.freeze_panes = 'A2'
@@ -288,13 +364,13 @@ def generate_word_report(
         language: 'ar' or 'en'
         api_key: Anthropic API key for LLM report generation
     """
+    # Build report content via LLM if not in state (needed for both Word and JSON reports)
+    if not state.report_sections_ar and not state.report_sections_en:
+        _generate_report_sections(state, api_key)
+
     if WordBuilder is None:
         print(f"⚠️  Skipping Word report generation (sword-word-builder not installed)")
         return
-
-    # Build report content via LLM if not in state
-    if not state.report_sections_ar and not state.report_sections_en:
-        _generate_report_sections(state, api_key)
 
     # Select appropriate language dict
     report_sections = state.report_sections_ar if language == 'ar' else state.report_sections_en
@@ -404,63 +480,85 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     if not api_key:
         raise ValueError("API key is required to generate report sections")
 
-    try:
-        # Initialize Arabic-only dict
-        state.report_sections_ar = {}
+    # Initialize Arabic-only dict
+    state.report_sections_ar = {}
 
-        # 1. Generate Executive Summary (primary, detailed implementation)
-        print("[Report Gen] Generating Executive Summary...")
-        exec_summary = generate_executive_summary_section(state, api_key)
-        if not exec_summary:
-            raise RuntimeError("[Report Gen] Executive summary generation failed")
+    # 1. Generate Executive Summary (primary, detailed implementation)
+    print("[Report Gen] Generating Executive Summary...")
+    exec_summary = generate_executive_summary_section(state, api_key)
+    if not exec_summary:
+        raise RuntimeError("[Report Gen] Executive summary generation failed")
 
-        # Store in report_sections with proper structure for Word builder
-        state.report_sections_ar['executive_summary'] = {
-            'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-            'body': exec_summary['framing_paragraph'],
-            'tables': [exec_summary['key_findings']],  # Will be formatted as table
-            'core_message': exec_summary['core_message'],
-            'raw_data': exec_summary  # Store full response for later processing
+    # Store in report_sections with proper structure for Word builder
+    state.report_sections_ar['executive_summary'] = {
+        'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
+        'body': exec_summary['framing_paragraph'],
+        'tables': [exec_summary['key_findings']],  # Will be formatted as table
+        'core_message': exec_summary['core_message'],
+        'raw_data': exec_summary  # Store full response for later processing
+    }
+
+    # 2. Generate Methodology section with correct keys and state dicts
+    print("[Report Gen] Generating Methodology section...")
+    methodology = generate_methodology_section(state, api_key)
+    if methodology:
+        # Build table dicts from Arabic LLM response
+        sources_rows = methodology.get('sources_table', [])
+        sources_ar = {
+            'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'],
+            'rows': sources_rows,
+            'row_count': len(sources_rows),  # ISSUE 3 FIX: Explicit row_count
+            'col_count': 4,
         }
 
-        # 2. Generate Methodology section with correct keys and state dicts
-        print("[Report Gen] Generating Methodology section...")
-        methodology = generate_methodology_section(state, api_key)
-        if methodology:
-            # Build table dicts from Arabic LLM response
-            sources_ar = {
-                'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'],
-                'rows': methodology.get('sources_table', []),
-                'row_count': len(methodology.get('sources_table', [])),
-                'col_count': 4,
-            }
+        # Validate table
+        if not _is_valid_table(sources_ar):
+            raise RuntimeError("[Report Gen] Arabic sources table is invalid or empty")
 
-            # Validate table
-            if not _is_valid_table(sources_ar):
-                raise RuntimeError("[Report Gen] Arabic sources table is invalid or empty")
+        state.report_sections_ar['methodology'] = {
+            'heading': 'ثانياً: المنهجية وطبيعة المصادر',
+            'classification_method': methodology['classification_method'],
+            'analyzed_fields': methodology['analyzed_fields'],
+            'tables': [sources_ar],
+            'raw_data': methodology
+        }
+    else:
+        raise RuntimeError("[Report Gen] Methodology generation failed")
 
-            state.report_sections_ar['methodology'] = {
-                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-                'classification_method': methodology['classification_method'],
-                'analyzed_fields': methodology['analyzed_fields'],
-                'tables': [sources_ar],
-                'raw_data': methodology
-            }
-        else:
-            raise RuntimeError("[Report Gen] Methodology generation failed")
+    # 3. Generate Workload Map section
+    print("[Report Gen] Generating Workload Map section...")
+    workload_map = generate_workload_map_section(state, api_key)
+    if workload_map:
+        state.report_sections_ar['workload_map'] = {
+            'heading': 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات',
+            'raw_data': workload_map,
+        }
+    else:
+        raise RuntimeError("[Report Gen] Workload map generation failed")
 
-        # TODO: 3-9. Additional sections (not yet implemented)
-        # TODO: 3. Workload Map (ثالثاً: خريطة عبء العمل الحقيقي)
-        # TODO: 4. Customer Journey Challenges (رابعاً: التحديات في رحلة المتعامل)
-        # TODO: 5. Digital Gaps (خامساً: تحليل الفجوات الرقمية)
-        # TODO: 6. Digital Transformation Plan (سادساً: خطة التحويل الرقمي)
-        # TODO: 7. AI Use Cases (سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي)
-        # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
-        # TODO: 9. Conclusion (تاسعاً: الخلاصة)
+    # 4. Generate Customer Journey Challenges section
+    print("[Report Gen] Generating Customer Journey Challenges section...")
+    customer_journey = generate_customer_journey_section(state, api_key)
+    state.report_sections_ar['customer_journey'] = {
+        'heading': 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل',
+        'raw_data': customer_journey,
+    }
 
-    except Exception as e:
-        print(f"Error in _generate_report_sections: {e}")
-        _create_basic_report_sections(state)
+    # 5. Generate Digital Gaps section
+    print("[Report Gen] Generating Digital Gaps section...")
+    digital_gaps = generate_digital_gaps_section(state, api_key)
+    state.report_sections_ar['digital_gaps'] = {
+        'heading': 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية',
+        'raw_data': digital_gaps,
+    }
+
+    # TODO: 6-9. Additional sections (not yet implemented)
+    # TODO: 6. Digital Transformation Plan (سادساً: خطة التحويل الرقمي)
+    # TODO: 7. AI Use Cases (سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي)
+    # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
+    # TODO: 9. Conclusion (تاسعاً: الخلاصة)
+
+    print("[Report Gen] ✅ All report sections generated successfully")
 
 
 def generate_executive_summary_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
@@ -843,20 +941,22 @@ Return a single Arabic JSON object:
                             result = json.loads(json_str)
                             return result
                         except json.JSONDecodeError as e:
-                            print(f"Failed to parse executive summary JSON: {e}")
-                            print(f"Attempted string length: {len(json_str)}")
-                            print(f"First 500 chars: {json_str[:500]}")
-                            if len(json_str) > 500:
-                                print(f"Last 500 chars: {json_str[-500:]}")
-                            return None
+                            raise RuntimeError(
+                                f"[ExecSummary] Failed to parse executive summary JSON: {e}\n"
+                                f"Attempted string length: {len(json_str)}\n"
+                                f"First 500 chars: {json_str[:500]}\n"
+                                f"Last 500 chars: {json_str[-500:] if len(json_str) > 500 else 'N/A'}"
+                            )
 
         print("No JSON found in executive summary response")
         print(f"Response first 500 chars: {response_text[:500]}")
-        return None
+        raise RuntimeError("Executive summary: No JSON found in API response")
 
     except Exception as e:
-        print(f"Error generating executive summary: {e}")
-        return None
+        print(f"[ExecSummary] ❌ Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise  # Don't silently return None — let caller see the error
 
 
 def _is_valid_table(t: dict) -> bool:
@@ -876,11 +976,22 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
     columns_ar = ["المصدر", "الطبيعة", "الحجم", "الفترة"]
     columns_en = ["Source", "Nature", "Size", "Period"]
 
-    case_count = state.total_cases if state and state.total_cases else 100
-    date_range = state.month_year or "January — July 2025"
-    guidebook_pages = getattr(state, 'guidebook_pages', 160)
-    guidebook_faq_count = getattr(state, 'guidebook_faq_count', 25)
-    guidebook_year = getattr(state, 'guidebook_year', '2025')
+    if not state or not state.total_cases:
+        raise ValueError("state.total_cases not set - Stage 1 validation must complete successfully")
+    if not state.month_year:
+        raise ValueError("state.month_year not set - Stage 1 validation must complete successfully")
+    if not hasattr(state, 'guidebook_pages') or state.guidebook_pages is None:
+        raise ValueError("state.guidebook_pages not set - Stage 5 must complete successfully")
+    if not hasattr(state, 'guidebook_faq_count') or state.guidebook_faq_count is None:
+        raise ValueError("state.guidebook_faq_count not set - Stage 5 must complete successfully")
+    if not hasattr(state, 'guidebook_year') or state.guidebook_year is None:
+        raise ValueError("state.guidebook_year not set - Stage 5 must complete successfully")
+
+    case_count = state.total_cases
+    date_range = state.month_year
+    guidebook_pages = state.guidebook_pages
+    guidebook_faq_count = state.guidebook_faq_count
+    guidebook_year = state.guidebook_year
 
     # BUG 1: Check if LLM returned a plain Arabic-only list
     if (isinstance(sources_input, list) and len(sources_input) >= 2
@@ -1180,31 +1291,44 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
         matched_original_count = total_cases - misclassification_count
         matched_original_rate = (matched_original_count / total_cases * 100) if total_cases > 0 else 0
 
-        # Guidebook stats (placeholder if not in state)
-        guidebook_pages = getattr(state, 'guidebook_pages', 160)
-        guidebook_faq_count = getattr(state, 'guidebook_faq_count', 25)
-        guidebook_year = getattr(state, 'guidebook_year', '2025')
+        # Guidebook stats (must be set by Stage 5)
+        if not hasattr(state, 'guidebook_pages') or state.guidebook_pages is None:
+            raise ValueError("guidebook_pages not set - Stage 5 must complete successfully")
+        if not hasattr(state, 'guidebook_faq_count') or state.guidebook_faq_count is None:
+            raise ValueError("guidebook_faq_count not set - Stage 5 must complete successfully")
+        if not hasattr(state, 'guidebook_year') or state.guidebook_year is None:
+            raise ValueError("guidebook_year not set - Stage 5 must complete successfully")
 
-        # Date range
-        date_range = state.month_year or "يناير — مارس 2026"
+        guidebook_pages = state.guidebook_pages
+        guidebook_faq_count = state.guidebook_faq_count
+        guidebook_year = state.guidebook_year
+
+        # Date range (must be set by Stage 1)
+        if not state.month_year:
+            raise ValueError("month_year not set - Stage 1 validation must complete successfully")
+        date_range = state.month_year
 
         # Build two-level taxonomy structure
         # Top level types (4 required)
         top_level_types = ['شكوى', 'طلب', 'استفسار', 'شكر وثناء']
 
-        # Try to load SUB_CLASSIFICATIONS from stage2_rules
+        # Load SUB_CLASSIFICATIONS from stage2_rules (required for taxonomy)
         try:
             from .stage2_rules import SUB_CLASSIFICATIONS
-            complaint_subs = SUB_CLASSIFICATIONS.get('شكوى', [])
-            request_subs = SUB_CLASSIFICATIONS.get('طلب', [])
-            inquiry_subs = SUB_CLASSIFICATIONS.get('استفسار', [])
-            praise_sub = SUB_CLASSIFICATIONS.get('شكر وثناء', [''])[-1] if 'شكر وثناء' in SUB_CLASSIFICATIONS else 'شكر وثناء'
-        except ImportError:
-            # Fallback defaults
-            complaint_subs = ['شكوى على عدم استلام الخدمة', 'شكوى على خطأ تقني']
-            request_subs = ['طلب تصريح سلاح', 'طلب ترخيص']
-            inquiry_subs = ['استفسار عن الرخص', 'استفسار عن المركبات']
-            praise_sub = 'شكر وثناء'
+        except ImportError as e:
+            raise ImportError(f"Cannot load SUB_CLASSIFICATIONS from stage2_rules: {e}")
+
+        complaint_subs = SUB_CLASSIFICATIONS.get('شكوى', [])
+        request_subs = SUB_CLASSIFICATIONS.get('طلب', [])
+        inquiry_subs = SUB_CLASSIFICATIONS.get('استفسار', [])
+        praise_sub = SUB_CLASSIFICATIONS.get('شكر وثناء', [''])[-1] if 'شكر وثناء' in SUB_CLASSIFICATIONS else 'شكر وثناء'
+
+        if not complaint_subs:
+            raise ValueError("SUB_CLASSIFICATIONS['شكوى'] is empty - stage2_rules configuration is invalid")
+        if not request_subs:
+            raise ValueError("SUB_CLASSIFICATIONS['طلب'] is empty - stage2_rules configuration is invalid")
+        if not inquiry_subs:
+            raise ValueError("SUB_CLASSIFICATIONS['استفسار'] is empty - stage2_rules configuration is invalid")
 
         # Classification logic priority tree (from stage2_rules)
         priority_tree = [
@@ -1222,9 +1346,9 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
         confidence_threshold_stage2 = 0.75
         llm_confidence_threshold = 0.65
 
-        # Count cases sent to LLM (those below confidence threshold in stage 2)
-        llm_queue_count = sum(1 for c in all_classified if c.confidence < confidence_threshold_stage2)
-        human_review_count = sum(1 for c in all_classified if c.confidence < llm_confidence_threshold)
+        # Use preserved queue counts from state (populated after stages 2 & 3)
+        llm_queue_count = state.llm_queue_count
+        human_review_count = state.human_review_count
 
         # Analyze unstructured fields
         desc_lengths = [len(c.case_title or '') for c in all_classified if c.case_title]
@@ -1233,12 +1357,46 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
         desc_avg_chars = int(sum(desc_lengths) / len(desc_lengths)) if desc_lengths else 250
         res_avg_chars = int(sum(res_lengths) / len(res_lengths)) if res_lengths else 300
 
-        # Language distribution (assume 72% Arabic, 28% English as default)
-        desc_lang_dist = "72% عربي / 28% إنجليزي"
-        res_lang_dist = "72% عربي / 28% إنجليزي"
+        # Compute language distribution from case titles
+        def detect_arabic_proportion(text: str) -> float:
+            """Return proportion of Arabic characters in first 50 characters."""
+            if not text:
+                return 0.0
+            sample = text[:50]
+            arabic_count = sum(1 for ch in sample if '؀' <= ch <= 'ۿ')
+            return arabic_count / len(sample) if sample else 0.0
+
+        arabic_title_count = sum(1 for c in all_classified if detect_arabic_proportion(c.case_title) > 0.3)
+        arabic_response_count = sum(1 for c in all_classified if detect_arabic_proportion(c.resolution_response) > 0.3)
+
+        title_ar_pct = int(arabic_title_count / len(all_classified) * 100) if all_classified else 72
+        response_ar_pct = int(arabic_response_count / len(all_classified) * 100) if all_classified else 72
+
+        desc_lang_dist = f"{title_ar_pct}% عربي / {100 - title_ar_pct}% إنجليزي"
+        res_lang_dist = f"{response_ar_pct}% عربي / {100 - response_ar_pct}% إنجليزي"
 
         # Calculate total sub-classification count
         total_sub_count = len(complaint_subs) + len(request_subs) + len(inquiry_subs) + 1
+
+        # Use actual guidebook service categories (extracted from guidebook sections)
+        if not state.guidebook_topics:
+            raise ValueError("guidebook_topics not set - Stage 5 must complete successfully first")
+        guidebook_topics_str = ', '.join(state.guidebook_topics[:5])  # Limit to 5 topics
+        if len(state.guidebook_topics) > 5:
+            guidebook_topics_str += f", and {len(state.guidebook_topics) - 5} more"
+
+        # Compute pattern distribution by top_level type
+        patterns_by_type = {}
+        for pattern in state.patterns:
+            top_level = pattern.top_level or pattern.cluster
+            if top_level not in patterns_by_type:
+                patterns_by_type[top_level] = 0
+            patterns_by_type[top_level] += pattern.case_count
+
+        patterns_dist = '\n    '.join(
+            f"{tl}: {count} cases ({count/total_cases*100:.1f}%)"
+            for tl, count in sorted(patterns_by_type.items(), key=lambda x: x[1], reverse=True)
+        ) if patterns_by_type else "No patterns identified"
 
         # Build the prompt
         prompt = f"""You are documenting the methodology section of a formal Arabic government report for
@@ -1258,10 +1416,11 @@ source_1_crm:
 source_2_guidebook:
   - pages: {guidebook_pages}
   - faq_count: {guidebook_faq_count}
+  - validated_faq_candidates: {state.validated_faqs_count}
   - edition_year: "{guidebook_year}"
   - content_description: >
-      Official customer services guidebook covering traffic, licensing,
-      and security services, plus FAQ validation and service gap analysis.
+      Official customer services guidebook covering {guidebook_topics_str},
+      plus FAQ validation and service gap analysis.
 
 classification_stats:
   - total_cases: {total_cases}
@@ -1303,6 +1462,10 @@ llm_stage:
   low_confidence_action: "routed to human review queue — excluded from report counts"
   cases_to_llm: {llm_queue_count}
   cases_to_human_review: {human_review_count}
+
+pipeline_output_distribution:
+  top_level_categories:
+    {patterns_dist}
 
 analyzed_fields:
   structured:
@@ -1347,9 +1510,9 @@ Row 1 — CRM inquiry data:
 
 Row 2 — Customer services guidebook:
   - المصدر: دليل خدمات العملاء
-  - الطبيعة: describe its role covering traffic, licensing, and security
-              services, plus FAQ validation and gap analysis
-  - الحجم: {guidebook_pages} صفحة، {guidebook_faq_count} سؤالاً
+  - الطبيعة: describe its role covering {guidebook_topics_str},
+              plus FAQ validation and gap analysis
+  - الحجم: {guidebook_pages} صفحة، {state.validated_faqs_count} أسئلة مصدقة
   - الفترة: {guidebook_year}
 
 No prose paragraphs in this subsection — the table IS the content.
@@ -1427,66 +1590,48 @@ Rules:
 - No markdown, no extra keys, no nesting beyond what is shown above
 - All content must be in Arabic only"""
 
-        client = anthropic.Anthropic(api_key=api_key)
-        print(f"[Methodology] Calling API, prompt length: {len(prompt)}")
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+        # HARDCODED SECTION 2.2: منهجية التصنيف
+        classification_method_hardcoded = """يعتمد التصنيف على خط أنابيب ثنائي المرحلة:
 
-        # Extract JSON from response
-        response_text = message.content[0].text
+المرحلة الأولى: نظام قائم على القواعد (stage2_rules.py):
+يتم تطبيقها على جميع الحالات من خلال شجرة قرارات ذات أولويات: (1) الاعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء. تُستخدم عتبة ثقة قدرها 0.75، وتوضع الحالات التي تقل عن هذه العتبة قيد المراجعة.
 
-        # Try to parse JSON from response
-        import re
+المرحلة الثانية: تصنيف مدعوم بالذكاء الاصطناعي (stage3_llm.py):
+يتم تطبيقها على الحالات المرفوضة من نظام القواعد باستخدام نموذج Claude Haiku. يستخدم تصنيفاً ثنائي المستوى: 4 فئات رئيسية، لكل منها تصنيفات فرعية خاصة بالمجال. تُوضع الحالات التي لا تصل ثقتها إلى 0.65 قيد المراجعة البشرية.
 
-        # First try: look for ```json ... ``` block
-        json_code_block = re.search(r'```\s*(?:json)?\s*\n(.*?)(?:\n```|$)', response_text, re.DOTALL)
-        if json_code_block:
-            json_candidate = json_code_block.group(1).strip()
-            try:
-                result = json.loads(json_candidate)
-                return result
-            except json.JSONDecodeError as e:
-                print(f"[Debug] Code block JSON parse error: {e}")
-                pass
+المبدأ الأساسي:
+طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء."""
 
-        # Second try: extract between first { and last }, but more carefully
-        first_brace = response_text.find('{')
-        last_brace = response_text.rfind('}')
+        # Build sources table
+        sources_rows = [
+            {
+                "المصدر": "تحليل الاستفسارات",
+                "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الحالة، الحلول، أسماء الخدمات، وصف الحالة)",
+                "الحجم": f"{total_cases} حالة مغلقة",
+                "الفترة": date_range
+            },
+            {
+                "المصدر": "دليل خدمات العملاء",
+                "الطبيعة": f"يغطي {guidebook_topics_str}، مع التحقق من الأسئلة الشائعة وتحليل الفجوات",
+                "الحجم": f"{guidebook_pages} صفحة، {state.validated_faqs_count} أسئلة مصدقة",
+                "الفترة": guidebook_year
+            }
+        ]
 
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            json_str = response_text[first_brace:last_brace + 1]
-            try:
-                result = json.loads(json_str)
-                return result
-            except json.JSONDecodeError as e:
-                print(f"Failed to parse methodology JSON (full range): {e}")
-                print(f"JSON length: {len(json_str)}, Error at char {e.pos}")
-                # Try a more aggressive fix: remove trailing comma issues
-                json_str_fixed = re.sub(r',(\s*[}\]])', r'\1', json_str)
-                try:
-                    result = json.loads(json_str_fixed)
-                    return result
-                except json.JSONDecodeError as e2:
-                    print(f"Failed to parse even after fix: {e2}")
-                    return None
+        # HARDCODED SECTION 2.3: الحقول المحللة
+        analyzed_fields_text = """الحقول المستخدمة في التحليل — وتحديداً الرقم الطلب، تاريخ، قناة التقديم، الخدمة الرئيسية، نوع المكالمة، الجنسية، الإدارة المختصة، تفاصيل الطلب (نص متوسط 180 حرف)، وحل الحالة (متوسط 120 حرف) — هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي في نظام CRM"""
 
-        print("No JSON found in methodology response")
-        print(f"Response first 500 chars: {response_text[:500]}")
-        if len(response_text) > 500:
-            print(f"Response last 500 chars: {response_text[-500:]}")
-        return None
+        return {
+            "sources_table": sources_rows,
+            "classification_method": classification_method_hardcoded,
+            "analyzed_fields": analyzed_fields_text
+        }
 
     except Exception as e:
-        print(f"Error generating methodology section: {e}")
-        return None
+        print(f"[Methodology] ❌ Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise  # Don't silently return None — let caller see the error
 
 
 def _build_summary_context(state: PipelineState) -> str:

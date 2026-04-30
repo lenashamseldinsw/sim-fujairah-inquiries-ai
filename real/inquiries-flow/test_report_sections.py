@@ -2,7 +2,7 @@
 """
 Test Stages 1-6 + Report Section Generation.
 
-Loads 10 random rows from the inquiries file, runs the pipeline,
+Loads 50 random rows from the inquiries file, runs the pipeline,
 and tests stages 1-5 + Stage 6 (Excel generation) + report sections.
 """
 
@@ -42,12 +42,12 @@ def main():
         print(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
         print(f"   Columns: {list(df.columns)[:5]}...")
 
-        # Sample 10 random rows
-        if len(df) > 10:
-            df = df.sample(n=10, random_state=42)
-            print(f"✅ Sampled 10 random rows (seed=42 for reproducibility)")
+        # Sample 50 random rows
+        if len(df) > 50:
+            df = df.sample(n=50, random_state=42)
+            print(f"✅ Sampled 50 random rows (seed=42 for reproducibility)")
         else:
-            print(f"⚠️  Only {len(df)} rows available (less than 10)")
+            print(f"⚠️  Only {len(df)} rows available (less than 50)")
 
     except Exception as e:
         print(f"❌ Failed to load file: {e}")

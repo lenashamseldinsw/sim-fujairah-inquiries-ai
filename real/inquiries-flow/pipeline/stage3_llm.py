@@ -56,7 +56,7 @@ CLASSIFIER_TOOL = {
                         },
                         "reason": {
                             "type": "string",
-                            "description": "1-2 sentence explanation"
+                            "description": "1-2 sentence explanation in Arabic only"
                         }
                     },
                     "required": ["case_number", "top_level", "sub_classification", "confidence", "reason"]
@@ -112,12 +112,68 @@ INQUIRY SUB-CLASSIFICATIONS (استفسار):
 PRAISE SUB-CLASSIFICATIONS (شكر وثناء):
 - شكر وتقدير عام (General praise)
 
+CLASSIFICATION GUIDELINES:
+
+⚠️  RECLASSIFICATION INDICATORS — These must override first impressions:
+
+1. SERVICE FAILURE INDICATORS → CLASSIFY AS شكوى (COMPLAINT):
+   - Money charged but service not delivered (e.g., "تم دفع مبلغ X دون استلام الخدمة")
+   - Service promised but not received despite payment
+   - System error caused financial or operational loss
+   - Document issued incorrectly or not issued despite full payment
+   → KEY: "Service failure" = Complaint, even if worded as neutral statement
+
+2. UNRESOLVED FOLLOW-UP ISSUES → CLASSIFY AS طلب (REQUEST):
+   - Customer circles back asking "what do I do now?" or "what's next?"
+   - Process described as stuck or incomplete (e.g., "في دوامة" / "كل مرة نفس الموضوع")
+   - Asks for specific action to resolve (e.g., "هل يحق لي..." / "ماذا يجب أن أفعل")
+   - Seeks permission or eligibility (e.g., "هل يحق لي الحصول على")
+   → KEY: "What should I do?" = Request for action
+
+3. PURE INFORMATION-SEEKING → CLASSIFY AS استفسار (INQUIRY):
+   - Customer only asks "what is the status?" or "when will X happen?"
+   - No complaint about delay, only asks for information about timeline
+   - No service failure mentioned
+   - No request for action to resolve — just wants to know facts
+   → KEY: "Tell me about X" (no problem statement) = Inquiry
+
+SPECIAL RECLASSIFICATION RULES:
+
+Rule A — Multi-part messages:
+   If a case contains BOTH a complaint AND a request/inquiry:
+   - Complaint component takes precedence → Classify as شكوى
+   - Only if purely neutral information-seeking: classify as استفسار
+
+Rule B — Authority/process confusion:
+   If customer is stuck in bureaucratic loops (bounced between departments):
+   - AND asking to resolve it → طلب (Request for action to untangle)
+   - AND only asking for clarification → استفسار (Inquiry about jurisdiction)
+
+Rule C — Payment issues:
+   - "دفعت مبلغ X دون استلام" → شكوى (COMPLAINT: paid without service)
+   - "كم المبلغ المطلوب" → استفسار (INQUIRY: asking fee amount)
+   - "ماذا أفعل لاسترجاع المبلغ" → طلب (REQUEST: asking for refund action)
+
+Rule D — Resolution reveals the true nature:
+   Always read the Resolution Response to determine what actually happened,
+   not just what the customer said. If the resolution shows any of the following,
+   the case is a شكوى (COMPLAINT) regardless of how neutrally the description is worded:
+   - A refund was issued ("تم إعادة المبلغ" / "تم استرداد")
+   - A system error was confirmed or corrected ("تم تحديث البرنامج" / "خطأ في النظام")
+   - A service failure was acknowledged ("تبين وجود خلل" / "لم يتم الإصدار")
+   - Escalation or coordination with another department was required to fix a problem
+   → KEY: If the resolution fixed something that was broken, a failure occurred —
+     the customer's neutral phrasing does not change the classification.
+
 RULES:
-- Base classification on actual customer intent, not just keywords.
-- The Resolution Response reveals the true nature — use it to override initial impressions.
+- Base classification on actual customer intent and situation, not just keywords.
+- The Description field reveals what actually happened — use it to override keywords.
+- The Resolution Response shows how it was handled — compare to what customer describes.
+- Service failure + no resolution = Complaint. Stuck process + asking to fix = Request.
 - Sub-classification MUST be a valid child of the chosen top_level.
 - Return case_number exactly as provided.
-- Return one entry per case in input order."""
+- Return one entry per case in input order.
+- ALL OUTPUT MUST BE IN ARABIC ONLY. Provide reasons (explanations) entirely in Arabic."""
 
 
 def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_callback=None) -> List[Dict]:
@@ -133,7 +189,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
         List of classification results {case_number, top_level, sub_classification, confidence, reason}
     """
     results = []
-    batch_size = 30  # Safe size for array tool-use without truncation risk
+    batch_size = 15  # Reduced from 30 — balances efficiency with response completeness (each ~150 tokens = 2250 total, safe margin under 8000 max)
 
     total_batches = (len(cases) + batch_size - 1) // batch_size
     print(f"[Stage3] Processing {len(cases)} cases in {total_batches} batches of {batch_size}")
@@ -160,7 +216,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
         try:
             message = client.messages.create(
                 model="claude-haiku-4-5-20251001",  # Haiku for speed/cost on bulk classification
-                max_tokens=4000,
+                max_tokens=8000,  # Increased from 4000 — need room for 30 case classifications (each ~150 tokens)
                 system=build_system_prompt(),
                 tools=[CLASSIFIER_TOOL],
                 tool_choice={"type": "any"},  # Force tool use — no free-text fallback
@@ -177,8 +233,19 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
             # Extract tool call — should contain all classifications in one array
             tool_calls = [b for b in message.content if b.type == "tool_use"]
 
+            # Check for truncation
+            if message.stop_reason == "max_tokens":
+                print(f"[Stage3] ERROR: Batch {batch_num} response was truncated (hit max_tokens limit)")
+                print(f"[Stage3] Current max_tokens: 8000. Consider increasing further or reducing batch_size.")
+
             if tool_calls:
                 classifications = tool_calls[0].input.get("classifications", [])
+
+                # Check if we got all expected classifications
+                if len(classifications) < len(batch):
+                    print(f"[Stage3] WARNING: Batch {batch_num} incomplete — got {len(classifications)}/{len(batch)} classifications")
+                    print(f"[Stage3] stop_reason: {message.stop_reason}")
+
                 results.extend(classifications)
 
                 # Fallback for any case the LLM missed (shouldn't happen but defensive)
@@ -192,7 +259,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
                             "top_level": case.get("top_level", "استفسار"),
                             "sub_classification": case.get("sub_classification", "استفسار عام"),
                             "confidence": 0.4,  # Below threshold → human review
-                            "reason": "Not returned in LLM batch response"
+                            "reason": "لم يتم إرجاع الحالة في رد الدفعة"
                         })
             else:
                 # No tool call — flag all cases in batch for human review
@@ -203,7 +270,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
                         "top_level": case.get("top_level", "استفسار"),
                         "sub_classification": case.get("sub_classification", "استفسار عام"),
                         "confidence": 0.3,
-                        "reason": "LLM returned no tool call for this batch"
+                        "reason": "لم يتم استدعاء أداة تصنيف في هذه الدفعة"
                     })
 
         except Exception as e:
@@ -214,7 +281,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
                     "top_level": case.get("top_level", "استفسار"),
                     "sub_classification": case.get("sub_classification", "استفسار عام"),
                     "confidence": 0.4,
-                    "reason": f"LLM batch error: {str(e)}"
+                    "reason": f"خطأ في معالجة الدفعة: {str(e)}"
                 })
 
     return results

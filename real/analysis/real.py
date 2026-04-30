@@ -25,6 +25,10 @@ _REQUIRED_PACKAGES = {
     'pydantic': 'Data validation',
 }
 
+_OPTIONAL_PACKAGES = {
+    'tabula': 'PDF table extraction (tabula-py)',
+}
+
 _MISSING_PACKAGES = []
 for pkg_name, pkg_purpose in _REQUIRED_PACKAGES.items():
     try:
@@ -42,7 +46,7 @@ if _MISSING_PACKAGES:
 # Import pipeline after verifying dependencies
 # Add inquiries-flow to path since it has a hyphen and can't be imported as a module
 sys.path.insert(0, str(Path(__file__).parent.parent / "inquiries-flow"))
-from pipeline.orchestrator import PipelineOrchestrator
+from pipeline.orchestrator import PipelineOrchestrator  # type: ignore[import-untyped]
 
 
 class RealAnalyzer(Analyzer):
@@ -201,7 +205,7 @@ class RealAnalyzer(Analyzer):
     def _parse_pdf(self, uploaded_file) -> pd.DataFrame:
         """Parse PDF file into DataFrame."""
         try:
-            import tabula
+            import tabula  # type: ignore[import-untyped]
             pdf_bytes = BytesIO(uploaded_file.getvalue())
             tables = tabula.read_pdf(pdf_bytes, pages='all', multiple_tables=True)
 
@@ -236,7 +240,7 @@ class RealAnalyzer(Analyzer):
             sys.path.insert(0, str(real_dir))
             sys.path.insert(0, str(root_dir))
 
-            from pipeline.orchestrator import PipelineOrchestrator
+            from pipeline.orchestrator import PipelineOrchestrator  # type: ignore[import-untyped]
 
             # Initialize report structure that maps directly to UI sections
             report = {
@@ -452,7 +456,7 @@ class RealAnalyzer(Analyzer):
             if str(root_dir) not in sys.path:
                 sys.path.insert(0, str(root_dir))
 
-            from pipeline.stage6_artifacts import generate_excel, generate_word_report
+            from pipeline.stage6_artifacts import generate_excel, generate_word_report  # type: ignore[import-untyped]
 
             # Generate Excel
             generate_excel(state, str(excel_path))

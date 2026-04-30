@@ -15,5 +15,6 @@ State is serialized to JSON after each stage for recovery on browser refresh.
 """
 
 from .state import PipelineState
+from .orchestrator import PipelineOrchestrator
 
-__all__ = ["PipelineState"]
+__all__ = ["PipelineState", "PipelineOrchestrator"]

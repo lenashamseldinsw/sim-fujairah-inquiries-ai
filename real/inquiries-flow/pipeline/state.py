@@ -103,6 +103,7 @@ class PipelineState(BaseModel):
     # --- INPUT ---
     raw_df: Optional[Any] = None  # pandas DataFrame from uploaded Excel
     validated_schema: Optional[Dict[str, Any]] = None  # Schema validation result
+    original_columns: List[str] = Field(default_factory=list)  # Original column names from input Excel
 
     # --- STAGE 2 (RULE CLASSIFIER) ---
     rule_classified: List[CaseRow] = Field(default_factory=list)  # Cases classified by rules
@@ -144,6 +145,20 @@ class PipelineState(BaseModel):
     total_cases: int = 0
     reclassified_count: int = 0  # FIX 1: Centralized reclassification count
     reclassification_rate: float = 0.0  # Percentage of cases reclassified
+
+    # --- PIPELINE ROUTING STATS (stored before queues cleared) ---
+    llm_queue_count: int = 0  # Cases sent to LLM after stage 2
+    human_review_count: int = 0  # Cases below LLM threshold, sent to human review
+    rule_classified_count: int = 0  # Cases classified by rules in stage 2
+
+    # --- ANALYSIS METADATA ---
+    validated_faqs_count: int = 0  # Count of validated FAQs from stage 5
+    guidebook_topics: List[str] = Field(default_factory=list)  # Friction cluster topics from gap_table
+
+    # --- GUIDEBOOK METADATA (from Stage 5) ---
+    guidebook_pages: Optional[int] = None  # Total pages in guidebook
+    guidebook_faq_count: Optional[int] = None  # Total FAQs in guidebook
+    guidebook_year: Optional[str] = None  # Publication year of guidebook
 
     class Config:
         arbitrary_types_allowed = True

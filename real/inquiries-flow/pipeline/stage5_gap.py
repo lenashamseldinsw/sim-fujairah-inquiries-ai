@@ -66,6 +66,79 @@ GAP_ANALYSIS_TOOL = {
 }
 
 
+def extract_guidebook_topics(guidebook_path: str) -> List[str]:
+    """
+    Extract actual service category names from guidebook JSON.
+
+    Returns the section names (service categories) that the guidebook covers.
+    These are the REAL topics the guidebook addresses, not friction points.
+
+    Args:
+        guidebook_path: Path to guidebook JSON
+
+    Returns:
+        List of service category names in Arabic
+
+    Raises:
+        FileNotFoundError: If guidebook file doesn't exist
+        KeyError: If guidebook structure doesn't have 'sections'
+    """
+    with open(guidebook_path) as f:
+        g = json.load(f)
+
+    sections = g.get('sections', [])
+    if not sections:
+        raise KeyError("Guidebook JSON missing 'sections' field")
+
+    # Extract section names - these are the service categories
+    topics = [s.get('name_ar') or s.get('name_en') for s in sections if 'name_ar' in s or 'name_en' in s]
+
+    if not topics:
+        raise ValueError("No service categories found in guidebook sections")
+
+    return topics
+
+
+def extract_guidebook_metadata(guidebook_path: str) -> Dict[str, Any]:
+    """
+    Extract guidebook metadata (pages, FAQ count, publication year, topics).
+
+    Args:
+        guidebook_path: Path to guidebook JSON
+
+    Returns:
+        Dict with keys: pages, faq_count, year, topics
+
+    Raises:
+        FileNotFoundError: If guidebook file doesn't exist
+        KeyError: If guidebook structure doesn't have required fields
+    """
+    with open(guidebook_path) as f:
+        g = json.load(f)
+
+    # Extract pages from document metadata
+    document = g.get('document', {})
+    pages = document.get('total_pages', 160)
+
+    # Extract FAQ count
+    faqs = g.get('faq', [])
+    faq_count = len(faqs)
+
+    # Extract year from source_date (e.g., "October 2025" -> "2025")
+    source_date = document.get('source_date', '2025')
+    year = source_date.split()[-1] if source_date else '2025'
+
+    # Extract topics (service categories)
+    topics = extract_guidebook_topics(guidebook_path)
+
+    return {
+        'pages': pages,
+        'faq_count': faq_count,
+        'year': year,
+        'topics': topics
+    }
+
+
 def load_guidebook_for_stage5(guidebook_path: str, friction_clusters: List[str]) -> dict:
     """
     Load and filter guidebook JSON for Stage 5 gap analysis.

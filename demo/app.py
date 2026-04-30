@@ -3,6 +3,7 @@ import time
 import os
 import json
 import random
+import traceback
 from pathlib import Path
 from analysis import DemoAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
@@ -1847,7 +1848,6 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
         display.display_report(str(report_path))
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
-        import traceback
         st.code(traceback.format_exc())
 
 

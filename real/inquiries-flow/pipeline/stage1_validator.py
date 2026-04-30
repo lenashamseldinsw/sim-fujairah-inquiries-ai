@@ -265,6 +265,9 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     Input: pandas DataFrame from uploaded file
     Output: state with raw_df and validated_schema
     """
+    # Store original column names before normalization
+    state.original_columns = df.columns.tolist()
+    
     # Normalize column names
     df_normalized = normalize_columns(df)
 

@@ -78,6 +78,12 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
 
     Returns:
         (top_level, sub_classification, reason, confidence)
+
+    CLASSIFICATION RULE D — Resolution reveals the true nature:
+    Always consider the Resolution Response (الحل) when classifying. If resolution
+    shows a refund issued, system error corrected, service failure acknowledged, or
+    escalation required to fix a problem, classify as شكوى (complaint) regardless of
+    neutral phrasing in the description. Service failure + resolution = complaint.
     """
     # BUG FIX 1: Read from تفاصيل_الطلب (actual description), not نوع_المكالمة (CRM label)
     title = str(case_row.get('تفاصيل_الطلب', ''))

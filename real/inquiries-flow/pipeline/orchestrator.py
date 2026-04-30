@@ -18,7 +18,7 @@ from .stage1_validator import run_stage1
 from .stage2_rules import run_stage2
 from .stage3_llm import run_stage3
 from .stage4_analysis import run_stage4
-from .stage5_gap import run_stage5, load_guidebook_for_stage5
+from .stage5_gap import run_stage5, load_guidebook_for_stage5, extract_guidebook_topics, extract_guidebook_metadata
 from .stage6_artifacts import run_stage6
 
 
@@ -114,6 +114,11 @@ class PipelineOrchestrator:
         """
         try:
             self.state = run_stage2(self.state)
+
+            # Preserve queue counts before they're cleared
+            self.state.rule_classified_count = len(self.state.rule_classified)
+            self.state.llm_queue_count = len(self.state.llm_queue)
+
             self.save_state()
 
             msg = f"Classified {len(self.state.rule_classified)} cases, queued {len(self.state.llm_queue)} for LLM review"
@@ -134,6 +139,7 @@ class PipelineOrchestrator:
         if not self.state.llm_queue:
             # No low-confidence cases
             self.state.all_classified = self.state.rule_classified
+            self.state.human_review_count = 0  # Preserve count: no cases sent to human review
             self.state.month_year = extract_month_year_range(
                 [c.model_dump() for c in self.state.all_classified]
             )
@@ -145,6 +151,9 @@ class PipelineOrchestrator:
 
             # Merge classifications
             self.state.all_classified = self.state.rule_classified + self.state.llm_classified
+
+            # Preserve human review count before queue is cleared
+            self.state.human_review_count = len(self.state.human_review_queue)
 
             # Extract month_year range from date_opened fields
             self.state.month_year = extract_month_year_range(
@@ -197,6 +206,17 @@ class PipelineOrchestrator:
             guidebook_data = load_guidebook_for_stage5(self.guidebook_path, friction_clusters)
 
             self.state = run_stage5(self.state, self.api_key, guidebook_data)
+
+            # Preserve metadata for methodology section
+            self.state.validated_faqs_count = len(self.state.validated_faqs)
+
+            # Extract guidebook metadata (pages, FAQ count, year, topics)
+            guidebook_meta = extract_guidebook_metadata(self.guidebook_path)
+            self.state.guidebook_pages = guidebook_meta['pages']
+            self.state.guidebook_faq_count = guidebook_meta['faq_count']
+            self.state.guidebook_year = guidebook_meta['year']
+            self.state.guidebook_topics = guidebook_meta['topics']
+
             self.save_state()
 
             msg = f"Gap analysis complete: {len(self.state.gap_table)} gaps identified, {len(self.state.validated_faqs)} FAQs validated"
