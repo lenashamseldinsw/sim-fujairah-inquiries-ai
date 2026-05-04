@@ -44,7 +44,7 @@ from typing import Dict, Any, List, Optional
 from collections import defaultdict
 import anthropic
 
-from .state import PipelineState
+from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
 
@@ -243,7 +243,7 @@ def generate_customer_journey_section(
         # ── Pre-compute all numbers from state ────────────────────────────────
         # FIX 4: Use len(all_classified) consistently (matches workload map pattern)
         total_cases  = len(state.all_classified) or state.total_cases or 1
-        date_range   = state.month_year or "Q1 2026"
+        date_range   = convert_month_year_to_arabic(state.month_year) or "Q1 2026"
         friction_count = len(state.journey_map)
 
         friction_rows = _build_friction_rows(state)
@@ -295,11 +295,8 @@ def generate_customer_journey_section(
             '2–3 sentences, formal Arabic. Must:\n'
             f'  - Open: "يكشف التحليل المعمّق للبيانات النصية غير المهيكلة عن {friction_count} نقاط احتكاك'
             f' رئيسية في رحلة المتعامل، كل منها ينتج عن سبب جذري محدد قابل للمعالجة:"\n'
-            '  - If quick_win is not null, add a second sentence formatted exactly as:\n'
-            '    "إجراء تحسيني ذو أثر كبير: [describe the quick_win in 1–2 Arabic sentences,\n'
-            '     naming quick_win.friction_point, quick_win.case_count, date_range, quick_win.pct_of_total,\n'
-            '     and the specific fix (quick_win.fix_type)] — دون الحاجة إلى أي تغيير في المنصة أو هيكل الخدمة.\n'
-            '     هذا الإجراء الوحيد يحل {pct}% من إجمالي الحالات."\n'
+            f'  - Highlight the top friction: "النقطة الأكثر حدة هي {top_friction_point} التي تؤثر على {top_friction_count} حالة ({top_friction_pct}% من الإجمالي)."\n'
+            '  - If quick_win is not null, add a sentence about the quick_win impact.\n'
             '  - End the paragraph with a colon (":") — the friction table follows immediately.\n'
             '\n'
             'B. الإجراء التحسيني column for EVERY row in pre_computed_friction_table\n'

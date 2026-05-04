@@ -178,12 +178,55 @@ def save_state_to_json(state: PipelineState, json_path: str) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def extract_month_year_range(cases: list) -> str:
+ARABIC_MONTHS = {
+    'January': 'يناير',
+    'February': 'فبراير',
+    'March': 'مارس',
+    'April': 'أبريل',
+    'May': 'مايو',
+    'June': 'يونيو',
+    'July': 'يوليو',
+    'August': 'أغسطس',
+    'September': 'سبتمبر',
+    'October': 'أكتوبر',
+    'November': 'نوفمبر',
+    'December': 'ديسمبر',
+}
+
+ENGLISH_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December']
+
+
+def convert_month_year_to_arabic(english_month_year: str) -> str:
+    """
+    Convert English month-year string to Arabic.
+
+    Examples:
+        "January 2025" → "يناير 2025"
+        "January — February 2025" → "يناير — فبراير 2025"
+        "January 2025 — February 2026" → "يناير 2025 — فبراير 2026"
+    """
+    if not english_month_year:
+        return english_month_year
+
+    result = english_month_year
+    for eng_month, ar_month in ARABIC_MONTHS.items():
+        result = result.replace(eng_month, ar_month)
+    return result
+
+
+def extract_month_year_range(cases: list, lang: str = 'en') -> str:
     """
     Extract month_year range from date_opened fields in cases.
 
     Handles formats: YYYY-MM-DD HH:MM:SS, DD/MM/YYYY, YYYY-MM-DD, etc.
-    Returns: "Month Year — Month Year" (e.g., "January 2025 — February 2025")
+    Args:
+        cases: List of case dicts or CaseRow objects with date_opened field
+        lang: 'en' for English, 'ar' for Arabic month names
+
+    Returns:
+        - English: "Month Year — Month Year" (e.g., "January 2025 — February 2025")
+        - Arabic: "الشهر السنة — الشهر السنة" (e.g., "يناير 2025 — فبراير 2025")
     """
     if not cases:
         return None
@@ -240,12 +283,11 @@ def extract_month_year_range(cases: list) -> str:
     min_date = dates[0]
     max_date = dates[-1]
 
-    # Format as "Month Year — Month Year"
-    month_names = ['January', 'February', 'March', 'April', 'May', 'June',
-                   'July', 'August', 'September', 'October', 'November', 'December']
+    # Select month names based on language
+    month_names = ARABIC_MONTHS if lang == 'ar' else ENGLISH_MONTHS
 
-    min_month = month_names[min_date.month - 1]
-    max_month = month_names[max_date.month - 1]
+    min_month = month_names[ENGLISH_MONTHS[min_date.month - 1]] if lang == 'ar' else ENGLISH_MONTHS[min_date.month - 1]
+    max_month = month_names[ENGLISH_MONTHS[max_date.month - 1]] if lang == 'ar' else ENGLISH_MONTHS[max_date.month - 1]
 
     if min_date.year == max_date.year and min_date.month == max_date.month:
         return f"{min_month} {min_date.year}"

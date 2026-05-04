@@ -21,11 +21,13 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import importlib.util
 
-from .state import PipelineState, CaseRow
+from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage6_json_report import generate_json_report
 from .generate_workload_map_section import generate_workload_map_section
 from .generate_customer_journey_section import generate_customer_journey_section
 from .generate_digital_gaps_section import generate_digital_gaps_section
+from .generate_digital_transformation_section import generate_digital_transformation_section
+from .generate_ai_use_cases_section import generate_ai_use_cases_section
 
 # Load sword_word_builder from local path
 WordBuilder = None
@@ -129,7 +131,7 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
     total = len(state.all_classified)
 
     ws.merge_cells('A1:D1')
-    ws['A1'] = f"ملخص تحليل استفسارات شرطة الفجيرة — {state.month_year or 'Q1 2026'}"
+    ws['A1'] = f"ملخص تحليل استفسارات شرطة الفجيرة — {convert_month_year_to_arabic(state.month_year) or 'Q1 2026'}"
     ws['A1'].font = Font(bold=True, size=14)
 
     ws.merge_cells('A2:D2')
@@ -392,7 +394,7 @@ def generate_word_report(
     # Add cover page
     if is_arabic:
         title = "نبض الفجيرة"
-        subtitle = f"تقرير تحليل الاستفسارات — {state.month_year or 'الربع الأول 2026'}"
+        subtitle = f"تقرير تحليل الاستفسارات — {convert_month_year_to_arabic(state.month_year) or 'الربع الأول 2026'}"
     else:
         title = "Fujairah Pulse"
         subtitle = f"Inquiry Analysis Report — {state.month_year or 'Q1 2026'}"
@@ -552,9 +554,23 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         'raw_data': digital_gaps,
     }
 
-    # TODO: 6-9. Additional sections (not yet implemented)
-    # TODO: 6. Digital Transformation Plan (سادساً: خطة التحويل الرقمي)
-    # TODO: 7. AI Use Cases (سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي)
+    # 6. Generate Digital Transformation section
+    print("[Report Gen] Generating Digital Transformation section...")
+    digital_transform = generate_digital_transformation_section(state, api_key)
+    state.report_sections_ar['digital_transformation'] = {
+        'heading': 'سادساً: التحليل الرابع — خطة التحويل الرقمي',
+        'raw_data': digital_transform,
+    }
+
+    # 7. Generate AI Use Cases section
+    print("[Report Gen] Generating AI Use Cases section...")
+    ai_use_cases = generate_ai_use_cases_section(state, api_key)
+    state.report_sections_ar['ai_use_cases'] = {
+        'heading': 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي',
+        'raw_data': ai_use_cases,
+    }
+
+    # TODO: 8-9. Additional sections (not yet implemented)
     # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
     # TODO: 9. Conclusion (تاسعاً: الخلاصة)
 
@@ -707,7 +723,7 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         digital_channel_pct = (digital_cases / total_cases * 100) if total_cases > 0 else 0
 
         # Date range extraction (placeholder - would be parsed from data in real scenario)
-        date_range = state.month_year or "يناير — مارس 2026"
+        date_range = convert_month_year_to_arabic(state.month_year) or "يناير — مارس 2026"
         quarter_label = "Q1 2026"  # Would be calculated from month_year
 
         # Build the prompt
@@ -988,7 +1004,7 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
         raise ValueError("state.guidebook_year not set - Stage 5 must complete successfully")
 
     case_count = state.total_cases
-    date_range = state.month_year
+    date_range = convert_month_year_to_arabic(state.month_year)
     guidebook_pages = state.guidebook_pages
     guidebook_faq_count = state.guidebook_faq_count
     guidebook_year = state.guidebook_year
@@ -1306,7 +1322,7 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
         # Date range (must be set by Stage 1)
         if not state.month_year:
             raise ValueError("month_year not set - Stage 1 validation must complete successfully")
-        date_range = state.month_year
+        date_range = convert_month_year_to_arabic(state.month_year)
 
         # Build two-level taxonomy structure
         # Top level types (4 required)
@@ -1492,8 +1508,11 @@ core_definitional_principle: >
 YOUR TASK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Write the three subsections below in formal Arabic only. Do not generate English.
+Write the two subsections below in formal Arabic only. Do not generate English.
 Do not invent numbers or details not present in the inputs above.
+
+NOTE: Section 2.2 (منهجية التصنيف) is hardcoded and will be injected separately.
+Only generate sections 2.1 and 2.3.
 
 ───────────────────────────────────────────────
 2.1  المصادر المُحلَّلة
@@ -1516,33 +1535,6 @@ Row 2 — Customer services guidebook:
   - الفترة: {guidebook_year}
 
 No prose paragraphs in this subsection — the table IS the content.
-
-───────────────────────────────────────────────
-2.2  منهجية التصنيف
-───────────────────────────────────────────────
-Write a prose paragraph in Arabic that explains the two-stage pipeline.
-
-STAGE 1 — Rule-based engine (stage2_rules.py):
-  - Applied to all {total_cases} cases via a priority decision tree.
-  - State the priority order (1→8) using the Arabic sub-classification
-    names from classification_logic.priority_tree above.
-  - State the confidence threshold ({confidence_threshold_stage2}).
-  - Cases below threshold queued for Stage 2.
-  - Cases at or above threshold: directly classified.
-
-STAGE 2 — LLM classification (stage3_llm.py):
-  - Applied only to rule-engine rejects ({llm_queue_count} cases).
-  - Model: claude-haiku-4-5-20251001. Uses two-level taxonomy via tool-use.
-  - Cases with LLM confidence < {llm_confidence_threshold} routed to
-    human review queue and excluded from report counts
-    ({human_review_count} cases).
-
-Include this principle explicitly in the paragraph (do not paraphrase it):
-  "طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل.
-   الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء."
-
-State the two-level taxonomy structure: 4 top-level types, each with
-domain-specific sub-classifications (total {total_sub_count} sub-types).
 
 ───────────────────────────────────────────────
 2.3  الحقول المُحلَّلة
@@ -1579,28 +1571,24 @@ Return a single flat JSON object with these exact keys:
       "الفترة": "..."
     }}
   ],
-  "classification_method": "...",
   "analyzed_fields": "..."
 }}
 
 Rules:
 - sources_table: exactly 2 row objects, Arabic column keys only
-- classification_method: single Arabic prose paragraph covering both pipeline stages and the core definitional principle quoted verbatim
 - analyzed_fields: single Arabic prose paragraph covering structured fields (list) then unstructured fields (تفاصيل_الطلب and الحل with avg chars and language distribution)
 - No markdown, no extra keys, no nesting beyond what is shown above
-- All content must be in Arabic only"""
+- All content must be in Arabic only
+- Section 2.2 (classification methodology) is omitted — it will be hardcoded separately"""
 
         # HARDCODED SECTION 2.2: منهجية التصنيف
-        classification_method_hardcoded = """يعتمد التصنيف على خط أنابيب ثنائي المرحلة:
-
-المرحلة الأولى: نظام قائم على القواعد (stage2_rules.py):
-يتم تطبيقها على جميع الحالات من خلال شجرة قرارات ذات أولويات: (1) الاعتراض على مخالفة مرورية، (2) تقديم بلاغ أمني أو مروري، (3) طلب تصريح سلاح أو ترخيص، (4) شكوى عن عدم استلام الخدمة، (5) شكوى على خطأ تقني أو في النظام، (6) شكوى على تأخر المعالجة، (7) استفسار عن الرخص والمركبات، (8) شكر وثناء. تُستخدم عتبة ثقة قدرها 0.75، وتوضع الحالات التي تقل عن هذه العتبة قيد المراجعة.
-
-المرحلة الثانية: تصنيف مدعوم بالذكاء الاصطناعي (stage3_llm.py):
-يتم تطبيقها على الحالات المرفوضة من نظام القواعد باستخدام نموذج Claude Haiku. يستخدم تصنيفاً ثنائي المستوى: 4 فئات رئيسية، لكل منها تصنيفات فرعية خاصة بالمجال. تُوضع الحالات التي لا تصل ثقتها إلى 0.65 قيد المراجعة البشرية.
-
-المبدأ الأساسي:
-طبيعة المطلوب — وليس الصياغة — هي المعيار الفاصل. الحالة التي تُعبّر عن استياء تُصنَّف شكوى حتى لو تضمّنت طلب إجراء."""
+        classification_method_hardcoded = """يعتمد التحليل على شجرة قرار من أربعة مستويات، حيث طبيعة المطلوب وليس الصياغة هي المعيار الفاصل. يُطرح على كل حالة اختباران متتاليان:
+الاختبار الأول: هل يُعبّر النص عن استياء، أو إبلاغ عن إخفاق، أو رغبة في تقديم بلاغ رسمي أو اعتراض؟
+الاختبار الثاني: هل يطلب النص تنفيذ إجراء محدد كتقديم خدمة أو متابعة طلب أو تعديل بيانات، وليس مجرد الحصول على معلومة؟
+← إن كان الجواب نعم على الأول: شكوى  — حتى لو تضمّن النص طلباً لاتخاذ إجراء
+← إن كان الجواب نعم على الثاني فقط: طلب  — دون أن يكون الغرض إبلاغاً عن مشكلة
+← إن كان الغرض سؤالاً أو استعلاماً عن معلومة: استفسار
+← إن كان التعبير عن رضا وثناء: شكر وثناء"""
 
         # Build sources table
         sources_rows = [
@@ -1694,7 +1682,7 @@ def _create_basic_report_sections(state: PipelineState) -> None:
                         'المصدر': 'تحليل الاستفسارات',
                         'الطبيعة': 'بيانات CRM — نصوص غير مهيكلة',
                         'الحجم': f'{state.total_cases} حالة مغلقة',
-                        'الفترة': state.month_year or 'يناير — مارس 2026'
+                        'الفترة': convert_month_year_to_arabic(state.month_year) or 'يناير — مارس 2026'
                     },
                     {
                         'المصدر': 'دليل خدمات العملاء',

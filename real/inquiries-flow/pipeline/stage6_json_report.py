@@ -22,9 +22,14 @@ Each section has:
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from collections import defaultdict
-from .state import PipelineState, CaseRow
+from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .generate_customer_journey_section import _build_friction_rows
 from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows
+from .generate_digital_transformation_section import (
+    _build_faq_rows_for_transform,
+    _build_notification_rows,
+)
+from .generate_ai_use_cases_section import _build_ai_tool_rows
 
 
 # ==============================================================================
@@ -262,10 +267,10 @@ class JSONReportBuilder:
         """Build document metadata."""
         return {
             "extraction_version": 1,
-            "document_name": f"تقرير تحليل استفسارات المتعاملين — {self.state.month_year or 'Q1 2026'}",
+            "document_name": f"تقرير تحليل استفسارات المتعاملين — {convert_month_year_to_arabic(self.state.month_year) or 'Q1 2026'}",
             "document_path": "",
             "metadata": {
-                "title": f"تقرير تحليل استفسارات المتعاملين — {self.state.month_year or 'Q1 2026'}",
+                "title": f"تقرير تحليل استفسارات المتعاملين — {convert_month_year_to_arabic(self.state.month_year) or 'Q1 2026'}",
                 "author": "AI Analysis Pipeline",
                 "created": datetime.now().isoformat(),
                 "modified": datetime.now().isoformat(),
@@ -336,7 +341,7 @@ class JSONReportBuilder:
                 body = (
                     f"يُقدّم هذا التقرير تحليلاً ذكياً مُندمجاً لـ {total} حالة مغلقة "
                     f"من بيانات CRM لشرطة الفجيرة "
-                    f"{self.state.month_year or 'الربع الأول 2026'}. "
+                    f"{convert_month_year_to_arabic(self.state.month_year) or 'الربع الأول 2026'}. "
                     f"الهدف ليس عرض الأرقام، بل تحويل البيانات إلى قرارات ورؤى قابلة للتنفيذ. "
                     f"المُستجد الجوهري: بعد تطبيق معايير التصنيف الدقيقة، "
                     f"الشكاوى باتت تُمثّل {complaint_rate:.1f}% من عبء العمل الفعلي."
@@ -593,6 +598,12 @@ class JSONReportBuilder:
         request_pct = request_count / total_cases * 100 if total_cases else 0
 
         request_rows = wm_raw["requests_table"]
+        # Issue 3 Fix: Filter out استفسار rows that leaked into requests table (defensive filtering)
+        # This catches classifier misroutes where inquiry sub-categories appear in requests breakdown
+        request_rows = [
+            row for row in request_rows
+            if not (row.get("الفئة الفرعية", "").startswith("استفسار"))
+        ]
 
         def _sub_table(rows, columns):
             return {
@@ -863,7 +874,219 @@ class JSONReportBuilder:
             "subsections": [subsection_51, subsection_52],
         }
 
-    def build_faq_section(self, section_number: int = 7) -> Optional[Dict[str, Any]]:
+    def build_digital_transformation_section(
+        self,
+        lang: str = "ar",
+        section_number: int = 6,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Section 6 — Digital Transformation Plan — for the JSON report dict.
+
+        Reads pre-generated LLM output from state.report_sections_ar['digital_transformation']['raw_data']
+        and builds two tables: FAQ table (6.1) and notification table (6.2).
+
+        Args:
+            lang: 'ar' or 'en'
+            section_number: ordinal position in report (default 6 → سادساً)
+
+        Returns:
+            Section dict matching JSON cache structure, or None if raw_data unavailable.
+        """
+        dt_section = (self.state.report_sections_ar or {}).get("digital_transformation", {})
+        dt_raw = dt_section.get("raw_data")
+
+        if not dt_raw:
+            return None
+
+        section_body  = dt_raw.get("section_body", "")
+        faq_rows      = dt_raw.get("faq_table", [])
+        notif_rows    = dt_raw.get("notification_table", [])
+
+        if not section_body or not faq_rows or not notif_rows:
+            return None
+
+        # Derive faq intro from section_body (first sentence) or use default
+        faq_intro = (
+            section_body.split("—")[0].strip()
+            if section_body
+            else "هذه الأسئلة مستخرجة من الأنماط الأكثر تكراراً في البيانات النصية."
+        )
+        notif_intro_count = sum(
+            int("".join(filter(str.isdigit, r.get("الحالات المُلغاة", "0"))) or "0")
+            for r in notif_rows
+            if r.get("الحالات المُلغاة", "متعدد") != "متعدد"
+        )
+        notif_intro = (
+            f"تحليل البيانات يكشف أن {notif_intro_count}+ حالة تواصل "
+            f"({round(notif_intro_count / (len(self.state.all_classified) or self.state.total_cases or 1) * 100, 0):.0f}% "
+            "من الإجمالي) كان يمكن إلغاؤها كلياً بمنظومة إشعارات بسيطة — "
+            "دون أي تغيير هيكلي في الأنظمة أو الإجراءات:"
+            if notif_intro_count > 0
+            else "تحليل البيانات يكشف فرصة إلغاء عدد من حالات التواصل بمنظومة إشعارات بسيطة:"
+        )
+
+        # ── FAQ table dict ────────────────────────────────────────────────────
+        faq_table_dict = {
+            "columns":        ["#", "السؤال", "الإجابة المقترحة", "التكرار"],
+            "rows":           faq_rows,
+            "row_count":      len(faq_rows),
+            "col_count":      4,
+            "original_index": self.next_table_index(),
+            "caption":        faq_intro,
+        }
+
+        # ── Notification table dict ───────────────────────────────────────────
+        notif_table_dict = {
+            "columns":        ["نوع الإشعار", "الحالات المُلغاة", "محتوى الإشعار (مثال)", "القناة", "الأثر المتوقع"],
+            "rows":           notif_rows,
+            "row_count":      len(notif_rows),
+            "col_count":      5,
+            "original_index": self.next_table_index(),
+            "caption":        notif_intro,
+        }
+
+        # ── Subsection 6.1: FAQ Table ─────────────────────────────────────────
+        subsection_61_title = (
+            "6.1  الأسئلة الشائعة ذات الأولوية"
+            if lang == "ar"
+            else "6.1  Priority FAQs"
+        )
+        subsection_61 = {
+            "id":       self.next_section_id(
+                "61_الأسئلة_الشائعة" if lang == "ar" else "61_faq_table"
+            ),
+            "title":    subsection_61_title,
+            "title_en": "6.1  Priority FAQs",
+            "level":    3,
+            "content":  faq_intro,
+            "tables":   [faq_table_dict],
+            "charts":   [],
+        }
+
+        # ── Subsection 6.2: Notification Pathway ─────────────────────────────
+        notif_count_label = (
+            str(notif_intro_count) + "+" if notif_intro_count > 0 else "30+"
+        )
+        subsection_62_title = (
+            f"6.2  مسار إلغاء {notif_count_label} حالة تواصل بالإشعار الاستباقي"
+            if lang == "ar"
+            else "6.2  Proactive Notification Elimination Pathway"
+        )
+        subsection_62 = {
+            "id":       self.next_section_id(
+                "62_مسار_إلغاء_الإشعار" if lang == "ar" else "62_notification_pathway"
+            ),
+            "title":    subsection_62_title,
+            "title_en": "6.2  Proactive Notification Elimination Pathway",
+            "level":    3,
+            "content":  notif_intro,
+            "tables":   [notif_table_dict],
+            "charts":   [],
+        }
+
+        # ── Section dict ──────────────────────────────────────────────────────
+        ordinals = ["", "أولاً", "ثانياً", "ثالثاً", "رابعاً", "خامساً", "سادساً", "سابعاً"]
+        analysis_labels = ["", "التحليل الأول", "التحليل الثاني", "التحليل الثالث", "التحليل الرابع", "التحليل الخامس"]
+        ordinal = ordinals[section_number] if section_number < len(ordinals) else f"القسم {section_number}"
+        analysis_num = section_number - 2
+        analysis_label = (
+            analysis_labels[analysis_num]
+            if 0 < analysis_num < len(analysis_labels)
+            else f"التحليل {analysis_num}"
+        )
+
+        section_title = (
+            f"{ordinal}: {analysis_label} — خطة التحويل الرقمي"
+            if lang == "ar"
+            else "Section 6: Digital Transformation Plan"
+        )
+
+        return {
+            "id":       self.next_section_id(
+                "سادسا_التحليل_الرابع" if lang == "ar" else "digital_transformation"
+            ),
+            "title":    section_title,
+            "title_en": "Section 6: Digital Transformation Plan",
+            "level":    2,
+            "content":  section_body,
+            "tables":   [],
+            "charts":   [],
+            "subsections": [subsection_61, subsection_62],
+        }
+
+    def build_ai_use_cases_section(
+        self,
+        lang: str = "ar",
+        section_number: int = 7,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Section 7 — AI-Powered Use Cases — for the JSON report dict.
+
+        Reads pre-generated LLM output from state.report_sections_ar['ai_use_cases']['raw_data']
+        and builds a use-cases table with 4 AI tool rows.
+
+        Args:
+            lang: 'ar' or 'en'
+            section_number: ordinal position in report (default 7 → سابعاً)
+
+        Returns:
+            Section dict matching JSON cache structure, or None if raw_data unavailable.
+        """
+        uc_section = (self.state.report_sections_ar or {}).get("ai_use_cases", {})
+        uc_raw = uc_section.get("raw_data")
+
+        if not uc_raw:
+            return None
+
+        section_body   = uc_raw.get("section_body", "")
+        use_cases_rows = uc_raw.get("use_cases_table", [])
+        closing_note   = uc_raw.get("closing_note", "")
+
+        if not section_body or not use_cases_rows or not closing_note:
+            return None
+
+        # Strip tool_id from display (internal use only)
+        display_rows = []
+        for row in use_cases_rows:
+            display_row = {k: v for k, v in row.items() if k != "tool_id"}
+            display_rows.append(display_row)
+
+        # ── Use Cases table dict ──────────────────────────────────────────────
+        use_cases_table_dict = {
+            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية"), "تقييم التنفيذ"],
+            "rows":           display_rows,
+            "row_count":      len(display_rows),
+            "col_count":      4,
+            "original_index": self.next_table_index(),
+            "caption":        section_body,
+        }
+
+        # ── Section dict ──────────────────────────────────────────────────────
+        ordinals = ["", "أولاً", "ثانياً", "ثالثاً", "رابعاً", "خامساً", "سادساً", "سابعاً"]
+        ordinal = ordinals[section_number] if section_number < len(ordinals) else f"القسم {section_number}"
+
+        section_title = (
+            f"{ordinal}: حالات الاستخدام المدعومة بالذكاء الاصطناعي"
+            if lang == "ar"
+            else "Section 7: AI-Powered Use Cases"
+        )
+
+        # Build full content: section_body + table + closing_note
+        full_content = f"{section_body}\n\n{closing_note}"
+
+        return {
+            "id":       self.next_section_id(
+                "سابعا_حالات_الاستخدام_الذكاء_الاصطناعي" if lang == "ar" else "ai_use_cases"
+            ),
+            "title":    section_title,
+            "title_en": "Section 7: AI-Powered Use Cases",
+            "level":    2,
+            "content":  full_content,
+            "tables":   [use_cases_table_dict],
+            "charts":   [],
+        }
+
+    def build_faq_section(self, section_number: int = 8) -> Optional[Dict[str, Any]]:
         """Build FAQ section from validated FAQs. ISSUE 2 FIX: Accept positional section_number."""
         if not self.state.validated_faqs:
             return None
@@ -1046,11 +1269,18 @@ class JSONReportBuilder:
         analysis_num = section_number - 2  # Section 3 = analysis 1, Section 5 = analysis 3, etc.
         analysis_label = analysis_labels[analysis_num] if 0 < analysis_num < len(analysis_labels) else f"التحليل {analysis_num}"
 
+        # ISSUE 3 FIX: Explain clustering threshold to clarify case count differences
+        clustering_note = (
+            "الأنماط الرئيسية المكتشفة في البيانات، مجمعة حسب نوع التصنيف (شكوى، طلب، استفسار). "
+            "ملاحظة: تتضمن الجداول أدناه الأنماط التي تجمع حالات متشابهة بقدر كاف (مجموعة من حالتين فأكثر). "
+            "قد لا تظهر جميع الحالات من القسم 3 في هذه الأنماط إذا كانت تشكل مجموعات منفردة دون تشابه واضح مع حالات أخرى."
+        )
+
         return {
             "id": f"section_{section_number}_تحليل_الأنماط",
             "title": f"{ordinal}: {analysis_label} — تفصيل الأنماط حسب نوع التصنيف",
             "level": 2,
-            "content": "الأنماط الرئيسية المكتشفة في البيانات، مجمعة حسب نوع التصنيف (شكوى، طلب، استفسار).",
+            "content": clustering_note,
             "tables": [],
             "charts": [],
             "subsections": subsections
@@ -1080,17 +1310,26 @@ class JSONReportBuilder:
         # 5. Digital Gaps Analysis
         sections.append(self.build_digital_gaps_section(lang=lang))
 
-        # 6. Patterns (fixed to split by top_level type)
+        # 6. Digital Transformation Plan
+        digital_transform_section = self.build_digital_transformation_section(lang=lang, section_number=6)
+        if digital_transform_section:
+            sections.append(digital_transform_section)
+
+        # 7. AI Use Cases
+        ai_use_cases_section = self.build_ai_use_cases_section(lang=lang, section_number=7)
+        if ai_use_cases_section:
+            sections.append(ai_use_cases_section)
+
+        # 8. Patterns (fixed to split by top_level type)
         # ISSUE 2 FIX: Pass section_number for ordinal positioning
         patterns_section_num = len(sections) + 1
         patterns_section = self.build_patterns_section(section_number=patterns_section_num)
         if patterns_section:
             sections.append(patterns_section)
 
-        # 7+. FAQ Section (section number depends on which sections are included)
-        faq_section = self.build_faq_section(section_number=len(sections) + 1)
-        if faq_section:
-            sections.append(faq_section)
+        # NOTE: FAQ section removed (Issue 1) — FAQs now embedded in Section 6.1 (Digital Transformation)
+        # The old build_faq_section() was a duplicate with lower-quality content. Digital transformation
+        # section provides FAQs with better operational guidance and contextual information.
 
         # Charts
         charts = []
@@ -1100,6 +1339,19 @@ class JSONReportBuilder:
 
         report["charts"] = charts
         report["sections"] = sections
+
+        # Issue 3 Fix: Recalculate total_tables at the end by walking all sections
+        total_tables_count = 0
+        for section in sections:
+            if section and section.get('tables'):
+                total_tables_count += len(section['tables'])
+            if section and section.get('subsections'):
+                for subsection in section['subsections']:
+                    if subsection and subsection.get('tables'):
+                        total_tables_count += len(subsection['tables'])
+
+        if 'metadata' in report:
+            report['metadata']['total_tables'] = total_tables_count
 
         return report
 

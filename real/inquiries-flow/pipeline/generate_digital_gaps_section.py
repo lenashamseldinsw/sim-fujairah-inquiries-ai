@@ -44,8 +44,7 @@ Sub-section 5.2 — الأسباب الجذرية لاستمرار المشكل�
 DATA SOURCING — no new computation, only state reads
 ─────────────────────────────────────────────────────
 • gap_table               → topics, case_counts, severity, gap_type, recommendations (Stage 5)
-• journey_map             → root_cause_category, friction_point, case_count (Stage 4)
-• all_classified          → case_channel for digital channel % (Stage 2/3)
+• journey_map             → root_cause_category, friction text for digital context % inference (Stage 4)
 • notification_opportunities → concrete channel/fix text per root cause (Stage 4)
 • month_year              → report date range
 
@@ -60,7 +59,7 @@ from typing import Dict, Any, List
 from collections import defaultdict
 import anthropic
 
-from .state import PipelineState
+from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
 
@@ -83,12 +82,6 @@ _ROOT_CAUSE_LABELS: Dict[str, str] = {
     "policy_complexity":          "تعقيد إجراءات السياسة",
 }
 
-# Digital channel values recognised in CaseRow.case_channel
-_DIGITAL_CHANNEL_VALUES = {
-    'app', 'web', 'website', 'application', 'خدمة ذاتية', 'تطبيق',
-    'الموقع', 'الموقع الإلكتروني', 'إلكترونياً', 'بوابة',
-}
-
 # Sort order for severity (Critical first)
 _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
@@ -100,19 +93,52 @@ _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
 def _digital_channel_pct(state: PipelineState) -> float:
     """
-    % of cases that arrived via a digital / self-service channel.
+    % of friction cases rooted in a digital/self-service context.
 
-    Uses CaseRow.case_channel. Matches Arabic and English digital labels.
-    Kept in sync with the same calculation in generate_executive_summary_section.
+    CONTEXT INFERENCE (not submission channel):
+    The metric is NOT the CRM submission channel (how the customer contacted us —
+    usually phone) but the SERVICE CONTEXT (whether the underlying problem occurred
+    while using a digital channel — app, website, online renewal).
+
+    Example: Customer renewed their license online, got an error in the app, then
+    called us. We log the contact as "phone" (submission channel) but the underlying
+    problem is "digital context" (occurred in the app).
+
+    Inferred from journey_map: friction entries whose root_cause_category is
+    platform_bug, or whose cluster/friction text contains digital service keywords.
     """
-    total = len(state.all_classified) or state.total_cases
-    if not total:
+    if not state.journey_map:
         return 0.0
-    digital = sum(
-        1 for c in state.all_classified
-        if (c.case_channel or "").strip().lower() in _DIGITAL_CHANNEL_VALUES
-    )
-    return round(digital / total * 100, 1)
+
+    _DIGITAL_ROOT_CAUSES = {"platform_bug", "no_proactive_notification"}
+    _DIGITAL_KEYWORDS = {
+        "تطبيق", "موقع", "إلكتروني", "moi", "online", "app",
+        "تجديد", "دفع", "رقمي", "بوابة", "نظام", "رفع",
+    }
+
+    total_friction_cases = sum(f.case_count for f in state.journey_map)
+    if not total_friction_cases:
+        return 0.0
+
+    digital_cases = 0
+    for friction in state.journey_map:
+        # Build text from all friction fields
+        text = " ".join([
+            friction.friction_point_ar or friction.friction_point or "",
+            friction.cluster_ar or friction.cluster or "",
+            friction.sub_classification or "",
+        ]).lower()
+
+        # Check if this friction point is rooted in a digital context
+        is_digital = (
+            friction.root_cause_category in _DIGITAL_ROOT_CAUSES
+            or any(kw in text for kw in _DIGITAL_KEYWORDS)
+        )
+
+        if is_digital:
+            digital_cases += friction.case_count
+
+    return round(digital_cases / total_friction_cases * 100, 1)
 
 
 def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
@@ -310,7 +336,7 @@ def generate_digital_gaps_section(
         )
 
     # ── Pre-compute all values from state ─────────────────────────────────────
-    date_range         = state.month_year
+    date_range         = convert_month_year_to_arabic(state.month_year)
     digital_pct        = _digital_channel_pct(state)
     gap_rows           = _build_gap_rows(state)
     root_cause_rows    = _build_root_cause_rows(state)
@@ -351,8 +377,9 @@ def generate_digital_gaps_section(
         'INPUTS — use ONLY these numbers, never invent figures\n'
         f'total_cases:           {total_cases}\n'
         f'date_range:            "{date_range}"\n'
-        f'digital_channel_pct:   {digital_pct}%\n'
-        f'critical_gap_count:    {critical_count}\n'
+        + (f'digital_channel_pct:   {digital_pct}%\n' if digital_pct > 0 else
+           'digital_channel_pct:   [not available — use gap count to anchor the finding instead]\n')
+        + f'critical_gap_count:    {critical_count}\n'
         f'medium_gap_count:      {medium_count}\n'
         f'top_gap_topic:         "{top_gap_name}"\n'
         f'top_gap_case_count:    {top_gap_count}\n'
@@ -386,8 +413,18 @@ def generate_digital_gaps_section(
         f'   - State the core finding using digital_channel_pct ({digital_pct}%) and date_range.\n'
         '     The finding is: the problem is not the absence of digital channels —\n'
         '     it is the absence of the right functions inside those channels.\n'
-        f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
-        f'     citing "{top_gap_name}" as the largest ({top_gap_count} cases).\n'
+        + (
+            f'     IMPORTANT: digital_channel_pct ({digital_pct}%) represents the % of friction cases\n'
+            '     ROOTED IN A DIGITAL SERVICE CONTEXT (app error, online renewal, digital payment) —\n'
+            '     NOT the % of customers who called us.\n'
+            f'     Frame as: "{digital_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع)"\n'
+            if digital_pct > 0 else
+            '     Since digital_channel_pct is 0, do NOT cite a percentage.\n'
+            '     Instead state the finding as: "المشكلة ليست في غياب القنوات الرقمية بل في غياب الوظائف\n'
+            '     الصحيحة داخلها" — without a specific %. Use gap count instead to anchor the claim.\n'
+        )
+        + f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
+        + f'     citing "{top_gap_name}" as the largest ({top_gap_count} cases).\n'
         + proactive_instruction +
         '\n'
         'B. "وضع التطبيق / الموقع الحالي" for EVERY row in pre_computed_gap_table\n'

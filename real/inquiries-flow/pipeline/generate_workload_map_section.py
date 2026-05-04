@@ -45,7 +45,7 @@ from typing import Dict, Any, List, Optional
 from collections import defaultdict
 import anthropic
 
-from .state import PipelineState
+from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
 
@@ -179,7 +179,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
     try:
         all_classified = state.all_classified or []
         total_cases = len(all_classified)  # ISSUE 3 FIX: Use len(all_classified), not state.total_cases
-        date_range = state.month_year or "Q1 2026"
+        date_range = convert_month_year_to_arabic(state.month_year) or "Q1 2026"
         reclass_count = state.reclassified_count
         reclass_rate = state.reclassification_rate
 
