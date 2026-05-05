@@ -178,7 +178,8 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
     """
     try:
         all_classified = state.all_classified or []
-        total_cases = len(all_classified)  # ISSUE 3 FIX: Use len(all_classified), not state.total_cases
+        # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" consistency
+        total_cases = state.closed_cases_count if state.closed_cases_count > 0 else len(all_classified)
         date_range = convert_month_year_to_arabic(state.month_year) or "Q1 2026"
         reclass_count = state.reclassified_count
         reclass_rate = state.reclassification_rate
