@@ -30,6 +30,8 @@ from .generate_digital_transformation_section import (
     _build_notification_rows,
 )
 from .generate_ai_use_cases_section import _build_ai_tool_rows
+from .generate_improvement_roadmap_section import _build_display_roadmap_rows
+from .generate_conclusion_section import build_conclusion_section_for_json
 
 
 # ==============================================================================
@@ -40,17 +42,22 @@ def _validate_workload_map_data(wm_raw: Dict[str, Any]) -> None:
     """
     Validate that workload_map LLM output contains all required prose fields.
     Raises RuntimeError if any field is missing or empty.
+    Allows empty tables (for categories with 0 cases).
     """
-    required_fields = {
+    required_prose_fields = {
         "intro_paragraph": "3.1 intro (must open with 'تحليل...' and end with 'التحوّل الجوهري:')",
         "reclassification_insight": "3.2 insight (must open with 'الاكتشاف الحرج:' and include counts/rates)",
         "complaints_intro": "3.3 intro (must identify complaints as dominant category)",
-        "complaints_table": "breakdown table with الوصف column",
-        "requests_table": "breakdown table with الوصف column",
-        "inquiries_table": "breakdown table with الوصف column",
     }
 
-    for field, description in required_fields.items():
+    required_table_fields = {
+        "complaints_table": "breakdown table (may be empty if 0 complaints)",
+        "requests_table": "breakdown table (may be empty if 0 requests)",
+        "inquiries_table": "breakdown table (may be empty if 0 inquiries)",
+    }
+
+    # Validate all prose fields exist and are non-empty
+    for field, description in required_prose_fields.items():
         if field not in wm_raw:
             raise RuntimeError(
                 f"[JSONReportBuilder] Missing required field '{field}' in workload_map LLM output. "
@@ -63,25 +70,33 @@ def _validate_workload_map_data(wm_raw: Dict[str, Any]) -> None:
                 f"[JSONReportBuilder] Field '{field}' is empty in workload_map LLM output. "
                 f"Expected: {description}"
             )
-        if isinstance(value, list) and not value:
+
+    # Validate all table fields exist (but allow empty lists)
+    for field, description in required_table_fields.items():
+        if field not in wm_raw:
             raise RuntimeError(
-                f"[JSONReportBuilder] Field '{field}' is an empty list in workload_map LLM output. "
+                f"[JSONReportBuilder] Missing required field '{field}' in workload_map LLM output. "
                 f"Expected: {description}"
             )
 
-        # Validate الوصف in tables
-        if field in ["complaints_table", "requests_table", "inquiries_table"]:
-            for idx, row in enumerate(value):
-                if "الوصف" not in row:
-                    raise RuntimeError(
-                        f"[JSONReportBuilder] Row {idx} in {field} missing 'الوصف' field. "
-                        f"LLM must add description for each sub-classification."
-                    )
-                if not row["الوصف"].strip():
-                    raise RuntimeError(
-                        f"[JSONReportBuilder] Row {idx} in {field} has empty 'الوصف'. "
-                        f"LLM must provide a non-empty description."
-                    )
+        value = wm_raw[field]
+        if not isinstance(value, list):
+            raise RuntimeError(
+                f"[JSONReportBuilder] Field '{field}' must be a list in workload_map LLM output."
+            )
+
+        # Validate الوصف only if table has rows
+        for idx, row in enumerate(value):
+            if "الوصف" not in row:
+                raise RuntimeError(
+                    f"[JSONReportBuilder] Row {idx} in {field} missing 'الوصف' field. "
+                    f"LLM must add description for each sub-classification."
+                )
+            if not row["الوصف"].strip():
+                raise RuntimeError(
+                    f"[JSONReportBuilder] Row {idx} in {field} has empty 'الوصف'. "
+                    f"LLM must provide a non-empty description."
+                )
 
 def _delta_label(corrected_count: int, original_count: int) -> str:
     """
@@ -614,12 +629,17 @@ class JSONReportBuilder:
                 "original_index": self.next_table_index(),
             }
 
+        # 3.4 requests breakdown — with explanatory message when empty
         subsection_34 = {
             "id": self.next_section_id("34_تفصيل_الطلبات" if lang == "ar" else "34_requests"),
             "title": "3.4  تفصيل الطلبات والاستفسارات",
             "title_en": "3.4  Service Requests and Inquiries",
             "level": 2,
-            "content": f"أبرز الطلبات المقدَّمة ({request_count} حالات — {request_pct:.1f}%):",
+            "content": (
+                f"أبرز الطلبات المقدَّمة ({request_count} حالات — {request_pct:.1f}%):"
+                if request_rows
+                else "لم تُسجَّل أي طلبات خدمة مباشرة في هذه الفترة — اقتصر العبء على الشكاوى والاستفسارات."
+            ),
             "tables": [_sub_table(
                 request_rows,
                 ["الفئة الفرعية", "العدد", "النسبة", "الوصف"],
@@ -627,7 +647,7 @@ class JSONReportBuilder:
             "charts": [],
         }
 
-        # 3.5 inquiries breakdown
+        # 3.5 inquiries breakdown — with explanatory message when empty
         inquiry_count = corrected_dist.get("استفسار", 0)
         inquiry_pct = inquiry_count / total_cases * 100 if total_cases else 0
 
@@ -637,18 +657,29 @@ class JSONReportBuilder:
             "id": self.next_section_id("35_أبرز_الاستفسارات" if lang == "ar" else "35_inquiries"),
             "title": (
                 f"3.5  أبرز الاستفسارات المتكررة ({inquiry_count} حالات — {inquiry_pct:.1f}%) — وهي الفئة الأكثر قابليةً للتحويل إلى خدمة ذاتية رقمية كاملة"
-                if lang == "ar"
-                else f"3.5  Recurring Inquiries ({inquiry_count} cases — {inquiry_pct:.1f}%) — highest digital-deflection potential"
+                if inquiry_rows
+                else "3.5  الاستفسارات المتكررة"
             ),
-            "title_en": f"3.5  Recurring Inquiries ({inquiry_count} cases — {inquiry_pct:.1f}%)",
+            "title_en": (
+                f"3.5  Recurring Inquiries ({inquiry_count} cases — {inquiry_pct:.1f}%) — highest digital-deflection potential"
+                if inquiry_rows
+                else "3.5  Recurring Inquiries"
+            ),
             "level": 2,
-            "content": "",
+            "content": (
+                ""
+                if inquiry_rows
+                else "لم تُسجَّل استفسارات متكررة واضحة في هذه الفترة — كان التوزيع موزعاً على عدد من الحالات الفردية."
+            ),
             "tables": [_sub_table(
                 inquiry_rows,
                 ["الفئة الفرعية", "العدد", "النسبة", "الوصف"],
             )] if inquiry_rows else [],
             "charts": [],
         }
+
+        # Build subsections list (always include 3.4 and 3.5 with explanatory messages when empty)
+        subsections = [subsection_31, subsection_32, subsection_33, subsection_34, subsection_35]
 
         return {
             "id": self.next_section_id("ثالثا_التحليل_الأول" if lang == "ar" else "workload_map"),
@@ -658,7 +689,7 @@ class JSONReportBuilder:
             "content": "",
             "tables": [],
             "charts": [],
-            "subsections": [subsection_31, subsection_32, subsection_33, subsection_34, subsection_35],
+            "subsections": subsections,
         }
 
     def build_customer_journey_section(
@@ -792,6 +823,11 @@ class JSONReportBuilder:
 
         # Validate required columns in gap_table
         for idx, row in enumerate(dg_raw["gap_table"]):
+            if "الشدّة" not in row or not row["الشدّة"].strip():
+                raise RuntimeError(
+                    f"[JSONReportBuilder] gap_table row {idx} missing 'الشدّة'. "
+                    f"LLM must copy severity emoji from pre_computed_gap_table."
+                )
             if "وضع التطبيق / الموقع الحالي" not in row or not row["وضع التطبيق / الموقع الحالي"].strip():
                 raise RuntimeError(
                     f"[JSONReportBuilder] gap_table row {idx} missing 'وضع التطبيق / الموقع الحالي'. "
@@ -819,10 +855,10 @@ class JSONReportBuilder:
         section_body = dg_raw["section_body"]
 
         gap_table_dict = {
-            "columns": ["الموضوع", "الحالات", "وضع التطبيق / الموقع الحالي", "نوع الفجوة", "التوصية"],
+            "columns": ["الموضوع", "الحالات", "الشدّة", "وضع التطبيق / الموقع الحالي", "نوع الفجوة", "التوصية"],
             "rows":    gap_table_rows,
             "row_count": len(gap_table_rows),
-            "col_count": 5,
+            "col_count": 6,
             "original_index": self.next_table_index(),
         }
 
@@ -901,16 +937,20 @@ class JSONReportBuilder:
         section_body  = dt_raw.get("section_body", "")
         faq_rows      = dt_raw.get("faq_table", [])
         notif_rows    = dt_raw.get("notification_table", [])
+        faq_table_intro = dt_raw.get("faq_table_intro", "")  # Optional: separate intro for FAQ subsection
 
         if not section_body or not faq_rows or not notif_rows:
             return None
 
-        # Derive faq intro from section_body (first sentence) or use default
-        faq_intro = (
-            section_body.split("—")[0].strip()
-            if section_body
-            else "هذه الأسئلة مستخرجة من الأنماط الأكثر تكراراً في البيانات النصية."
-        )
+        # Use LLM-provided faq_table_intro if available; otherwise derive from section_body
+        if not faq_table_intro:
+            faq_intro = (
+                section_body.split("—")[0].strip()
+                if "—" in section_body and len(section_body.split("—")[0].strip()) > 10
+                else "هذه الأسئلة مستخرجة من الأنماط الأكثر تكراراً في البيانات النصية."
+            )
+        else:
+            faq_intro = faq_table_intro
         notif_intro_count = sum(
             int("".join(filter(str.isdigit, r.get("الحالات المُلغاة", "0"))) or "0")
             for r in notif_rows
@@ -951,6 +991,8 @@ class JSONReportBuilder:
             if lang == "ar"
             else "6.1  Priority FAQs"
         )
+        # BUG FIX: Don't duplicate section_body in subsection content if they're identical
+        subsection_61_content = faq_intro if faq_intro != section_body else ""
         subsection_61 = {
             "id":       self.next_section_id(
                 "61_الأسئلة_الشائعة" if lang == "ar" else "61_faq_table"
@@ -958,7 +1000,7 @@ class JSONReportBuilder:
             "title":    subsection_61_title,
             "title_en": "6.1  Priority FAQs",
             "level":    3,
-            "content":  faq_intro,
+            "content":  subsection_61_content,
             "tables":   [faq_table_dict],
             "charts":   [],
         }
@@ -972,6 +1014,8 @@ class JSONReportBuilder:
             if lang == "ar"
             else "6.2  Proactive Notification Elimination Pathway"
         )
+        # BUG FIX: Don't duplicate section_body in subsection content if they're identical
+        subsection_62_content = notif_intro if notif_intro != section_body else ""
         subsection_62 = {
             "id":       self.next_section_id(
                 "62_مسار_إلغاء_الإشعار" if lang == "ar" else "62_notification_pathway"
@@ -979,7 +1023,7 @@ class JSONReportBuilder:
             "title":    subsection_62_title,
             "title_en": "6.2  Proactive Notification Elimination Pathway",
             "level":    3,
-            "content":  notif_intro,
+            "content":  subsection_62_content,
             "tables":   [notif_table_dict],
             "charts":   [],
         }
@@ -1085,6 +1129,74 @@ class JSONReportBuilder:
             "tables":   [use_cases_table_dict],
             "charts":   [],
         }
+
+    def build_improvement_roadmap_section(
+        self,
+        lang: str = "ar",
+        section_number: int = 8,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build Section 8 — Improvement Roadmap — for the JSON report dict.
+
+        Reads pre-generated LLM output from
+        state.report_sections_ar['improvement_roadmap']['raw_data']
+        and assembles a 6-column prioritised roadmap table.
+
+        Args:
+            lang:           'ar' or 'en'
+            section_number: ordinal position in report (default 8 → ثامناً)
+
+        Returns:
+            Section dict matching JSON cache structure, or None if raw_data unavailable.
+        """
+        roadmap_section = (self.state.report_sections_ar or {}).get("improvement_roadmap", {})
+        roadmap_raw = roadmap_section.get("raw_data")
+
+        if not roadmap_raw:
+            return None
+
+        section_body = roadmap_raw.get("section_body", "")
+        if not section_body or not roadmap_raw.get("roadmap_table"):
+            return None
+
+        # Build display rows (strips internal keys)
+        display_rows = _build_display_roadmap_rows(roadmap_raw)
+
+        # Roadmap table dict
+        roadmap_table_dict = {
+            "columns":        ["الأفق الزمني", "#", "التوصية", "المصدر", "الأثر المتوقع", "الجهد"],
+            "rows":           display_rows,
+            "row_count":      len(display_rows),
+            "col_count":      6,
+            "original_index": self.next_table_index(),
+            "caption":        section_body,
+        }
+
+        ordinals = ["", "أولاً", "ثانياً", "ثالثاً", "رابعاً", "خامساً", "سادساً", "سابعاً", "ثامناً"]
+        ordinal = ordinals[section_number] if section_number < len(ordinals) else f"القسم {section_number}"
+
+        section_title = (
+            f"{ordinal}: خارطة الطريق التحسينية المقترحة"
+            if lang == "ar"
+            else "Section 8: Improvement Roadmap"
+        )
+
+        return {
+            "id":       self.next_section_id(
+                "ثامنا_خارطة_الطريق_التحسينية" if lang == "ar" else "improvement_roadmap"
+            ),
+            "title":    section_title,
+            "title_en": "Section 8: Improvement Roadmap",
+            "level":    2,
+            "content":  section_body,
+            "tables":   [roadmap_table_dict],
+            "charts":   [],
+            "subsections": [],
+        }
+
+    def build_conclusion_section(self, lang: str = "ar", section_number: int = 9) -> Optional[Dict[str, Any]]:
+        """Build Conclusion section (Section 9) from state.report_sections_ar['conclusion']."""
+        return build_conclusion_section_for_json(self.state, lang, section_number)
 
     def build_faq_section(self, section_number: int = 8) -> Optional[Dict[str, Any]]:
         """Build FAQ section from validated FAQs. ISSUE 2 FIX: Accept positional section_number."""
@@ -1262,14 +1374,14 @@ class JSONReportBuilder:
         if not subsections:
             return None
 
-        # ISSUE 2 FIX: Use ordinal numbering based on section_number
+        # Use ordinal numbering based on section_number
         ordinals = ["", "أولاً", "ثانياً", "ثالثاً", "رابعاً", "خامساً", "سادساً", "سابعاً"]
         analysis_labels = ["", "التحليل الأول", "التحليل الثاني", "التحليل الثالث", "التحليل الرابع", "التحليل الخامس"]
         ordinal = ordinals[section_number] if section_number < len(ordinals) else f"القسم {section_number}"
         analysis_num = section_number - 2  # Section 3 = analysis 1, Section 5 = analysis 3, etc.
         analysis_label = analysis_labels[analysis_num] if 0 < analysis_num < len(analysis_labels) else f"التحليل {analysis_num}"
 
-        # ISSUE 3 FIX: Explain clustering threshold to clarify case count differences
+        # Explain clustering threshold to clarify case count differences
         clustering_note = (
             "الأنماط الرئيسية المكتشفة في البيانات، مجمعة حسب نوع التصنيف (شكوى، طلب، استفسار). "
             "ملاحظة: تتضمن الجداول أدناه الأنماط التي تجمع حالات متشابهة بقدر كاف (مجموعة من حالتين فأكثر). "
@@ -1320,12 +1432,20 @@ class JSONReportBuilder:
         if ai_use_cases_section:
             sections.append(ai_use_cases_section)
 
-        # 8. Patterns (fixed to split by top_level type)
-        # ISSUE 2 FIX: Pass section_number for ordinal positioning
-        patterns_section_num = len(sections) + 1
-        patterns_section = self.build_patterns_section(section_number=patterns_section_num)
-        if patterns_section:
-            sections.append(patterns_section)
+        # 8. Improvement Roadmap
+        improvement_roadmap_section = self.build_improvement_roadmap_section(lang=lang, section_number=8)
+        if improvement_roadmap_section:
+            sections.append(improvement_roadmap_section)
+
+        # 9. Conclusion
+        conclusion_section = self.build_conclusion_section(lang=lang, section_number=9)
+        if conclusion_section:
+            sections.append(conclusion_section)
+
+        # NOTE: Patterns section (S10) removed — patterns are internal clustering and don't add value to the
+        # executive report. The patterns are already surfaced via journey_map clusters in the customer journey
+        # section (S4) and gap analysis (S5). Separate patterns enumeration was causing denominator confusion
+        # with the workload map section totals.
 
         # NOTE: FAQ section removed (Issue 1) — FAQs now embedded in Section 6.1 (Digital Transformation)
         # The old build_faq_section() was a duplicate with lower-quality content. Digital transformation

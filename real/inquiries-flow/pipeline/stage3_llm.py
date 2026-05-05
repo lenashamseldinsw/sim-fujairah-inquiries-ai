@@ -189,7 +189,7 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
         List of classification results {case_number, top_level, sub_classification, confidence, reason}
     """
     results = []
-    batch_size = 15  # Reduced from 30 — balances efficiency with response completeness (each ~150 tokens = 2250 total, safe margin under 8000 max)
+    batch_size = 25  # Reduced from 30 — balances efficiency with response completeness (each ~150 tokens = 2250 total, safe margin under 8000 max)
 
     total_batches = (len(cases) + batch_size - 1) // batch_size
     print(f"[Stage3] Processing {len(cases)} cases in {total_batches} batches of {batch_size}")

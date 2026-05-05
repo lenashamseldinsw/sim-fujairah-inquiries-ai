@@ -205,7 +205,8 @@ def load_guidebook_for_stage5(guidebook_path: str, friction_clusters: List[str])
 def build_gap_analysis_prompt(
     patterns: List[Dict],
     journey_map: List[Dict],
-    guidebook_data: Optional[Dict] = None
+    guidebook_data: Optional[Dict] = None,
+    locked_case_counts: Optional[Dict[str, int]] = None
 ) -> str:
     """Build prompt for gap analysis with guidebook context from JSON."""
     patterns_text = json.dumps(patterns, ensure_ascii=False, indent=2)
@@ -217,6 +218,11 @@ def build_gap_analysis_prompt(
         guidebook_context = json.dumps(guidebook_data, ensure_ascii=False, indent=2)
     else:
         guidebook_context = "(Guidebook data not available)"
+
+    # Format locked case counts for LLM reference
+    locked_counts_text = ""
+    if locked_case_counts:
+        locked_counts_text = json.dumps(locked_case_counts, ensure_ascii=False, indent=2)
 
     return f"""You are evaluating information gaps in government customer service.
 
@@ -240,7 +246,21 @@ Patterns Identified:
 Guidebook Content (filtered services, FAQs, fee schedules):
 {guidebook_context}
 
+LOCKED CASE COUNTS — DO NOT MODIFY:
+These case counts are pre-computed from the friction points above and MUST be used as-is.
+Match each gap to its corresponding friction cluster and use the locked count.
+{locked_counts_text}
+
+CRITICAL INSTRUCTION — case_count propagation:
+For EVERY gap you identify, you MUST use the case_count from the LOCKED CASE COUNTS above.
+Find the corresponding gap topic in the locked table and copy the case_count exactly.
+DO NOT invent case_count values. DO NOT default to 1.
+ALWAYS check the locked counts first — they are the source of truth.
+
 For each major friction topic, provide:
+- topic: Name of the gap topic (must match a friction point cluster if possible)
+- topic_ar: Arabic name of the gap topic
+- case_count: FROM LOCKED CASE COUNTS TABLE ABOVE (copy verbatim, do NOT alter)
 - guidebook_status: "Covered" (full coverage), "Partially Covered", or "Missing"
 - guidebook_excerpt: The actual relevant text from the guidebook (if applicable)
 - coverage_percentage: 0-100 score of how much the guidebook addresses this issue
@@ -250,8 +270,10 @@ For each major friction topic, provide:
 - guidebook_match_confidence: 0.0-1.0 confidence that the guidebook content matches the actual customer need
 - proactive_notification_opportunity: true/false (would SMS/email proactive notifications prevent this inquiry?)
 - severity: "Critical", "Medium", or "Adequate"
-- Specific, actionable recommendations for improvement
-- Consider both content improvements and notification strategies
+- gap_type: Type of gap (e.g., "missing_content", "unclear_process", "no_automation")
+- gap_type_ar: Arabic type of gap
+- recommendation: Specific, actionable recommendation for improvement
+- recommendation_ar: Arabic recommendation
 
 Return bilingual output (English and Arabic) for all content.
 """
@@ -278,11 +300,20 @@ def run_stage5(
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Build analysis prompt with guidebook context
+    # Build locked case counts from journey_map before API call
+    # This maps friction clusters to their case counts for injection into results
+    locked_case_counts = {}
+    for friction in state.journey_map:
+        cluster_key = friction.cluster or friction.cluster_ar or "unknown"
+        friction_point = friction.friction_point or friction.friction_point_ar or ""
+        locked_case_counts[f"{cluster_key} — {friction_point}"] = friction.case_count
+
+    # Build analysis prompt with guidebook context and locked case counts
     prompt = build_gap_analysis_prompt(
         [p.model_dump() for p in state.patterns],
         [j.model_dump() for j in state.journey_map],
-        guidebook_data
+        guidebook_data,
+        locked_case_counts
     )
 
     # Call Claude with tool-use
@@ -323,11 +354,46 @@ def run_stage5(
 
             # Parse gap table with enhanced guidebook intelligence
             if 'gap_table' in analysis:
-                state.gap_table = [
-                    GapRow(
+                # Build journey_map lookup by topic and cluster for case_count matching
+                journey_map_by_topic = {}
+                cluster_to_case_count = {}
+                for friction in (state.journey_map or []):
+                    friction_topic = friction.friction_point or friction.friction_point_ar or ""
+                    cluster_topic = friction.cluster or friction.cluster_ar or ""
+                    if friction_topic:
+                        journey_map_by_topic[friction_topic.lower()[:50]] = friction.case_count
+                    if cluster_topic:
+                        cluster_key = cluster_topic.lower()[:50]
+                        journey_map_by_topic[cluster_key] = friction.case_count
+                        cluster_to_case_count[cluster_topic] = friction.case_count  # Exact match for reinject
+
+                gap_rows = []
+                for g in analysis.get('gap_table', []):
+                    case_count = g.get('case_count', 0)
+                    gap_topic = g.get('topic_ar') or g.get('topic') or ""
+
+                    # PRIMARY: Reinject from locked case counts (journey_map source of truth)
+                    # Try exact match on gap topic against journey_map
+                    gap_topic_lower = gap_topic.lower()[:50]
+                    matched_count = journey_map_by_topic.get(gap_topic_lower)
+
+                    # Try partial match if exact fails
+                    if not matched_count:
+                        for jm_key, count in journey_map_by_topic.items():
+                            if jm_key in gap_topic_lower or gap_topic_lower in jm_key:
+                                matched_count = count
+                                break
+
+                    # If matched, reinject locked count (overrides LLM output)
+                    if matched_count and matched_count > 0:
+                        case_count = matched_count
+                        if case_count != g.get('case_count', 0):
+                            print(f"[Stage5] REINJECT: case_count={case_count} for gap '{gap_topic[:50]}' (was {g.get('case_count', '?')})")
+
+                    gap_rows.append(GapRow(
                         topic=g.get('topic', ''),
                         topic_ar=g.get('topic_ar', ''),
-                        case_count=g.get('case_count', 0),
+                        case_count=case_count,
                         guidebook_status=g.get('guidebook_status', ''),
                         gap_type=g.get('gap_type', ''),
                         gap_type_ar=g.get('gap_type_ar', ''),
@@ -343,9 +409,9 @@ def run_stage5(
                         has_visual_guidance=g.get('has_visual_guidance', None),
                         guidebook_match_confidence=float(g.get('guidebook_match_confidence', 0)) if g.get('guidebook_match_confidence') else None,
                         proactive_notification_opportunity=g.get('proactive_notification_opportunity', None)
-                    )
-                    for g in analysis.get('gap_table', [])
-                ]
+                    ))
+
+                state.gap_table = gap_rows
 
             # Validate FAQ candidates
             if 'faq_validations' in analysis:

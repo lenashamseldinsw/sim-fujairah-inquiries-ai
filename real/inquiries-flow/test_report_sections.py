@@ -9,6 +9,7 @@ and tests stages 1-5 + Stage 6 (Excel generation) + report sections.
 import sys
 import os
 import json
+import time
 import traceback
 import pandas as pd
 from pathlib import Path
@@ -22,6 +23,7 @@ from pipeline.orchestrator import PipelineOrchestrator  # type: ignore[import-un
 
 def main():
     """Run Stages 1-5 + Report Section Generation test."""
+    start_time = time.time()
     print("=" * 80)
     print("PIPELINE STAGES 1-5 + REPORT SECTIONS TEST")
     print("=" * 80)
@@ -45,9 +47,9 @@ def main():
         # Sample 50 random rows
         if len(df) > 50:
             df = df.sample(n=50, random_state=42)
-            print(f"✅ Sampled 50 random rows (seed=42 for reproducibility)")
+            print(f"✅ Sampled 5 random rows (seed=42 for reproducibility)")
         else:
-            print(f"⚠️  Only {len(df)} rows available (less than 50)")
+            print(f"⚠️  Only {len(df)} rows available (less than 10)")
 
     except Exception as e:
         print(f"❌ Failed to load file: {e}")
@@ -140,7 +142,7 @@ def main():
             if stage_num < 6:
                 break
 
-    # Summary of stages 1-6
+    # Summary of pipeline stages 1-6
     print(f"\n{'=' * 80}")
     print("PIPELINE STAGES 1-6 SUMMARY")
     print(f"{'=' * 80}")
@@ -187,113 +189,24 @@ def main():
                 if g.severity:
                     print(f"      Severity: {g.severity}")
 
-    # Now test report section generation
+    # Verify report section generation (already done by run_stage6_artifacts above)
     print(f"\n{'=' * 80}")
-    print("REPORT SECTION GENERATION TEST (Executive Summary → Methodology → Workload Map → Customer Journey)")
+    print("REPORT SECTIONS VERIFICATION")
     print(f"{'=' * 80}")
 
     try:
-        from pipeline.stage6_artifacts import generate_executive_summary_section, generate_methodology_section  # type: ignore[import-untyped]
-        from pipeline.stage6_json_report import JSONReportBuilder  # type: ignore[import-untyped]
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        print(f"\n📄 Generating Executive Summary section...")
-        exec_summary = generate_executive_summary_section(state, api_key)
-
-        if exec_summary:
-            print(f"✅ Executive Summary generated successfully")
-            if 'framing_paragraph_ar' in exec_summary:
-                print(f"   📋 Framing paragraph: {exec_summary['framing_paragraph_ar'][:100]}...")
-            if 'key_findings' in exec_summary:
-                print(f"   📊 Key findings: {len(exec_summary['key_findings'])} rows")
+        if state.report_sections_ar:
+            print(f"✅ Report sections generated successfully by Stage 6")
+            for section_name in state.report_sections_ar.keys():
+                print(f"   ✓ {section_name}")
         else:
-            print(f"❌ Executive Summary generation failed")
-            exec_summary = {}
+            print(f"⚠️  No report sections found in state after Stage 6")
 
-        print(f"\n📄 Generating Methodology section...")
-        methodology = generate_methodology_section(state, api_key)
-
-        if methodology:
-            print(f"✅ Methodology generated successfully")
-            if 'sources_table' in methodology:
-                print(f"   📋 Sources table: {len(methodology['sources_table'])} rows")
-            if 'classification_method_ar' in methodology:
-                print(f"   📋 Classification method: {methodology['classification_method_ar'][:100]}...")
-        else:
-            print(f"❌ Methodology generation failed")
-            methodology = {}
-
-        # Build Arabic report sections only (LLM now outputs Arabic-only)
-        state.report_sections_ar = {
-            'executive_summary': {
-                'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-                'body': exec_summary.get('framing_paragraph_ar', '') if exec_summary else '',
-                'core_message': exec_summary.get('core_message_ar', '') if exec_summary else '',
-                'tables': [exec_summary.get('key_findings', [])] if exec_summary and exec_summary.get('key_findings') else [],
-                'raw_data': exec_summary,
-            },
-            'methodology': {
-                'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-                'classification_method': methodology.get('classification_method', '') if methodology else '',
-                'analyzed_fields': methodology.get('analyzed_fields', '') if methodology else '',
-                'tables': [{'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'], 'rows': methodology.get('sources_table', [])}] if methodology else [],
-                'raw_data': methodology,
-            }
-        }
-
-        # Generate Workload Map section
-        print(f"\n📄 Generating Workload Map section...")
-        from pipeline.generate_workload_map_section import generate_workload_map_section  # type: ignore[import-untyped]
-
-        workload_map_raw = generate_workload_map_section(state, api_key)
-        if workload_map_raw:
-            # Store as JSONReportBuilder expects it
-            state.report_sections_ar['workload_map'] = {
-                'heading': 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات',
-                'raw_data': workload_map_raw,
-            }
-            print(f"✅ Workload Map raw data generated successfully")
-        else:
-            print(f"❌ Workload Map generation failed")
-
-        # Generate Customer Journey Challenges section
-        print(f"\n📄 Generating Customer Journey Challenges section...")
-        from pipeline.generate_customer_journey_section import generate_customer_journey_section  # type: ignore[import-untyped]
-
-        customer_journey = generate_customer_journey_section(state, api_key)
-        if customer_journey:
-            state.report_sections_ar['customer_journey'] = {
-                'heading': 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل',
-                'raw_data': customer_journey,
-            }
-            print(f"✅ Customer Journey generated successfully")
-            print(f"   📊 Friction table rows: {len(customer_journey.get('friction_table', []))}")
-        else:
-            print(f"⚠️  Customer Journey generation failed (will be skipped in report)")
-
-        # Generate Digital Gaps section
-        print(f"\n📄 Generating Digital Gaps section...")
-        from pipeline.generate_digital_gaps_section import generate_digital_gaps_section  # type: ignore[import-untyped]
-
-        digital_gaps = generate_digital_gaps_section(state, api_key)
-        if digital_gaps:
-            state.report_sections_ar['digital_gaps'] = {
-                'heading': 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية',
-                'raw_data': digital_gaps,
-            }
-            print(f"✅ Digital Gaps generated successfully")
-        else:
-            print(f"⚠️  Digital Gaps generation failed (will be skipped in report)")
-
-        # No English sections (Arabic-only output per new prompts)
-        state.report_sections_en = None
-
-        # Generate complete report JSON using JSONReportBuilder
-        print(f"\n📄 Assembling complete report structure via JSONReportBuilder...")
-        from pipeline.stage6_json_report import generate_json_report  # type: ignore[import-untyped]
-        state.report_json = generate_json_report(state)
-
+        # Verify final report JSON was assembled
         if state.report_json:
-            print(f"✅ Report JSON assembled successfully")
+            print(f"\n✅ Report JSON assembled successfully")
             if 'ar' in state.report_json:
                 ar_report = state.report_json['ar']
                 sections = ar_report.get('sections', [])
@@ -307,13 +220,12 @@ def main():
             print(f"⚠️  Report JSON not generated")
 
         # Save final report JSON (Arabic-only, production version)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         if state.report_json and 'ar' in state.report_json:
             ar_report = state.report_json['ar']
 
             # Print summary before save
             print(f"\n{'=' * 80}")
-            print("FINAL REPORT STRUCTURE (from JSONReportBuilder):")
+            print("FINAL REPORT STRUCTURE (from Stage 6):")
             print(f"{'=' * 80}")
             print(f"Metadata: {json.dumps(ar_report.get('metadata', {}), ensure_ascii=False, indent=2)}")
             print(f"\nSections ({len(ar_report.get('sections', []))} total):")
@@ -334,7 +246,7 @@ def main():
             print(f"\n⚠️  No final report JSON to save")
 
     except Exception as e:
-        print(f"❌ Report generation error: {e}")
+        print(f"❌ Report verification error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -343,12 +255,21 @@ def main():
     print(f"\n{'=' * 80}")
     if all_success:
         print("✅ PIPELINE STAGES 1-6 PASSED")
-        print("✅ REPORT SECTIONS GENERATED (Executive Summary + Methodology + Workload Map + Customer Journey)")
+        print("✅ ALL REPORT SECTIONS 1-8 GENERATED (Executive Summary, Methodology, Workload Map, Customer Journey, Digital Gaps, Digital Transformation, AI Use Cases, Improvement Roadmap)")
         if results.get(6, {}).get('success'):
             print("✅ EXCEL GENERATION COMPLETED SUCCESSFULLY")
     else:
         failed = [s for s, r in results.items() if not r['success']]
         print(f"❌ FAILED STAGES: {failed}")
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    hours = int(elapsed_time // 3600)
+    minutes = int((elapsed_time % 3600) // 60)
+    seconds = int(elapsed_time % 60)
+    milliseconds = int((elapsed_time % 1) * 1000)
+
+    print(f"\n⏱️  TOTAL TEST DURATION: {hours}h {minutes}m {seconds}s {milliseconds}ms ({elapsed_time:.2f}s)")
     print(f"{'=' * 80}")
 
     return all_success

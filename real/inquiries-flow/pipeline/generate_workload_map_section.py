@@ -331,6 +331,47 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         result["distribution_table"] = distribution_rows
         result["reclassification_sample"] = reclass_samples
 
+        # VALIDATION: Verify all sub-classifications are present in returned tables
+        # Bug 2 Fix: LLM sometimes only returns partial breakdown tables
+        def validate_and_fix_table(table_name, table_rows, expected_rows):
+            """Ensure all expected rows are present in table; add missing ones."""
+            if not expected_rows:
+                return table_rows
+
+            returned_count = len(table_rows)
+            expected_count = len(expected_rows)
+
+            if returned_count < expected_count:
+                print(f"[WorkloadMap] WARNING: {table_name} has {returned_count} rows, expected {expected_count}")
+
+                # Add missing rows from expected_rows
+                returned_subs = {row.get('الفئة الفرعية', '') for row in table_rows}
+                for expected_row in expected_rows:
+                    sub = expected_row.get('الفئة الفرعية', '')
+                    if sub not in returned_subs:
+                        # Preserve LLM-written description if it was provided
+                        table_rows.append(expected_row)
+                        print(f"[WorkloadMap] FIX: Added missing row for '{sub}'")
+
+            return table_rows
+
+        # Validate complaints, requests, inquiries tables against pre-computed data
+        result["complaints_table"] = validate_and_fix_table(
+            "complaints_table",
+            result.get("complaints_table", []),
+            complaint_subs
+        )
+        result["requests_table"] = validate_and_fix_table(
+            "requests_table",
+            result.get("requests_table", []),
+            request_subs
+        )
+        result["inquiries_table"] = validate_and_fix_table(
+            "inquiries_table",
+            result.get("inquiries_table", []),
+            inquiry_subs
+        )
+
         print(
             f"[WorkloadMap] OK — "
             f"complaints={len(result.get('complaints_table', []))} rows, "

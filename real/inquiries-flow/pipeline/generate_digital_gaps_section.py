@@ -148,7 +148,7 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     Sort: Critical first, then by case_count descending.
     Columns locked here — LLM adds وضع التطبيق / الموقع الحالي and التوصية.
 
-    Schema: الموضوع | الحالات | نوع الفجوة
+    Schema: الموضوع | الحالات | الشدّة | نوع الفجوة
     """
     sorted_gaps = sorted(
         state.gap_table,
@@ -158,7 +158,8 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
         {
             "الموضوع":    gap.topic_ar or gap.topic,
             "الحالات":    str(gap.case_count),
-            "نوع الفجوة": _SEVERITY_EMOJI.get(gap.severity, gap.severity),
+            "الشدّة":      _SEVERITY_EMOJI.get(gap.severity, gap.severity),
+            "نوع الفجوة": gap.gap_type_ar or gap.gap_type or "—",
         }
         for gap in sorted_gaps
     ]
@@ -397,7 +398,7 @@ def generate_digital_gaps_section(
         f'{json.dumps(root_cause_context, ensure_ascii=False, indent=2)}\n'
         '\n'
         'pre_computed_gap_table — Section 5.1\n'
-        '(الموضوع, الحالات, نوع الفجوة are LOCKED — copy verbatim; only ADD the two new columns):\n'
+        '(الموضوع, الحالات, الشدّة, نوع الفجوة are LOCKED — copy verbatim; only ADD the two new columns):\n'
         f'{json.dumps(gap_rows, ensure_ascii=False, indent=2)}\n'
         '\n'
         'pre_computed_root_cause_table — Section 5.2\n'
@@ -453,6 +454,7 @@ def generate_digital_gaps_section(
         '    {\n'
         '      "الموضوع": "...",\n'
         '      "الحالات": "...",\n'
+        '      "الشدّة": "🔴 حرجة",\n'
         '      "وضع التطبيق / الموقع الحالي": "...",\n'
         '      "نوع الفجوة": "...",\n'
         '      "التوصية": "..."\n'
@@ -471,7 +473,7 @@ def generate_digital_gaps_section(
         'RULES:\n'
         '- gap_table must have exactly the same number of rows as pre_computed_gap_table.\n'
         '- root_cause_table must have exactly the same number of rows as pre_computed_root_cause_table.\n'
-        '- الموضوع, الحالات, نوع الفجوة: copy verbatim from pre_computed_gap_table.\n'
+        '- الموضوع, الحالات, الشدّة, نوع الفجوة: copy verbatim from pre_computed_gap_table.\n'
         '- #, السبب الجذري, مثال على التحدي: copy verbatim from pre_computed_root_cause_table.\n'
         '- Every number in section_body must match a pre-computed input above.\n'
         '- Arabic only. Proper nouns only in Latin script: MOI, SMS, UAE PASS.\n'
@@ -531,10 +533,11 @@ def generate_digital_gaps_section(
                 f"(topic: '{pre_row['الموضوع']}')"
             )
 
-        # Column order matches sample output: الموضوع | الحالات | وضع التطبيق | نوع الفجوة | التوصية
+        # Column order matches sample output: الموضوع | الحالات | الشدّة | وضع التطبيق | نوع الفجوة | التوصية
         merged_gap_table.append({
             "الموضوع":                     pre_row["الموضوع"],
             "الحالات":                     pre_row["الحالات"],
+            "الشدّة":                      pre_row["الشدّة"],
             "وضع التطبيق / الموقع الحالي": app_status,
             "نوع الفجوة":                  pre_row["نوع الفجوة"],
             "التوصية":                      توصية,

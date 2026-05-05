@@ -292,6 +292,6 @@ def extract_month_year_range(cases: list, lang: str = 'en') -> str:
     if min_date.year == max_date.year and min_date.month == max_date.month:
         return f"{min_month} {min_date.year}"
     elif min_date.year == max_date.year:
-        return f"{min_month} — {max_month} {max_date.year}"
+        return f"{min_month} - {max_month} {max_date.year}"
     else:
-        return f"{min_month} {min_date.year} — {max_month} {max_date.year}"
+        return f"{min_month} {min_date.year} - {max_month} {max_date.year}"

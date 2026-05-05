@@ -20,6 +20,7 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import importlib.util
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage6_json_report import generate_json_report
@@ -28,6 +29,8 @@ from .generate_customer_journey_section import generate_customer_journey_section
 from .generate_digital_gaps_section import generate_digital_gaps_section
 from .generate_digital_transformation_section import generate_digital_transformation_section
 from .generate_ai_use_cases_section import generate_ai_use_cases_section
+from .generate_improvement_roadmap_section import generate_improvement_roadmap_section
+from .generate_conclusion_section import generate_conclusion_section
 
 # Load sword_word_builder from local path
 WordBuilder = None
@@ -214,8 +217,8 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
 def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) -> None:
     """Populate sheet with case data (RTL).
 
-    Preserves all original input columns + adds 4 AI-generated columns at end.
-    Uses original column names from the input Excel file.
+    Preserves all meaningful input columns in original order + adds 4 AI-generated columns at end.
+    Filters out empty/unnamed columns from input Excel.
     """
     # Enable RTL layout
     ws.sheet_view.rightToLeft = True
@@ -233,24 +236,44 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         'الإدارة_العامة': 'admin',
     }
 
-    # Use original column names from input Excel
-    input_columns = state.original_columns if state.original_columns else []
-    
-    # If no original columns stored (backward compatibility), use default
-    if not input_columns:
-        input_columns = [
-            'رقم_الطلب',
-            'تفاصيل_الطلب',
-            'تاريخ_الإنشاء',
-            'قناة_تقديم_الخدمة',
-            'نوع_المكالمة',
-            'الخدمة_الرئيسية',
-            'الحل',
-            'الحالة_SLA',
-            'الإدارة_العامة',
-        ]
+    # Import COLUMN_MAPPING for validation
+    from .stage1_validator import COLUMN_MAPPING
 
-    # New AI-generated columns
+    # Filter original columns to only include meaningful ones (mapped or already normalized)
+    # This removes empty "Unnamed: X" columns from input Excel
+    meaningful_columns = []
+    if state.original_columns:
+        for col in state.original_columns:
+            # Check if it's an empty/unnamed column
+            if col.startswith('Unnamed'):
+                continue
+            # Keep if it's in mapping (will be normalized) or already normalized
+            if col in COLUMN_MAPPING or col in NORMALIZED_TO_CASEROW:
+                meaningful_columns.append(col)
+
+    # Map original column names to normalized names
+    normalized_columns = []
+    if meaningful_columns:
+        for col in meaningful_columns:
+            if col in COLUMN_MAPPING:
+                normalized_columns.append(COLUMN_MAPPING[col])
+            else:
+                normalized_columns.append(col)
+
+    # Use filtered columns, fallback to defaults if none found
+    input_columns = normalized_columns if normalized_columns else [
+        'رقم_الطلب',
+        'تفاصيل_الطلب',
+        'نوع_المكالمة',
+        'تاريخ_الإنشاء',
+        'قناة_تقديم_الخدمة',
+        'الخدمة_الرئيسية',
+        'الحل',
+        'الحالة_SLA',
+        'الإدارة_العامة',
+    ]
+
+    # New AI-generated columns (added at end)
     ai_columns = [
         'التصنيف_الفعلي',
         'التصنيف_الفرعي',
@@ -267,18 +290,6 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         cell.font = HEADER_FONT
         cell.border = BORDER
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-    # Import normalize function to map original columns
-    from .stage1_validator import COLUMN_MAPPING
-    
-    # Build reverse mapping: original column name -> normalized name
-    original_to_normalized = {}
-    for orig_col in input_columns:
-        if orig_col in COLUMN_MAPPING:
-            original_to_normalized[orig_col] = COLUMN_MAPPING[orig_col]
-        else:
-            # Column already normalized or unknown
-            original_to_normalized[orig_col] = orig_col
 
     # Create a lookup dict for raw_df by case_number for columns not in CaseRow
     raw_df_lookup = {}
@@ -304,12 +315,11 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         # Get raw row data for this case (for unmapped columns)
         raw_row = raw_df_lookup.get(case.case_number)
 
-        # Build input data by mapping original columns to CaseRow attributes
+        # Build input data by mapping normalized columns to CaseRow attributes
         input_data = []
-        for orig_col in input_columns:
-            normalized_col = original_to_normalized.get(orig_col, orig_col)
+        for normalized_col in input_columns:
             caserow_attr = NORMALIZED_TO_CASEROW.get(normalized_col, None)
-            
+
             if caserow_attr:
                 # Get value from CaseRow
                 value = getattr(case, caserow_attr, '')
@@ -366,9 +376,8 @@ def generate_word_report(
         language: 'ar' or 'en'
         api_key: Anthropic API key for LLM report generation
     """
-    # Build report content via LLM if not in state (needed for both Word and JSON reports)
-    if not state.report_sections_ar and not state.report_sections_en:
-        _generate_report_sections(state, api_key)
+    # Report sections should already be generated by run_stage6
+    # No need to regenerate here
 
     if WordBuilder is None:
         print(f"⚠️  Skipping Word report generation (sword-word-builder not installed)")
@@ -463,18 +472,17 @@ def generate_word_report(
 
 def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     """
-    Generate report sections via LLM.
+    Generate report sections via LLM with threading.
 
-    Calls specialized functions for each of the 9 sections:
-    1. Executive Summary
-    2. Methodology (placeholder)
-    3. Workload Map (placeholder)
-    4. Customer Journey Challenges (placeholder)
-    5. Digital Gaps (placeholder)
-    6. Digital Transformation Plan (placeholder)
-    7. AI Use Cases (placeholder)
-    8. Improvement Roadmap (placeholder)
-    9. Conclusion (placeholder)
+    Uses 3-wave parallelization:
+    - Wave 1: 7 independent sections in parallel (executive_summary, methodology, workload_map,
+              customer_journey, digital_gaps, digital_transformation, ai_use_cases)
+    - Wave 2: improvement_roadmap (depends on ai_use_cases from wave 1)
+    - Wave 3: conclusion (depends on both ai_use_cases and improvement_roadmap from earlier waves)
+
+    Thread safety: Each generator function is read-only on state and returns a result dict.
+    Results are collected in a local dict per thread, then merged into state.report_sections_ar
+    after all threads complete (single-threaded merge, no race conditions).
     """
     print(f"[GenSections] api_key present: {bool(api_key)}")
     print(f"[GenSections] api_key length: {len(api_key) if api_key else 0}")
@@ -485,96 +493,158 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     # Initialize Arabic-only dict
     state.report_sections_ar = {}
 
-    # 1. Generate Executive Summary (primary, detailed implementation)
-    print("[Report Gen] Generating Executive Summary...")
-    exec_summary = generate_executive_summary_section(state, api_key)
-    if not exec_summary:
-        raise RuntimeError("[Report Gen] Executive summary generation failed")
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # WAVE 1: 7 independent sections — run in parallel
+    # ──────────────────────────────────────────────────────────────────────────────────
+    print("[GenSections] WAVE 1: Starting 7 parallel section generations...")
 
-    # Store in report_sections with proper structure for Word builder
-    state.report_sections_ar['executive_summary'] = {
-        'heading': 'أولاً: الملخص التنفيذي — التحليلات الرئيسية',
-        'body': exec_summary['framing_paragraph'],
-        'tables': [exec_summary['key_findings']],  # Will be formatted as table
-        'core_message': exec_summary['core_message'],
-        'raw_data': exec_summary  # Store full response for later processing
+    wave1_tasks = {
+        'executive_summary': (generate_executive_summary_section, 'أولاً: الملخص التنفيذي — التحليلات الرئيسية'),
+        'methodology': (generate_methodology_section, 'ثانياً: المنهجية وطبيعة المصادر'),
+        'workload_map': (generate_workload_map_section, 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات'),
+        'customer_journey': (generate_customer_journey_section, 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل'),
+        'digital_gaps': (generate_digital_gaps_section, 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية'),
+        'digital_transformation': (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي'),
+        'ai_use_cases': (generate_ai_use_cases_section, 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي'),
     }
 
-    # 2. Generate Methodology section with correct keys and state dicts
-    print("[Report Gen] Generating Methodology section...")
-    methodology = generate_methodology_section(state, api_key)
-    if methodology:
-        # Build table dicts from Arabic LLM response
+    wave1_results = {}  # Local dict — no shared state touched inside threads
+
+    def run_section(key: str, fn, state: PipelineState, api_key: str) -> tuple[str, Dict[str, Any]]:
+        """Run a section generator and return (key, result_dict)."""
+        print(f"[GenSections] Starting {key}...")
+        result = fn(state, api_key)  # Pure: reads state, returns dict
+        print(f"[GenSections] ✓ {key} complete")
+        return key, result
+
+    with ThreadPoolExecutor(max_workers=7) as executor:
+        futures = {
+            executor.submit(run_section, key, fn, state, api_key): key
+            for key, (fn, _heading) in wave1_tasks.items()
+        }
+        for future in as_completed(futures):
+            key = futures[future]
+            try:
+                result_key, result = future.result()
+                wave1_results[result_key] = result
+            except Exception as e:
+                raise RuntimeError(f"[GenSections] Wave 1 failed on '{key}': {e}") from e
+
+    print(f"[GenSections] ✓ WAVE 1 complete: {len(wave1_results)} sections generated")
+
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # Merge Wave 1 results into state (single-threaded, no race conditions)
+    # ──────────────────────────────────────────────────────────────────────────────────
+    print("[GenSections] Merging WAVE 1 results into state...")
+
+    # Special handling for executive_summary and methodology (have special structure)
+    if 'executive_summary' in wave1_results:
+        exec_summary = wave1_results['executive_summary']
+        state.report_sections_ar['executive_summary'] = {
+            'heading': wave1_tasks['executive_summary'][1],
+            'body': exec_summary.get('framing_paragraph', ''),
+            'tables': [exec_summary.get('key_findings', [])],
+            'core_message': exec_summary.get('core_message', ''),
+            'raw_data': exec_summary
+        }
+
+    if 'methodology' in wave1_results:
+        methodology = wave1_results['methodology']
         sources_rows = methodology.get('sources_table', [])
         sources_ar = {
             'columns': ['المصدر', 'الطبيعة', 'الحجم', 'الفترة'],
             'rows': sources_rows,
-            'row_count': len(sources_rows),  # ISSUE 3 FIX: Explicit row_count
+            'row_count': len(sources_rows),
             'col_count': 4,
         }
-
-        # Validate table
         if not _is_valid_table(sources_ar):
-            raise RuntimeError("[Report Gen] Arabic sources table is invalid or empty")
-
+            raise RuntimeError("[GenSections] Arabic sources table is invalid or empty")
         state.report_sections_ar['methodology'] = {
-            'heading': 'ثانياً: المنهجية وطبيعة المصادر',
-            'classification_method': methodology['classification_method'],
-            'analyzed_fields': methodology['analyzed_fields'],
+            'heading': wave1_tasks['methodology'][1],
+            'classification_method': methodology.get('classification_method', ''),
+            'analyzed_fields': methodology.get('analyzed_fields', ''),
             'tables': [sources_ar],
             'raw_data': methodology
         }
-    else:
-        raise RuntimeError("[Report Gen] Methodology generation failed")
 
-    # 3. Generate Workload Map section
-    print("[Report Gen] Generating Workload Map section...")
-    workload_map = generate_workload_map_section(state, api_key)
-    if workload_map:
-        state.report_sections_ar['workload_map'] = {
-            'heading': 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات',
-            'raw_data': workload_map,
-        }
-    else:
-        raise RuntimeError("[Report Gen] Workload map generation failed")
+    # Standard sections (workload_map, customer_journey, digital_gaps, digital_transformation, ai_use_cases)
+    standard_sections = ['workload_map', 'customer_journey', 'digital_gaps', 'digital_transformation', 'ai_use_cases']
+    for section_key in standard_sections:
+        if section_key in wave1_results:
+            state.report_sections_ar[section_key] = {
+                'heading': wave1_tasks[section_key][1],
+                'raw_data': wave1_results[section_key],
+            }
 
-    # 4. Generate Customer Journey Challenges section
-    print("[Report Gen] Generating Customer Journey Challenges section...")
-    customer_journey = generate_customer_journey_section(state, api_key)
-    state.report_sections_ar['customer_journey'] = {
-        'heading': 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل',
-        'raw_data': customer_journey,
+    print("[GenSections] ✓ Wave 1 results merged")
+
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # WAVE 2: improvement_roadmap (depends on ai_use_cases from Wave 1)
+    # ──────────────────────────────────────────────────────────────────────────────────
+    print("[GenSections] WAVE 2: Generating Improvement Roadmap (depends on AI Use Cases)...")
+    roadmap = generate_improvement_roadmap_section(state, api_key)
+    state.report_sections_ar['improvement_roadmap'] = {
+        'heading': 'ثامناً: خارطة الطريق التحسينية المقترحة',
+        'raw_data': roadmap,
     }
+    print("[GenSections] ✓ WAVE 2 complete")
 
-    # 5. Generate Digital Gaps section
-    print("[Report Gen] Generating Digital Gaps section...")
-    digital_gaps = generate_digital_gaps_section(state, api_key)
-    state.report_sections_ar['digital_gaps'] = {
-        'heading': 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية',
-        'raw_data': digital_gaps,
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # WAVE 3: conclusion (depends on both ai_use_cases and improvement_roadmap)
+    # ──────────────────────────────────────────────────────────────────────────────────
+    print("[GenSections] WAVE 3: Generating Conclusion (depends on AI Use Cases + Roadmap)...")
+    conclusion = generate_conclusion_section(state, api_key)
+    state.report_sections_ar['conclusion'] = {
+        'heading': 'تاسعاً: الخلاصة — من البيانات إلى القرار',
+        'raw_data': conclusion,
     }
-
-    # 6. Generate Digital Transformation section
-    print("[Report Gen] Generating Digital Transformation section...")
-    digital_transform = generate_digital_transformation_section(state, api_key)
-    state.report_sections_ar['digital_transformation'] = {
-        'heading': 'سادساً: التحليل الرابع — خطة التحويل الرقمي',
-        'raw_data': digital_transform,
-    }
-
-    # 7. Generate AI Use Cases section
-    print("[Report Gen] Generating AI Use Cases section...")
-    ai_use_cases = generate_ai_use_cases_section(state, api_key)
-    state.report_sections_ar['ai_use_cases'] = {
-        'heading': 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي',
-        'raw_data': ai_use_cases,
-    }
-
-    # TODO: 8-9. Additional sections (not yet implemented)
-    # TODO: 8. Improvement Roadmap (ثامناً: خارطة الطريق التحسينية)
-    # TODO: 9. Conclusion (تاسعاً: الخلاصة)
+    print("[GenSections] ✓ WAVE 3 complete")
 
     print("[Report Gen] ✅ All report sections generated successfully")
+
+
+def _fix_unescaped_newlines(json_str: str) -> str:
+    """Fix unescaped newlines in JSON string values (from LLM responses).
+
+    When Claude returns JSON with literal newlines in Arabic text,
+    this escapes them properly so json.loads() can parse it.
+    """
+    result = []
+    i = 0
+    in_string = False
+    escape_next = False
+
+    while i < len(json_str):
+        char = json_str[i]
+
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            i += 1
+            continue
+
+        if char == '\\' and in_string:
+            result.append(char)
+            escape_next = True
+            i += 1
+            continue
+
+        if char == '"':
+            in_string = not in_string
+            result.append(char)
+            i += 1
+            continue
+
+        if char == '\n' and in_string:
+            # Replace literal newline with escaped version
+            result.append('\\n')
+            i += 1
+            continue
+
+        result.append(char)
+        i += 1
+
+    return ''.join(result)
 
 
 def generate_executive_summary_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
@@ -957,12 +1027,18 @@ Return a single Arabic JSON object:
                             result = json.loads(json_str)
                             return result
                         except json.JSONDecodeError as e:
-                            raise RuntimeError(
-                                f"[ExecSummary] Failed to parse executive summary JSON: {e}\n"
-                                f"Attempted string length: {len(json_str)}\n"
-                                f"First 500 chars: {json_str[:500]}\n"
-                                f"Last 500 chars: {json_str[-500:] if len(json_str) > 500 else 'N/A'}"
-                            )
+                            # Try to fix unescaped newlines in JSON strings
+                            fixed_json = _fix_unescaped_newlines(json_str)
+                            try:
+                                result = json.loads(fixed_json)
+                                return result
+                            except json.JSONDecodeError:
+                                raise RuntimeError(
+                                    f"[ExecSummary] Failed to parse executive summary JSON: {e}\n"
+                                    f"Attempted string length: {len(json_str)}\n"
+                                    f"First 500 chars: {json_str[:500]}\n"
+                                    f"Last 500 chars: {json_str[-500:] if len(json_str) > 500 else 'N/A'}"
+                                )
 
         print("No JSON found in executive summary response")
         print(f"Response first 500 chars: {response_text[:500]}")
@@ -1607,7 +1683,7 @@ Rules:
         ]
 
         # HARDCODED SECTION 2.3: الحقول المحللة
-        analyzed_fields_text = """الحقول المستخدمة في التحليل — وتحديداً الرقم الطلب، تاريخ، قناة التقديم، الخدمة الرئيسية، نوع المكالمة، الجنسية، الإدارة المختصة، تفاصيل الطلب (نص متوسط 180 حرف)، وحل الحالة (متوسط 120 حرف) — هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي في نظام CRM"""
+        analyzed_fields_text = """الحقول المستخدمة في التحليل — وتحديداً رقم الطلب، تاريخ، قناة التقديم، الخدمة الرئيسية، نوع المكالمة، الجنسية، الإدارة المختصة، تفاصيل الطلب (نص متوسط 180 حرف)، وحل الحالة (متوسط 120 حرف) — هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي في نظام CRM"""
 
         return {
             "sources_table": sources_rows,
@@ -1738,13 +1814,29 @@ def run_stage6(
     # FIX 1: Compute reclassification stats once — used by all downstream outputs
     reclassified = [
         c for c in state.all_classified
-        if c.top_level != c.case_type
+        if c.actual_contact_type != c.case_type
     ]
     state.reclassified_count = len(reclassified)
     state.reclassification_rate = (
         state.reclassified_count / state.total_cases * 100
         if state.total_cases > 0 else 0.0
     )
+
+    # Generate all report sections (including sections 6-8 for JSON/Word output)
+    sections_ar = state.report_sections_ar or {}
+    missing_sections = not all(key in sections_ar for key in [
+        'digital_transformation', 'ai_use_cases', 'improvement_roadmap', 'conclusion'
+    ])
+
+    # DEBUG
+    print(f"[Stage6] report_sections_ar has {len(sections_ar)} sections")
+    print(f"[Stage6] missing_sections = {missing_sections}")
+    print(f"[Stage6] api_key present: {bool(api_key)}, length: {len(api_key) if api_key else 0}")
+
+    if (not state.report_sections_ar and not state.report_sections_en) or missing_sections:
+        print(f"[Stage6] Calling _generate_report_sections...")
+        _generate_report_sections(state, api_key)
+        print(f"[Stage6] After generation: {len(state.report_sections_ar or {})} sections")
 
     # Generate Excel
     generate_excel(state, excel_path)
