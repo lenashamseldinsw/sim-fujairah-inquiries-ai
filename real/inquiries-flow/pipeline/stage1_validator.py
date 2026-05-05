@@ -267,7 +267,7 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     """
     # Store original column names before normalization
     state.original_columns = df.columns.tolist()
-    
+
     # Normalize column names
     df_normalized = normalize_columns(df)
 
@@ -277,6 +277,15 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     state.raw_df = df_normalized
     state.validated_schema = result
     state.total_cases = len(df_normalized)
+
+    # Count closed cases (where تاريخ_إغلاق_الطلب is not empty)
+    # This is used in methodology section to report "X حالة مغلقة"
+    closed_date_col = 'تاريخ_إغلاق_الطلب'
+    if closed_date_col in df_normalized.columns:
+        state.closed_cases_count = df_normalized[closed_date_col].notna().sum()
+    else:
+        # Fallback: if closing date column doesn't exist, use total cases
+        state.closed_cases_count = state.total_cases
 
     if not is_valid:
         raise ValueError(f"Schema validation failed: {result}")

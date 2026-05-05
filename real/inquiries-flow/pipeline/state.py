@@ -143,6 +143,7 @@ class PipelineState(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     month_year: Optional[str] = None  # From data date range
     total_cases: int = 0
+    closed_cases_count: int = 0  # Cases where تاريخ_إغلاق_الطلب is not empty (for methodology section)
     reclassified_count: int = 0  # FIX 1: Centralized reclassification count
     reclassification_rate: float = 0.0  # Percentage of cases reclassified
 

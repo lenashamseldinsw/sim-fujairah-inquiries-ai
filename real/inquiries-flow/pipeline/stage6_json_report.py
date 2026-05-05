@@ -346,7 +346,8 @@ class JSONReportBuilder:
             body = ''
         # Fall back to computed summary if body is empty or stub
         if not body or body.startswith('جاري') or body.startswith('Generating'):
-            total = len(self.state.all_classified)
+            # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" reporting
+            total = self.state.closed_cases_count if self.state.closed_cases_count > 0 else len(self.state.all_classified)
             complaint_count = sum(
                 1 for c in self.state.all_classified
                 if c.actual_contact_type == 'شكوى'

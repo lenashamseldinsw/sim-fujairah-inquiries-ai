@@ -1079,7 +1079,8 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
     if not hasattr(state, 'guidebook_year') or state.guidebook_year is None:
         raise ValueError("state.guidebook_year not set - Stage 5 must complete successfully")
 
-    case_count = state.total_cases
+    # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty)
+    case_count = state.closed_cases_count if state.closed_cases_count > 0 else state.total_cases
     date_range = convert_month_year_to_arabic(state.month_year)
     guidebook_pages = state.guidebook_pages
     guidebook_faq_count = state.guidebook_faq_count
@@ -1375,13 +1376,15 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
     try:
         # Extract classification metrics
         total_cases = state.total_cases
+        # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" reporting
+        closed_cases = state.closed_cases_count if state.closed_cases_count > 0 else total_cases
         all_classified = state.all_classified or []
 
         # Use centralized reclassification stats from state (computed in generate_artifacts_stage6)
         misclassification_count = state.reclassified_count
         misclassification_rate = state.reclassification_rate
-        matched_original_count = total_cases - misclassification_count
-        matched_original_rate = (matched_original_count / total_cases * 100) if total_cases > 0 else 0
+        matched_original_count = closed_cases - misclassification_count
+        matched_original_rate = (matched_original_count / closed_cases * 100) if closed_cases > 0 else 0
 
         # Guidebook stats (must be set by Stage 5)
         if not hasattr(state, 'guidebook_pages') or state.guidebook_pages is None:
@@ -1499,11 +1502,11 @@ INPUTS PROVIDED TO YOU
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 source_1_crm:
-  - total_cases: {total_cases}
+  - closed_cases: {closed_cases}
   - date_range: "{date_range}"
   - content_description: >
       CRM data — unstructured text fields (case details, resolutions,
-      service names, case descriptions). All cases are closed.
+      service names, case descriptions). Only cases where تاريخ_إغلاق_الطلب is not empty.
 
 source_2_guidebook:
   - pages: {guidebook_pages}
@@ -1515,7 +1518,7 @@ source_2_guidebook:
       plus FAQ validation and service gap analysis.
 
 classification_stats:
-  - total_cases: {total_cases}
+  - closed_cases: {closed_cases}
   - reclassified_count: {misclassification_count}
   - reclassification_rate: "{misclassification_rate:.1f}%"
   - matched_original_count: {matched_original_count}
@@ -1600,7 +1603,7 @@ Row 1 — CRM inquiry data:
   - المصدر: تحليل الاستفسارات
   - الطبيعة: describe it as CRM data with unstructured text fields
               (case details, resolutions, service names, case descriptions)
-  - الحجم: {total_cases} حالة مغلقة
+  - الحجم: {closed_cases} حالة مغلقة
   - الفترة: {date_range}
 
 Row 2 — Customer services guidebook:
@@ -1666,12 +1669,13 @@ Rules:
 ← إن كان الغرض سؤالاً أو استعلاماً عن معلومة: استفسار
 ← إن كان التعبير عن رضا وثناء: شكر وثناء"""
 
-        # Build sources table
+        # Build sources table using closed_cases_count (where تاريخ_إغلاق_الطلب is not empty)
+        closed_count = state.closed_cases_count if state.closed_cases_count > 0 else total_cases
         sources_rows = [
             {
                 "المصدر": "تحليل الاستفسارات",
                 "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الحالة، الحلول، أسماء الخدمات، وصف الحالة)",
-                "الحجم": f"{total_cases} حالة مغلقة",
+                "الحجم": f"{closed_count} حالة مغلقة",
                 "الفترة": date_range
             },
             {
