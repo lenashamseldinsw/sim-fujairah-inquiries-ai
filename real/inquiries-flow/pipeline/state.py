@@ -76,6 +76,7 @@ class GapRow(BaseModel):
     topic_ar: Optional[str] = None
     gap_type_ar: Optional[str] = None
     recommendation_ar: Optional[str] = None
+    sub_classification: Optional[str] = None  # sub_classification(s) this gap covers
     # Enhanced guidebook intelligence fields
     guidebook_excerpt: Optional[str] = None  # Actual text snippet from guidebook
     guidebook_excerpt_ar: Optional[str] = None

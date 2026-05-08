@@ -1400,7 +1400,7 @@ class JSONReportBuilder:
         )
         subsections.append({
             "id": self.next_section_id("22_منهجية_التصنيف" if lang == "ar" else "22_classification_methodology"),
-            "title": "2.2 منهجية التصنيف" if lang == "ar" else "2.2 Classification Methodology",
+            "title": "2.2  منهجية التصنيف" if lang == "ar" else "2.2  Classification Methodology",
             "level": 2,
             "content": classification_content,
             "tables": [],
@@ -1414,7 +1414,7 @@ class JSONReportBuilder:
         )
         subsections.append({
             "id": self.next_section_id("23_الحقول_المحللة" if lang == "ar" else "23_analyzed_fields"),
-            "title": "2.3 الحقول المُحلَّلة" if lang == "ar" else "2.3 Analyzed Fields",
+            "title": "2.3  الحقول المُحلَّلة" if lang == "ar" else "2.3  Analyzed Fields",
             "level": 2,
             "content": fields_content,
             "tables": [],

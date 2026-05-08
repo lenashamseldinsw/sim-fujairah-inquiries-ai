@@ -44,10 +44,10 @@ def main():
         print(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
         print(f"   Columns: {list(df.columns)[:5]}...")
 
-        # Sample 50 random rows
-        if len(df) > 50:
-            df = df.sample(n=50, random_state=42)
-            print(f"✅ Sampled 5 random rows (seed=42 for reproducibility)")
+        # Sample 20 random rows
+        if len(df) > 20:
+            df = df.sample(n=20, random_state=42)
+            print(f"✅ Sampled 20 random rows (seed=42 for reproducibility)")
         else:
             print(f"⚠️  Only {len(df)} rows available (less than 10)")
 
@@ -123,8 +123,7 @@ def main():
                 success, msg = orchestrator.run_stage5_gap_analysis()
             elif stage_num == 6:
                 excel_path = str(output_dir / f"inquiries_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
-                word_path = str(output_dir / f"inquiries_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx")
-                success, msg = orchestrator.run_stage6_artifacts(excel_path, word_path, language='ar')
+                success, msg = orchestrator.run_stage6_artifacts(excel_path, None, language='ar')
 
             results[stage_num] = {'success': success, 'message': msg}
 

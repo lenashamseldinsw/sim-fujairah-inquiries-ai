@@ -210,7 +210,7 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     rows = []
     for i, (cat, total_count) in enumerate(sorted_rc, 1):
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
-        _, example_text = rc_best_friction.get(cat, (0, ""))
+        best_count, example_text = rc_best_friction.get(cat, (0, ""))
         example_cell = f"{total_count} حالة — {example_text}" if example_text else str(total_count)
         rows.append({
             "#":               str(i),
@@ -511,15 +511,20 @@ def generate_digital_gaps_section(
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=6000,
+        max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
     )
 
     result = parse_json_response(message.content[0].text, tag="DigitalGaps")
     if result is None:
+        # Show more of the response for debugging
+        response_text = message.content[0].text
+        response_len = len(response_text)
+        show_chars = min(1500, response_len)
         raise RuntimeError(
             "[DigitalGaps] parse_json_response returned None — could not extract JSON from API response.\n"
-            f"Raw response (first 500 chars):\n{message.content[0].text[:500]}"
+            f"Response length: {response_len} chars\n"
+            f"Raw response (first {show_chars} chars):\n{response_text[:show_chars]}"
         )
 
     # ── Reinject pre-computed values — LLM output must never override state data ──

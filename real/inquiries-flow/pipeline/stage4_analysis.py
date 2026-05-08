@@ -134,6 +134,10 @@ ANALYSIS INSTRUCTIONS:
 2. JOURNEY MAP - Friction points customers experience
    - What causes customers to contact Fujairah Police?
    - Map each friction point to a specific sub_classification
+   - CRITICAL: sub_classification MUST be copied EXACTLY as it appears in the
+     "=== top_level > sub_classification ===" section headers provided in the input.
+     Do NOT paraphrase, translate, or invent sub_classification values.
+     If a friction point spans multiple sub_classifications, pick the single best match.
    - What's the root cause? (missing info, inaccessible info, no proactive notification, platform bug, policy complexity)
    - How many cases per friction point?
    - Include top_level and sub_classification in each entry
@@ -221,17 +225,25 @@ def _reconcile_counts(
 
     reconciled_journey_map = []
     for friction in journey_map:
-        remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
-
-        # Use the LLM's supplied count, capped at remaining budget
-        # This prevents two friction points from each claiming the full group total
-        reconciled_count = min(friction.case_count, remaining_budget)
-
-        # Deduct from the budget so the next friction point in this sub_classification
-        # cannot double-count the same cases
-        sub_classification_budget[friction.sub_classification] = max(
-            0, remaining_budget - reconciled_count
-        )
+        actual_count = actual_counts.get(friction.sub_classification)
+        if actual_count is not None:
+            # Exact match — cap LLM count at actual, and deduct from budget
+            # to prevent two friction points from double-counting the same cases
+            remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
+            reconciled_count = min(friction.case_count, remaining_budget)
+            sub_classification_budget[friction.sub_classification] = max(
+                0, remaining_budget - reconciled_count
+            )
+        else:
+            # No exact match (sub_classification is None or approximate string from LLM)
+            # Keep the LLM count rather than silently zeroing it out
+            reconciled_count = friction.case_count
+            print(
+                f"[Stage4] WARNING: No exact sub_classification match for friction "
+                f"'{friction.cluster_ar or friction.cluster}' "
+                f"(sub_classification={friction.sub_classification!r}) — "
+                f"keeping LLM count {friction.case_count}"
+            )
 
         reconciled_friction = friction.model_copy(update={"case_count": reconciled_count})
         reconciled_journey_map.append(reconciled_friction)
@@ -239,7 +251,16 @@ def _reconcile_counts(
     # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
     # Distribute the capped budget proportionally across all notification opportunities.
-    max_proactive_cases = proactive_case_count
+
+    # Cap proactive_case_count against actual total to prevent LLM inflation
+    actual_total = len(all_classified)
+    max_proactive_cases = min(proactive_case_count, actual_total)
+
+    if proactive_case_count > actual_total:
+        print(
+            f"[Stage4] WARNING: proactive_notification_case_count={proactive_case_count} "
+            f"exceeds total cases={actual_total}. Capping to {actual_total}."
+        )
 
     # Sum what the LLM claimed across all notification opportunities
     llm_total = sum(

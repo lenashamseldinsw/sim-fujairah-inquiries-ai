@@ -122,15 +122,23 @@ class RealAnalyzer(Analyzer):
             if progress_callback:
                 progress_callback(1.0, "✅ اكتمل التحليل", "✅ Analysis Complete")
 
-            # Return result with file paths
-            return {
+            # Return result with file paths and report JSON for display
+            report_json = orchestrator.state.report_json if orchestrator.state else {}
+
+            # Build response - merge report structure with metadata
+            response = {
                 'success': True,
                 'message': 'Analysis completed successfully',
                 'excel_path': excel_path,
                 'word_path': word_path,
                 'summary': orchestrator.get_state_summary(),
-                'results': results
+                'results': results,
             }
+            # Add report structure (sections, metadata, etc) from report_json
+            if report_json:
+                response.update(report_json)
+
+            return response
 
         except Exception as e:
             return {

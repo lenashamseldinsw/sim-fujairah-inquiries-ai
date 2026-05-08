@@ -1135,23 +1135,32 @@ def load_css(lang='ar'):
         width: 100%;
         margin: 1.5rem 0;
     }}
-    .stProgress {{
-        direction: {DIR} !important;
+    .custom-progress-wrapper {{
+        width: 100%;
+        height: 8px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 1.5rem 0;
+        display: flex;
     }}
-    .stProgress > div > div > div > div {{
+    .custom-progress-bar {{
+        height: 100%;
         background: linear-gradient(90deg, {GOLD_DARK}, {GOLD}, {GOLD_LIGHT});
         border-radius: 10px;
         transition: width 0.4s ease;
+        width: 0%;
     }}
-    .stProgress > div > div > div {{
-        background: rgba(255,255,255,0.05);
-        border-radius: 10px;
+    .custom-progress-bar.rtl {{
+        margin-left: auto;
+        border-radius: 10px 0 0 10px;
     }}
-    .stProgress > div > div {{
-        border-radius: 10px;
+    /* Hide default Streamlit progress bar and replace with custom */
+    .stProgress {{
+        display: none !important;
     }}
     /* Blue progress bar */
-    .blue-progress .stProgress > div > div > div > div {{
+    .blue-progress .custom-progress-bar {{
         background: linear-gradient(90deg, {BLUE_DARK}, {BLUE}, {BLUE_LIGHT}) !important;
     }}
 
@@ -1498,14 +1507,30 @@ def load_css(lang='ar'):
         flex-direction: column !important;
         min-height: 0;
     }}
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {{
+        display: flex !important;
+        flex-direction: column !important;
+    }}
     .feature-card, .step-card {{
         height: 100% !important;
         display: flex !important;
         flex-direction: column !important;
         box-sizing: border-box !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+    }}
+    .feature-icon-wrap {{
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }}
+    .feature-title, .step-title {{
+        width: 100% !important;
+        text-align: center !important;
     }}
     .feature-desc, .step-desc {{
         flex: 1 !important;
+        width: 100% !important;
+        text-align: center !important;
     }}
 
     /* ── ANIMATIONS ── */
@@ -1866,16 +1891,18 @@ def process_with_analyzer(uploaded_files, lang='ar'):
     progress_placeholder = st.empty()
     progress_bar = st.progress(0)
 
-    # Initialize progress display immediately
+    # Initialize progress display immediately with custom RTL progress bar
     progress_placeholder.markdown(f"""
     <div style="text-align:center;padding:1rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
         جاري تحليل الملف...
+    </div>
+    <div class="custom-progress-wrapper">
+        <div class="custom-progress-bar rtl" id="progress-bar" style="width: 1%;"></div>
     </div>
     <div style="text-align:center;padding:0.5rem;color:#999;font-size:0.9rem;">
         0%
     </div>
     """, unsafe_allow_html=True)
-    progress_bar.progress(0.01)
 
     def update_progress(progress_pct, msg_ar, msg_en):
         """Update UI with progress from pipeline stages."""
@@ -1928,6 +1955,9 @@ def process_with_analyzer(uploaded_files, lang='ar'):
             }}
         </style>
         {stage_html}
+        <div class="custom-progress-wrapper">
+            <div class="custom-progress-bar rtl" style="width: {pct_display}%;"></div>
+        </div>
         <div style="text-align:center;padding:0.5rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
             {msg}
         </div>
@@ -1961,7 +1991,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
 
 # ── Display Report ─────────────────────────────────────────────────────────────
 def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: str = None):
-    """Display report tabs dynamically based on detected structure.
+    """Display report from JSON data in session state with section dropdown.
 
     Args:
         lang: Language preference ('ar' or 'en')
@@ -1969,46 +1999,56 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
         period: The period folder name (e.g. '2025', 'Q1_2026'). If None, uses root folder.
     """
     try:
-        # Get the script directory (where app.py is located)
+        # Try to use report_data from session state first
+        report_data = st.session_state.get('report_data')
+
+        if report_data:
+            cache_dir = None
+            if flow_type == 'complaints':
+                cache_dir = str(Path(__file__).parent / "complaints-output" / "cache")
+            else:
+                cache_dir = str(Path(__file__).parent / "inquiries-output" / "cache")
+
+            display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
+            display.display_from_json(report_data)
+            return
+
+        # Fallback: look for existing report files (for legacy compatibility)
         script_dir = Path(__file__).parent
 
-        # Determine output folder and search keywords based on flow type and period
         if flow_type == 'complaints':
-            # For English mode in complaints, look in english-output subfolder
             if lang == 'en':
                 if period:
                     outputs_path = script_dir / "complaints-output" / period / "english-output"
                 else:
                     outputs_path = script_dir / "complaints-output"
                 cache_dir = str(script_dir / "complaints-output" / "cache" / "english-cache")
-                search_keywords = ['complaints']  # English keywords for complaints
+                search_keywords = ['complaints']
             else:
                 if period:
                     outputs_path = script_dir / "complaints-output" / period
                 else:
                     outputs_path = script_dir / "complaints-output"
                 cache_dir = str(script_dir / "complaints-output" / "cache")
-                search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints (Arabic)
-        else:  # default to inquiries
+                search_keywords = ['تقرير', 'شكاوى']
+        else:
             if period:
                 outputs_path = script_dir / "inquiries-output" / period
             else:
                 outputs_path = script_dir / "inquiries-output"
-            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries (Arabic)
+            search_keywords = ['تقرير', 'استفسارات']
             cache_dir = str(script_dir / "inquiries-output" / "cache")
 
         if not outputs_path.exists():
             st.error(f"❌ {outputs_path.name} folder not found at {outputs_path}")
             return
 
-        # Find all .docx files (excluding temp files starting with ~$)
         docx_files = [f for f in outputs_path.glob("*.docx") if not f.name.startswith("~$")]
 
         if not docx_files:
             st.error(f"❌ No .docx files found in {outputs_path.name}/")
             return
 
-        # Try to find the report file with the appropriate keywords
         report_path = None
         for docx_file in docx_files:
             if all(keyword in docx_file.name for keyword in search_keywords):
@@ -2450,7 +2490,7 @@ def landing_page(lang):
         <div class="feature-card">
             <div class="feature-icon-wrap">📊</div>
             <div class="feature-title">{tx['feat2_title']}</div>
-            <div class="feature-desc">{tx['feat2_desc']}</div>
+            <div class="feature-desc">{tx['feat2_desc']}<br><br></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2704,23 +2744,16 @@ def inquiries_page(lang):
             display_report_tabs(lang, flow_type='inquiries')
             st.markdown('</div>', unsafe_allow_html=True)
 
-        has_report = (
-            'report_data' in st.session_state and st.session_state.report_data
-        ) or Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx").exists()
-
-        if has_report:
+            # Download button
             output_files = st.session_state.get('output_files', {})
-            artifacts_complete = output_files.get('excel_ready', False) and output_files.get('word_ready', False)
+            excel_path = output_files.get('excel_path')
+            word_path = output_files.get('word_path')
 
-            st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
-
-            if not artifacts_complete and 'report_data' in st.session_state:
-                st.info("📄 " + tx['artifacts_generating'])
-
-            zip_data = create_download_zip(flow_type='inquiries')
-            if zip_data:
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
+            st.markdown('<div style="max-width:820px;margin:2rem auto 0;">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                zip_data = create_download_zip(flow_type='inquiries')
+                if zip_data:
                     st.download_button(
                         label=tx['btn_download_inq'],
                         data=zip_data,

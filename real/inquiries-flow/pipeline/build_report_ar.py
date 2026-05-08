@@ -108,12 +108,11 @@ def _extract_cover_stats(data: dict):
 
 def _make_config(data: dict) -> DocumentConfig:
     doc_name = data.get("document_name", "تقرير تحليل استفسارات المتعاملين")
-    # Extract period from document name for header
-    period = "January — December 2025"
-    if "January" in doc_name and "December" in doc_name:
-        period = "January — December 2025"
+    # Extract period from document name (format: "تقرير تحليل استفسارات المتعاملين — يناير 2025")
+    parts = doc_name.split('—')
+    period = parts[1].strip() if len(parts) > 1 else "Q1 2026"
 
-    header_text = f"{doc_name.split('—')[0].strip()}  ·  {period}"
+    header_text = f"{parts[0].strip()}  ·  {period}"
 
     return DocumentConfig(
         page_size="Letter",

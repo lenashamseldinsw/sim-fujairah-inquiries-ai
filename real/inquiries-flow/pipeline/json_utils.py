@@ -81,8 +81,14 @@ def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[
     # Try to fix by closing the JSON structure
     if depth > 0:
         print(f"[{tag}] Response appears truncated (unclosed braces: depth={depth})")
-        # Try to close all unclosed braces and parse
-        candidate = response_text[first:].rstrip() + ('}' * depth)
+        # Extract from first brace to end, removing trailing junk
+        extracted = response_text[first:].rstrip()
+
+        # Remove incomplete trailing elements (trailing comma, quote, bracket)
+        extracted = extracted.rstrip(',"\']')
+
+        # Try to close all unclosed structures
+        candidate = extracted + ('}' * depth)
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
@@ -92,6 +98,9 @@ def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[
                 return json.loads(fixed)
             except json.JSONDecodeError as e:
                 print(f"[{tag}] Could not recover truncated JSON: {e}")
+                print(f"[{tag}] Attempted: extracted {len(extracted)} chars, closed {depth} braces")
+                print(f"[{tag}] Last 500 chars: ...{response_text[-500:]}")
                 return None
 
+    print(f"[{tag}] No complete JSON found in response")
     return None

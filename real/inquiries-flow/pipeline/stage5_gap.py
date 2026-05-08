@@ -17,6 +17,7 @@ Also validates FAQ candidates from Stage 4 against guidebook.
 import json
 import anthropic
 from typing import Dict, Any, List, Optional
+from collections import defaultdict
 from .state import PipelineState, GapRow, FAQCandidate
 
 
@@ -412,6 +413,42 @@ def run_stage5(
                     ))
 
                 state.gap_table = gap_rows
+
+            # Reconcile gap_table case counts against all_classified (Root Cause 1 fix)
+            # Ground truth: sub_classification → actual case count
+            actual_sub_counts = defaultdict(int)
+            for case in state.all_classified:
+                actual_sub_counts[case.sub_classification] += 1
+
+            # Bridge: journey_map cluster text → set of sub_classifications it covers.
+            # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
+            cluster_to_subs: dict = defaultdict(set)
+            for friction in state.journey_map:
+                cluster_key = (friction.cluster_ar or friction.cluster or "").strip().lower()
+                if cluster_key and friction.sub_classification:
+                    cluster_to_subs[cluster_key].add(friction.sub_classification)
+
+            # Re-derive each gap row's case_count by summing actual counts of all
+            # sub_classifications whose journey_map cluster overlaps with the gap topic.
+            for gap in state.gap_table:
+                topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
+                matched_subs: set = set()
+
+                for cluster_key, subs in cluster_to_subs.items():
+                    if cluster_key in topic_lower or topic_lower in cluster_key:
+                        matched_subs.update(subs)
+
+                if matched_subs:
+                    reconciled = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
+                    if reconciled > 0 and reconciled != gap.case_count:
+                        print(
+                            f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                            f"{gap.case_count} → {reconciled} "
+                            f"(subs: {matched_subs})"
+                        )
+                        gap.case_count = reconciled
+
+            print(f"[Stage5] ✓ gap_table case_counts reconciled against all_classified")
 
             # Validate FAQ candidates
             if 'faq_validations' in analysis:
