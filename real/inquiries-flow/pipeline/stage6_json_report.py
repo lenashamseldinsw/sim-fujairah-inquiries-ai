@@ -1602,16 +1602,14 @@ def generate_json_report(state: PipelineState) -> Dict[str, Any]:
     Generate report dictionary for Arabic only from pipeline state.
 
     Combines pipeline outputs (stages 1-5) with report_sections to build
-    demo-compatible dictionary structure for Arabic.
+    report JSON structure for Arabic.
 
     Args:
         state: PipelineState from stages 1-5 with populated report_sections_ar
 
     Returns:
-        Dict with structure: {
-            'ar': {...report structure for Arabic...}
-        }
-        Ready to pass to DynamicReportDisplay.display_report_from_dict()
+        Dict with structure: {...report structure for Arabic...}
+        with "sections" key at top level for build_report_ar
     """
     builder = JSONReportBuilder(state)
-    return {'ar': builder.build_report(lang='ar')}
+    return builder.build_report(lang='ar')
