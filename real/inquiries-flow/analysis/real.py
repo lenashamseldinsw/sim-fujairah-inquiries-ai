@@ -55,17 +55,22 @@ class RealAnalyzer(Analyzer):
 
         return True, ""
 
-    def analyze(self, uploaded_file) -> Dict[str, Any]:
+    def analyze(self, uploaded_file, progress_callback=None) -> Dict[str, Any]:
         """
         Analyze uploaded file using the 6-stage pipeline.
 
         Args:
             uploaded_file: Streamlit UploadedFile object
+            progress_callback: Optional function(progress_pct, message_ar, message_en) for UI updates
 
         Returns:
             Dict with analysis results and file paths
         """
         try:
+            # Notify start
+            if progress_callback:
+                progress_callback(0.05, "جاري تحليل الملف...", f"Parsing file: {uploaded_file.name}")
+
             # Read Excel file
             if uploaded_file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                        'application/vnd.ms-excel']:
@@ -94,19 +99,31 @@ class RealAnalyzer(Analyzer):
             excel_path = str(self.output_dir / f"{session_id}_inquiries.xlsx")
             word_path = str(self.output_dir / f"{session_id}_inquiries.docx")
 
-            # Load guidebook if available
-            guidebook_text = self._load_guidebook()
+            # Update progress before pipeline run
+            if progress_callback:
+                progress_callback(0.10, "التحقق من صيغة البيانات", "Stage 1: File Validation")
 
             results = orchestrator.run_full_pipeline(
                 df=df,
                 excel_path=excel_path,
                 word_path=word_path,
-                guidebook_text=guidebook_text,
                 language='ar'
             )
 
+            # Update progress during pipeline
+            if progress_callback:
+                progress_callback(0.50, "تصنيف البيانات", "Stage 2-3: Classification")
+
+            # Update progress for reporting
+            if progress_callback:
+                progress_callback(0.85, "توليد التقرير", "Stage 6: Report Generation")
+
             if not results['success']:
                 raise ValueError(f"Pipeline failed: {results['errors']}")
+
+            # Mark as complete
+            if progress_callback:
+                progress_callback(1.0, "✅ اكتمل التحليل", "✅ Analysis Complete")
 
             # Return result with file paths
             return {
