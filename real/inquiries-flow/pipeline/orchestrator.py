@@ -131,7 +131,7 @@ class PipelineOrchestrator:
         Run Stage 3: LLM classifier for low-confidence cases.
 
         Args:
-            progress_callback: Optional function(batch_num, total_batches) for batch progress updates
+            progress_callback: Optional function(progress_pct, msg_ar, msg_en) for UI updates
 
         Returns:
             (success, message)
@@ -267,7 +267,8 @@ class PipelineOrchestrator:
         df: pd.DataFrame,
         excel_path: str,
         word_path: str,
-        language: str = 'ar'
+        language: str = 'ar',
+        progress_callback=None
     ) -> Dict[str, Any]:
         """
         Run all 6 stages in sequence.
@@ -277,6 +278,7 @@ class PipelineOrchestrator:
             excel_path: Path for Excel output
             word_path: Path for Word output
             language: Language for output ('ar' or 'en')
+            progress_callback: Optional function(pct, msg_ar, msg_en) for UI updates
 
         Returns:
             Results dict with stage outcomes
@@ -289,6 +291,8 @@ class PipelineOrchestrator:
         }
 
         # Stage 1
+        if progress_callback:
+            progress_callback(0.10, "التحقق من صيغة البيانات", "Stage 1: File Validation")
         success, msg, validation = self.run_stage1_validator(df)
         results['stages']['stage1'] = {'success': success, 'message': msg}
         if not success:
@@ -297,30 +301,40 @@ class PipelineOrchestrator:
         results['total_cases'] = self.state.total_cases
 
         # Stage 2
+        if progress_callback:
+            progress_callback(0.25, "تصنيف الحالات حسب القواعس", "Stage 2: Rule Classification")
         success, msg = self.run_stage2_classifier()
         results['stages']['stage2'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
 
         # Stage 3
-        success, msg = self.run_stage3_llm_classifier()
+        if progress_callback:
+            progress_callback(0.40, "تصنيف الحالات باستخدام الذكاء الاصطناعي", "Stage 3: AI Classification")
+        success, msg = self.run_stage3_llm_classifier(progress_callback=progress_callback)
         results['stages']['stage3'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
 
         # Stage 4
+        if progress_callback:
+            progress_callback(0.55, "تحليل الأنماط والفجوات", "Stage 4: Pattern Analysis")
         success, msg = self.run_stage4_analysis()
         results['stages']['stage4'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
 
         # Stage 5
+        if progress_callback:
+            progress_callback(0.70, "تحليل الفجوات في الخدمات", "Stage 5: Gap Analysis")
         success, msg = self.run_stage5_gap_analysis()
         results['stages']['stage5'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
 
         # Stage 6
+        if progress_callback:
+            progress_callback(0.85, "توليد التقارير والقوائم", "Stage 6: Report Generation")
         success, msg = self.run_stage6_artifacts(excel_path, word_path, language)
         results['stages']['stage6'] = {'success': success, 'message': msg}
         if not success:

@@ -198,7 +198,8 @@ def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_c
         batch = cases[batch_idx:batch_idx + batch_size]
 
         if progress_callback:
-            progress_callback(batch_num, total_batches)
+            pct = 0.30 + ((batch_num / total_batches) * 0.10)  # Progress spans 30% to 40%
+            progress_callback(pct, f"معالجة الدفعة {batch_num}/{total_batches}", f"Processing batch {batch_num}/{total_batches}")
 
         print(f"[Stage3] Batch {batch_num}/{total_batches} ({len(batch)} cases)...")
 
