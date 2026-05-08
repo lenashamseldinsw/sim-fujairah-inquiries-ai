@@ -90,8 +90,12 @@ def main():
 
     print(f"\n🔧 Initializing pipeline...")
     orchestrator = PipelineOrchestrator(api_key=api_key, temp_dir=str(output_dir))
-    orchestrator.initialize_state("test_report_sections")
-    print(f"✅ Pipeline ready (output: {output_dir})")
+    # Use a unique session ID per run so stale state from a previous run is never loaded.
+    # A fixed ID like "test_report_sections" causes initialize_state() to reload the old
+    # state.json (including old report_json), which then gets saved when stage 6 fails.
+    run_session_id = f"test_report_sections_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    orchestrator.initialize_state(run_session_id)
+    print(f"✅ Pipeline ready (output: {output_dir}, session: {run_session_id})")
 
     stages = [
         (1, "SCHEMA VALIDATION"),
@@ -122,8 +126,10 @@ def main():
             elif stage_num == 5:
                 success, msg = orchestrator.run_stage5_gap_analysis()
             elif stage_num == 6:
-                excel_path = str(output_dir / f"inquiries_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
-                success, msg = orchestrator.run_stage6_artifacts(excel_path, None, language='ar')
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                excel_path = str(output_dir / f"inquiries_report_{timestamp}.xlsx")
+                word_path = str(output_dir / f"inquiries_report_{timestamp}.docx")
+                success, msg = orchestrator.run_stage6_artifacts(excel_path, word_path, language='ar')
 
             results[stage_num] = {'success': success, 'message': msg}
 
@@ -194,7 +200,7 @@ def main():
     print(f"{'=' * 80}")
 
     try:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')  # used for the JSON save filename
 
         if state.report_sections_ar:
             print(f"✅ Report sections generated successfully by Stage 6")
@@ -219,7 +225,10 @@ def main():
             print(f"⚠️  Report JSON not generated")
 
         # Save final report JSON (Arabic-only, production version)
-        if state.report_json and 'ar' in state.report_json:
+        # Only save if stage 6 actually ran successfully — if it failed, state.report_json
+        # may still hold a value loaded from a previous-run state file (stale data).
+        stage6_succeeded = results.get(6, {}).get('success', False)
+        if stage6_succeeded and state.report_json and 'ar' in state.report_json:
             ar_report = state.report_json['ar']
 
             # Print summary before save
@@ -242,7 +251,10 @@ def main():
             print(f"   File size: {ar_file.stat().st_size} bytes")
             print(f"   Sections in file: {len(ar_report.get('sections', []))}")
         else:
-            print(f"\n⚠️  No final report JSON to save")
+            if not stage6_succeeded:
+                print(f"\n⚠️  Stage 6 did not succeed — skipping JSON save to avoid writing stale data")
+            else:
+                print(f"\n⚠️  No final report JSON to save")
 
     except Exception as e:
         print(f"❌ Report verification error: {e}")

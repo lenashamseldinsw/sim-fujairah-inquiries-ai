@@ -18,15 +18,12 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pipeline.orchestrator import PipelineOrchestrator
 
-
-class RealAnalyzer(Analyzer):
-    """Real analyzer using 6-stage pipeline."""
-
+class RealAnalyzer:
     def __init__(self):
-        """Initialize analyzer with API key from Streamlit secrets."""
-        self.api_key = st.secrets.get("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_API_KEY", ""))
-        if not self.api_key:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in secrets or environment")
+        self.client = anthropic.Anthropic(api_key=api_key)
 
         # Create temp directory for outputs
         self.output_dir = Path(tempfile.gettempdir()) / "inquiries_output"

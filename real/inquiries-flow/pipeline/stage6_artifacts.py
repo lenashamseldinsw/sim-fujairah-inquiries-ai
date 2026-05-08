@@ -170,7 +170,7 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
 
     # --- Section 5: Reclassification count ---
     row += 2
-    reclassified_count = sum(1 for c in state.all_classified if c.misclassification != 'OK')
+    reclassified_count = state.reclassified_count
     matched_count = total - reclassified_count
     ws[f'A{row}'] = f"5. إعادة التصنيف ({reclassified_count} حالة)"
     ws[f'A{row}'].font = Font(bold=True)
@@ -361,6 +361,10 @@ def generate_word_report(
     """
     if build_report is None:
         print(f"⚠️  Skipping Word report generation (build_report_ar not available)")
+        return
+
+    if output_path is None:
+        print(f"⚠️  Skipping Word report generation (no output_path provided)")
         return
 
     # Generate JSON report from state
@@ -1885,10 +1889,11 @@ def run_stage6(
     # Generate Excel
     generate_excel(state, excel_path)
 
-    # Generate Word report
-    generate_word_report(state, word_path, language, api_key)
-
-    # Generate report dictionary (for passing to display functions)
+    # Generate report dictionary first so state.report_json is always populated
+    # (generate_word_report may be skipped when word_path is None)
     state.report_json = generate_json_report(state)
+
+    # Generate Word report (skipped gracefully when word_path is None)
+    generate_word_report(state, word_path, language, api_key)
 
     return state

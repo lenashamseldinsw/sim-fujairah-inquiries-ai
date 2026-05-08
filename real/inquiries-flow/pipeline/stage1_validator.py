@@ -289,6 +289,27 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     print(f"[Stage1] Normalized columns: {list(df_normalized.columns)}")
     print(f"[Stage1] Required columns: {REQUIRED_COLUMNS}")
 
+    # Null-description audit — flag rows with missing CRM label or case description before
+    # they silently degrade downstream classification. Pipeline continues regardless.
+    null_audit_cols = {
+        'نوع_المكالمة': 'CRM label (نوع_المكالمة)',
+        'تفاصيل_الطلب': 'Case description (تفاصيل_الطلب)',
+    }
+    for col, label in null_audit_cols.items():
+        if col in df_normalized.columns:
+            null_mask = df_normalized[col].isna() | (df_normalized[col].astype(str).str.strip() == '')
+            null_count = null_mask.sum()
+            if null_count > 0:
+                null_case_ids = df_normalized.loc[null_mask, 'رقم_الطلب'].tolist() if 'رقم_الطلب' in df_normalized.columns else []
+                id_preview = ', '.join(str(x) for x in null_case_ids[:10])
+                ellipsis = f' … (+{null_count - 10} more)' if null_count > 10 else ''
+                print(
+                    f"\n⚠️  [Stage1] WARNING — {null_count} rows have null/empty {label}.\n"
+                    f"   Case IDs: {id_preview}{ellipsis}\n"
+                    f"   These cases will reach Stage 2 with no text to classify and will "
+                    f"fall through to the CRM-label fallthrough path.\n"
+                )
+
     # Validate
     is_valid, result = validate_excel(df_normalized)
 

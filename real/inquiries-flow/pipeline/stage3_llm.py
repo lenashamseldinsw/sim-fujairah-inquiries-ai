@@ -165,6 +165,16 @@ Rule D — Resolution reveals the true nature:
    → KEY: If the resolution fixed something that was broken, a failure occurred —
      the customer's neutral phrasing does not change the classification.
 
+Rule E — Physical damage reports requesting a certificate:
+   If a customer describes physical damage (car accident, property damage, falling rocks,
+   injury) AND the resolution shows a certificate was issued ("شهادة لمن يهمه الأمر" /
+   "تقرير الضرر" / "damage report"), classify as:
+   → طلب > طلب إصدار شهادة أو وثيقة
+   Do NOT classify these as شكوى unless the customer is explicitly complaining about a
+   service failure (e.g. the certificate was denied or delayed after a prior request).
+   Example: "سقوط حجارة على السيارة وكسر النافذة" + resolution shows certificate issued
+   → طلب > طلب إصدار شهادة أو وثيقة (not شكوى)
+
 RULES:
 - Base classification on actual customer intent and situation, not just keywords.
 - The Description field reveals what actually happened — use it to override keywords.
@@ -408,8 +418,9 @@ def run_stage3(state: PipelineState, api_key: str, progress_callback=None) -> Pi
             admin=orig_case.get('admin', ''),
         )
 
-        if case.case_type and case.case_type != case.top_level:
-            case.misclassification = f"Reclassified: {case.case_type} → {case.top_level}"
+        # Check for misclassification — use actual_contact_type (consistent with Stage 6 reclassified_count)
+        if case.case_type and case.actual_contact_type != case.case_type:
+            case.misclassification = f"Reclassified: {case.case_type} → {case.actual_contact_type}"
 
         if case.confidence < LLM_LOW_CONFIDENCE_THRESHOLD:
             human_review.append(case.model_dump())

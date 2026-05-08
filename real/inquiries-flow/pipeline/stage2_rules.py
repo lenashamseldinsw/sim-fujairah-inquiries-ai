@@ -102,16 +102,48 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     english_contest = any(k in title_norm for k in ['incorrect', 'dispute', 'contest', 'disagree', 'wrong fine', 'objection'])
     has_contest = arabic_contest or english_contest
 
-    arabic_fine = normalize_arabic('مخالفة') in title_norm
-    english_fine = any(k in title_norm for k in ['fine', 'traffic fine', 'speeding', 'violation'])
+    # Bug #2: also catch informal spelling مخالفه and English ticket
+    arabic_fine = normalize_arabic('مخالفة') in title_norm or normalize_arabic('مخالفه') in title_norm
+    english_fine = any(k in title.lower() for k in ['fine', 'traffic fine', 'speeding', 'violation', 'ticket'])
     has_fine = arabic_fine or english_fine
 
     if has_contest and has_fine:
         return 'شكوى', 'اعتراض على مخالفة مرورية', 'اعتراض صريح على مخالفة مرورية', 0.92
 
+    # --- PRIORITY 1b: Disputed Fine — Customer Was Not Present / Wrong Vehicle ---
+    # Catches cases where customer asserts they didn't commit the fine (wrong vehicle, not in emirate,
+    # fine issued by mistake) without using the exact "contest/objection" words of Priority 1.
+    # تحرير مخالفة بشكل خاطئ is handled here, NOT in Priority 2, because it is always a disputed fine.
+    disputed_fine_signals_ar = [
+        'لم أكون متواجد', 'لم اكن متواجد', 'لم أكن في', 'لم اكن في',
+        'صورة المخالفة', 'رقم اللوحة خاطئ', 'لوحة غير لوحتي',
+        'خطأ في اللوحة', 'ليست سيارتي', 'ليست مركبتي',
+        'مخالفة بشكل خاطىء', 'مخالفة بشكل خاطئ',
+        'تحرير مخالفة بشكل خاطىء', 'تحرير مخالفة بشكل خاطئ',
+        'عدم خصم', 'نقاط خاطئة',
+    ]
+    disputed_fine_signals_en = [
+        'not my vehicle', 'not my car', 'i was not in', 'i did not go to',
+        'was not there', 'was in al ain', 'wrong plate', 'wrong car',
+        'photo is not my', 'picture is not my', 'by mistake',
+        'third time getting fine', 'getting fine by mistake',
+    ]
+    has_arabic_dispute = any(k in title_norm for k in [normalize_arabic(w) for w in disputed_fine_signals_ar])
+    has_english_dispute = any(k in title.lower() for k in disputed_fine_signals_en)
+    fine_also_mentioned = has_fine or any(k in title.lower() for k in ['fine', 'violation', 'ticket', 'مخالفة', 'مخالفه'])
+    if (has_arabic_dispute or has_english_dispute) and fine_also_mentioned:
+        return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', 'شكوى صريحة عن مخالفة خاطئة', 0.88
+
     # --- PRIORITY 2: Security/Traffic Reports (filing, issuing, etc.) ---
-    report_keywords = ['فتح بلاغ', 'تقديم بلاغ', 'سرقة', 'حادث', 'بلاغ جنائي', 'تحرير مخالفة']
-    if any(k in title_norm for k in [normalize_arabic(w) for w in report_keywords]):
+    # Bug #8: 'تحرير مخالفة' removed — ambiguous, now handled by Priority 1b (disputed fine rule)
+    # Bug #5: added English fraud/crime/scam signals
+    report_keywords_ar = ['فتح بلاغ', 'تقديم بلاغ', 'سرقة', 'حادث', 'بلاغ جنائي',
+                          'تعرضت للضرب', 'تعرضي للضرب', 'اعتداء', 'نصب', 'احتيال']
+    report_keywords_en = ['i got scammed', 'scammed', 'fraud', 'fake iphone', 'took money from me',
+                          'he took', 'she took', 'stolen', 'assault', 'attacked', 'robbery']
+    has_ar_report = any(k in title_norm for k in [normalize_arabic(w) for w in report_keywords_ar])
+    has_en_report = any(k in title.lower() for k in report_keywords_en)
+    if has_ar_report or has_en_report:
         return 'شكوى', 'تقديم بلاغ أمني أو مروري', 'بلاغ أمني أو مروري مباشر', 0.90
 
     # --- PRIORITY 3: Processing Delay (moved earlier to catch delayed requests) ---
@@ -128,15 +160,33 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         return 'طلب', 'طلب تصريح سلاح أو ترخيص', 'طلب تصريح سلاح مباشر', 0.91
 
     # --- PRIORITY 5: License/Vehicle Delivery Not Received ---
-    # BUG FIX 2: Remove generic nouns 'رخصة' and 'ملكية' — keep only complaint-intent phrases
-    # 'لم يصل' removed — too short, matches mid-sentence generically (e.g. "لم يصل إلى علمي")
-    delivery_keywords = ['لم استلم', 'لم تصلني', 'لم يتم التسليم', 'لم تصل الرخصة', 'لم يتم التوصيل']
+    # Bug #3: expanded with all attested Arabic forms including informal/typo variants
+    delivery_keywords = [
+        'لم استلم', 'لم أستلم', 'لم تصلني', 'لم يتم التسليم',
+        'لم تصل الرخصة', 'لم تصل الرخصه', 'لم يتم التوصيل',
+        'لم استلام', 'لم استلمت',
+        'حتى الان لم', 'حتى الآن لم',
+        'لم يتم ارسال', 'لم يرسل',
+    ]
     if any(k in title_norm for k in [normalize_arabic(w) for w in delivery_keywords]):
         return 'شكوى', 'شكوى عن عدم استلام الخدمة', 'شكوى عدم استقبال وثيقة أو خدمة', 0.86
 
+    # --- PRIORITY 5b: Paid But Not Received (English) ---
+    # Bug #3: catch English cases where customer paid fees but hasn't received the service/document
+    english_paid_not_received = (
+        any(k in title.lower() for k in ['paid', 'already paid', 'paid the fee', 'paid renewal'])
+        and any(k in title.lower() for k in ['not received', "haven't received", 'have not received', 'not delivered', 'not yet'])
+    )
+    if english_paid_not_received:
+        return 'شكوى', 'شكوى عن عدم استلام الخدمة', 'دفع الرسوم ولم يستلم الخدمة', 0.85
+
     # --- PRIORITY 6: System/Technical Errors ---
-    # BUG FIX 3: Remove generic 'تطبيق' — keep only technical error indicators
-    system_keywords = ['عطل', 'خطأ في النظام', 'خصم مرتين', 'لم يصدر', 'خطأ تقني']
+    # Bug #9: added double-charge and paid-without-issuance keywords
+    system_keywords = [
+        'عطل', 'خطأ في النظام', 'خصم مرتين', 'لم يصدر', 'خطأ تقني',
+        'دفع مرتين', 'دفع مبلغ مرتين', 'خصمت مرتين',
+        'بدون اصدار', 'دون اصدار',
+    ]
     if any(k in title_norm for k in [normalize_arabic(w) for w in system_keywords]):
         return 'شكوى', 'شكوى على خطأ تقني أو في النظام', 'خلل تقني أو خطأ في النظام', 0.87
 
@@ -145,6 +195,27 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     renewal_request_keywords = ['اريد تجديد', 'أريد تجديد', 'لا استطيع تجديد', 'لا أستطيع تجديد', 'طلب تجديد', 'أطلب تجديد']
     if any(k in title_norm for k in [normalize_arabic(w) for w in renewal_request_keywords]):
         return 'طلب', 'طلب تجديد رخصة أو ملكية', 'طلب تجديد صريح', 0.85
+
+    # --- PRIORITY 6b: Follow-up on Existing Request ---
+    # Bug #4: cases where the customer is following up on a previously submitted request/case
+    followup_keywords_ar = [
+        'رقم الطلب', 'شكوى رقم', 'بلاغ رقم',
+        'وللحين ما', 'وللحين لم', 'ولم يتم حتى',
+        'رجاء التواصل', 'الرجاء التواصل',
+        'لعدم ردي', 'لعدم الرد',
+        'متابعة طلبي', 'بخصوص طلبي السابق',
+        'لازال معلق', 'لا يزال معلق', 'قيد الانتظار',
+    ]
+    followup_keywords_en = [
+        'my previous request', 'follow up on', 'reference number',
+        'case number', 'ticket number', "what's the problem",
+        'what i need to do', 'still pending', 'no response yet',
+    ]
+    has_ar_followup = any(k in title_norm for k in [normalize_arabic(w) for w in followup_keywords_ar])
+    has_en_followup = any(k in title.lower() for k in followup_keywords_en)
+    is_formal_complaint = any(k in title_norm for k in [normalize_arabic(w) for w in ['أتقدم بشكوى', 'أقدم شكوى', 'شكوى رسمية', 'مشكلة']])
+    if (has_ar_followup or has_en_followup) and not is_formal_complaint:
+        return 'طلب', 'متابعة طلب مقدم', 'متابعة طلب مقدم سابقاً', 0.80
 
     # --- PRIORITY 7: License/Vehicle Inquiries ---
     # FIX 2: Remove bare 'تجديد' and 'استفسار' — use compound phrases to avoid catch-all
@@ -207,15 +278,28 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         print(f"[Stage2] Case {case_row.get('رقم_الطلب', 'UNKNOWN')}: Priority 9 fine_found_erroneous → شكوى عن مخالفة مشكوك فيها")
         return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', 'شكوى عن مخالفة خاطئة (من الحل)', 0.85
 
+    # --- PRIORITY 10: Data Update/Correction Requests (English) ---
+    # Bug #6: English cases requesting info updates not caught by Arabic keyword rules
+    data_update_keywords_en = [
+        'update my information', 'update my info', 'change my photo',
+        'wrong photo', 'wrong picture', 'another person photo',
+        'update my details', 'correct my name', 'wrong name on',
+        'pls update', 'please update', 'change my number', 'update my number',
+    ]
+    if any(k in title.lower() for k in data_update_keywords_en):
+        return 'طلب', 'طلب تعديل أو تحديث بيانات', 'طلب تحديث بيانات بالإنجليزية', 0.83
+
     # --- DEFAULT FALLTHROUGH ---
-    # Map CRM label to taxonomy if available (last resort)
+    # Map CRM label to taxonomy if available (last resort).
+    # Bug #1: استفسار fallthrough confidence lowered to 0.45 — the CRM frequently mislabels
+    # complaints and requests as استفسار, so every unmatched استفسار must go to LLM (Stage 3).
     crm_label_norm = normalize_arabic(crm_label)
     if crm_label_norm == 'شكوى' or crm_label_norm == 'complaint':
         return 'شكوى', 'شكوى عامة', 'تصنيف CRM: شكوى عامة', 0.75
     elif crm_label_norm == 'طلب' or crm_label_norm == 'request':
         return 'طلب', 'طلب خدمة عام', 'تصنيف CRM: طلب عام', 0.75
     elif crm_label_norm == 'استفسار' or crm_label_norm == 'inquiry':
-        return 'استفسار', 'استفسار عام', 'تصنيف CRM: استفسار عام', 0.72
+        return 'استفسار', 'استفسار عام', 'تصنيف CRM: يحتاج مراجعة LLM', 0.45
     else:
         return 'استفسار', 'استفسار عام', 'تصنيف افتراضي', 0.70
 
@@ -258,9 +342,9 @@ def run_stage2(state: PipelineState) -> PipelineState:
             admin=str(row.get('الإدارة_العامة', '')),
         )
 
-        # Check for misclassification
-        if case.case_type and case.case_type != case.top_level:
-            case.misclassification = f"Reclassified: {case.case_type} → {case.top_level}"
+        # Check for misclassification — use actual_contact_type (consistent with Stage 6 reclassified_count)
+        if case.case_type and case.actual_contact_type != case.case_type:
+            case.misclassification = f"Reclassified: {case.case_type} → {case.actual_contact_type}"
 
         if confidence < LOW_CONFIDENCE_THRESHOLD:
             # Queue for LLM review
