@@ -424,9 +424,18 @@ def run_stage5(
             # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
             cluster_to_subs: dict = defaultdict(set)
             for friction in state.journey_map:
-                cluster_key = (friction.cluster_ar or friction.cluster or "").strip().lower()
-                if cluster_key and friction.sub_classification:
-                    cluster_to_subs[cluster_key].add(friction.sub_classification)
+                if not friction.sub_classification:
+                    continue
+                # Index by every available text field so gap topic matching has maximum coverage
+                for text_field in [
+                    friction.cluster_ar,
+                    friction.cluster,
+                    friction.friction_point_ar,
+                    friction.friction_point,
+                ]:
+                    key = (text_field or "").strip().lower()
+                    if key:
+                        cluster_to_subs[key].add(friction.sub_classification)
 
             # Re-derive each gap row's case_count by summing actual counts of all
             # sub_classifications whose journey_map cluster overlaps with the gap topic.

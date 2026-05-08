@@ -1849,16 +1849,15 @@ def get_report_files_in_period(flow_type: str, period: str, lang: str = 'ar'):
     return docx_path, xlsx_path
 
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
+@st.cache_resource
 def get_analyzer():
-    """Get the demo analyzer."""
+    """Get the real analyzer (cached for performance)."""
     return RealAnalyzer()
-
-ANALYZER = get_analyzer()
 
 # ── Validation ────────────────────────────────────────────────────────────────
 def validate_file(uploaded_file, lang='ar'):
     tx = T[lang]
-    is_valid, error_msg = ANALYZER.validate_file(uploaded_file)
+    is_valid, error_msg = get_analyzer().validate_file(uploaded_file)
     if not is_valid:
         return False, error_msg or tx['err_bad_type']
     return True, ""
@@ -1969,7 +1968,7 @@ def process_with_analyzer(uploaded_files, lang='ar'):
     
     try:
         # Call the analyzer's analyze method with progress callback
-        report = ANALYZER.analyze(uploaded_file, progress_callback=update_progress)
+        report = get_analyzer().analyze(uploaded_file, progress_callback=update_progress)
         
         # Clear progress indicators
         progress_placeholder.empty()
@@ -2229,7 +2228,7 @@ def simulate_period_processing(lang='ar'):
     update_interval = 0.5
     total_steps = int(total_duration / update_interval)
 
-    analyzer_stages = ANALYZER.get_processing_stages()
+    analyzer_stages = get_analyzer().get_processing_stages()
 
     for step in range(total_steps + 1):
         elapsed = step * update_interval

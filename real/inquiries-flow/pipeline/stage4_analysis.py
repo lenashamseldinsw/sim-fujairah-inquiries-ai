@@ -226,8 +226,9 @@ def _reconcile_counts(
     reconciled_journey_map = []
     for friction in journey_map:
         actual_count = actual_counts.get(friction.sub_classification)
+
         if actual_count is not None:
-            # Exact match — cap LLM count at actual, and deduct from budget
+            # Exact sub_classification match — cap and deduct from budget
             # to prevent two friction points from double-counting the same cases
             remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
             reconciled_count = min(friction.case_count, remaining_budget)
@@ -235,15 +236,50 @@ def _reconcile_counts(
                 0, remaining_budget - reconciled_count
             )
         else:
-            # No exact match (sub_classification is None or approximate string from LLM)
-            # Keep the LLM count rather than silently zeroing it out
-            reconciled_count = friction.case_count
-            print(
-                f"[Stage4] WARNING: No exact sub_classification match for friction "
-                f"'{friction.cluster_ar or friction.cluster}' "
-                f"(sub_classification={friction.sub_classification!r}) — "
-                f"keeping LLM count {friction.case_count}"
-            )
+            # No exact match — LLM returned an approximate or merged sub_classification.
+            # Try word-overlap against actual_counts keys to find the closest match.
+            cluster_text = (
+                friction.sub_classification or
+                friction.cluster_ar or
+                friction.cluster or
+                friction.friction_point_ar or
+                friction.friction_point or ""
+            ).strip().lower()
+
+            best_key = None
+            best_overlap = 0
+            for sub_key in actual_counts:
+                if not sub_key:
+                    continue
+                sub_norm = sub_key.strip().lower()
+                words_a = set(w for w in cluster_text.split() if len(w) >= 3)
+                words_b = set(w for w in sub_norm.split() if len(w) >= 3)
+                overlap = len(words_a & words_b)
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_key = sub_key
+
+            if best_key and best_overlap >= 1:
+                # Plausible fuzzy match — use that key's remaining budget
+                remaining_budget = sub_classification_budget.get(best_key, 0)
+                reconciled_count = min(friction.case_count, remaining_budget)
+                sub_classification_budget[best_key] = max(0, remaining_budget - reconciled_count)
+                print(
+                    f"[Stage4] FUZZY MATCH: friction '{friction.cluster_ar or friction.cluster}' "
+                    f"sub_classification={friction.sub_classification!r} → matched '{best_key}' "
+                    f"(overlap={best_overlap}) count: {friction.case_count} → {reconciled_count}"
+                )
+            else:
+                # No match at all — cap against total remaining budget across all sub_classifications.
+                # This ensures the LLM's inflated count can never exceed the remaining case pool,
+                # even when sub_classification is completely unrecognisable.
+                total_remaining = sum(sub_classification_budget.values())
+                reconciled_count = min(friction.case_count, total_remaining)
+                print(
+                    f"[Stage4] WARNING: No match for friction '{friction.cluster_ar or friction.cluster}' "
+                    f"(sub_classification={friction.sub_classification!r}) — "
+                    f"capping against total_remaining={total_remaining}, was {friction.case_count} → {reconciled_count}"
+                )
 
         reconciled_friction = friction.model_copy(update={"case_count": reconciled_count})
         reconciled_journey_map.append(reconciled_friction)
@@ -307,8 +343,19 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         key = (case.top_level, case.sub_classification)
         groups[key].append(case)
 
+    # Build exact sub_classification values list for the LLM to reference
+    exact_sub_classifications = sorted(set(
+        case.sub_classification for case in state.all_classified
+        if case.sub_classification
+    ))
+
     # Build case summary: all groups with samples from each
-    cases_text = "Cases aggregated by classification (top_level > sub_classification):\n"
+    cases_text = (
+        "VALID sub_classification VALUES (copy these EXACTLY — no other values are accepted):\n"
+        + "\n".join(f"  - {s}" for s in exact_sub_classifications)
+        + "\n\n"
+        + "Cases aggregated by classification (top_level > sub_classification):\n"
+    )
     for (top_level, sub_classification), cases in sorted(groups.items()):
         cases_text += f"\n=== {top_level} > {sub_classification} ({len(cases)} cases) ===\n"
         # Sample up to 15 cases per cluster for diversity while staying within token budget
