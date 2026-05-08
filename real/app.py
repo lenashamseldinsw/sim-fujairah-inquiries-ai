@@ -4,6 +4,7 @@ import os
 import json
 import random
 import traceback
+import shutil
 from pathlib import Path
 from analysis import RealAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
@@ -131,6 +132,7 @@ T = {
         'login_button':      'تسجيل الدخول',
         'cancel_button':     'إلغاء',
         'login_error':       'اسم المستخدم أو كلمة المرور غير صحيحة',
+        'artifacts_generating': 'جاري إعداد الملفات...',
     },
     'en': {
         'nav_back':          '← Back to Home',
@@ -213,6 +215,7 @@ T = {
         'login_button':      'Login',
         'cancel_button':     'Cancel',
         'login_error':       'Invalid username or password',
+        'artifacts_generating': 'Preparing artifacts...',
     }
 }
 
@@ -646,6 +649,9 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
         display: flex;
         flex-direction: column;
+        height: 100%;
+        text-align: center;
+        align-items: center;
     }}
     .feature-card::before {{
         content: '';
@@ -669,7 +675,7 @@ def load_css(lang='ar'):
         align-items: center;
         justify-content: center;
         font-size: 1.7rem;
-        margin-bottom: 1.4rem;
+        margin: 0 auto 1.4rem;
     }}
     .feature-title {{
         color: {GOLD_LIGHT};
@@ -1860,10 +1866,22 @@ def process_with_analyzer(uploaded_files, lang='ar'):
     progress_placeholder = st.empty()
     progress_bar = st.progress(0)
 
+    # Initialize progress display immediately
+    progress_placeholder.markdown(f"""
+    <div style="text-align:center;padding:1rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
+        جاري تحليل الملف...
+    </div>
+    <div style="text-align:center;padding:0.5rem;color:#999;font-size:0.9rem;">
+        0%
+    </div>
+    """, unsafe_allow_html=True)
+    progress_bar.progress(0.01)
+
     def update_progress(progress_pct, msg_ar, msg_en):
         """Update UI with progress from pipeline stages."""
         msg = msg_ar if lang == 'ar' else msg_en
         pct_display = int(progress_pct * 100)
+        print(f"[Progress] {pct_display}% - {msg_ar}")
 
         # Determine which stage based on progress percentage
         stages = [
@@ -2008,6 +2026,58 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
         st.code(traceback.format_exc())
 
 
+# ── Handle Generated Output Files ────────────────────────────────────────────
+def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar'):
+    """
+    Handle generated output files from RealAnalyzer.
+
+    Copies files from temp directory to output folder and updates session state.
+
+    Args:
+        excel_path: Path to generated Excel file
+        word_path: Path to generated Word document
+        lang: Language preference
+    """
+    output_dir = Path(__file__).parent / "inquiries-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Store original paths in session state for direct access if needed
+    if 'output_files' not in st.session_state:
+        st.session_state.output_files = {}
+
+    # Copy Excel file
+    print(f"[Output] Checking Excel: path={excel_path}, exists={Path(excel_path).exists() if excel_path else False}")
+    if excel_path and Path(excel_path).exists():
+        try:
+            dest_excel = output_dir / "Fujairah_Police_Inquiry_Triage_Detail.xlsx"
+            shutil.copy2(excel_path, dest_excel)
+            st.session_state.output_files['excel_ready'] = True
+            st.session_state.output_files['excel_path'] = str(dest_excel)
+            print(f"[Output] ✓ Excel file copied to {dest_excel}")
+        except Exception as e:
+            print(f"[Output] ✗ Error copying Excel: {e}")
+            st.session_state.output_files['excel_ready'] = False
+    else:
+        print(f"[Output] ✗ Excel file not found at {excel_path}")
+        st.session_state.output_files['excel_ready'] = False
+
+    # Copy Word document
+    print(f"[Output] Checking Word: path={word_path}, exists={Path(word_path).exists() if word_path else False}")
+    if word_path and Path(word_path).exists():
+        try:
+            dest_word = output_dir / "تقرير تحليل استفسارات المتعاملين .docx"
+            shutil.copy2(word_path, dest_word)
+            st.session_state.output_files['word_ready'] = True
+            st.session_state.output_files['word_path'] = str(dest_word)
+            print(f"[Output] ✓ Word document copied to {dest_word}")
+        except Exception as e:
+            print(f"[Output] ✗ Error copying Word: {e}")
+            st.session_state.output_files['word_ready'] = False
+    else:
+        print(f"[Output] ✗ Word document not found at {word_path}")
+        st.session_state.output_files['word_ready'] = False
+
+
 # ── Create ZIP with multiple files ────────────────────────────────────────────
 def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: str = 'ar'):
     """Create a ZIP file containing the Word report and Excel file
@@ -2021,7 +2091,38 @@ def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: 
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        if flow_type == 'complaints':
+        if flow_type == 'inquiries':
+            # First check session state for newly generated files
+            output_files = st.session_state.get('output_files', {})
+            excel_path = output_files.get('excel_path')
+            word_path = output_files.get('word_path')
+
+            # Fall back to standard output folder locations if not in session state
+            if not excel_path or not Path(excel_path).exists():
+                if period:
+                    report_path, excel_path = get_report_files_in_period('inquiries', period, lang=lang)
+                else:
+                    excel_path = script_dir / "inquiries-output" / "Fujairah_Police_Inquiry_Triage_Detail.xlsx"
+                    excel_path = excel_path if excel_path.exists() else None
+
+            if not word_path or not Path(word_path).exists():
+                if period:
+                    report_path, _ = get_report_files_in_period('inquiries', period, lang=lang)
+                    word_path = report_path
+                else:
+                    word_path = script_dir / "inquiries-output" / "تقرير تحليل استفسارات المتعاملين .docx"
+                    word_path = word_path if word_path.exists() else None
+
+            # Add files to zip if they exist
+            if word_path and Path(word_path).exists():
+                word_file = Path(word_path)
+                zip_file.write(word_file, word_file.name)
+
+            if excel_path and Path(excel_path).exists():
+                excel_file = Path(excel_path)
+                zip_file.write(excel_file, excel_file.name)
+
+        else:  # complaints flow
             if period:
                 report_path, excel_path = get_report_files_in_period('complaints', period, lang=lang)
                 if report_path:
@@ -2037,23 +2138,6 @@ def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: 
                 excel_path = script_dir / "complaints-output" / "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx"
                 if excel_path.exists():
                     zip_file.write(excel_path, "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
-        else:
-            # Inquiries flow
-            if period:
-                report_path, excel_path = get_report_files_in_period('inquiries', period, lang=lang)
-                if report_path:
-                    zip_file.write(report_path, report_path.name)
-                if excel_path:
-                    zip_file.write(excel_path, excel_path.name)
-            else:
-                # Legacy behavior - look in root
-                report_path = script_dir / "inquiries-output" / "تقرير تحليل استفسارات المتعاملين .docx"
-                if report_path.exists():
-                    zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
-
-                excel_path = script_dir / "inquiries-output" / "Fujairah_Police_Inquiry_Triage_Detail.xlsx"
-                if excel_path.exists():
-                    zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
@@ -2556,9 +2640,20 @@ def inquiries_page(lang):
                 report = process_with_analyzer(files_to_process, lang)
                 st.session_state.processing = False
                 st.session_state.completed = True
+
                 if report:
                     st.session_state.report_data = report
-                    st.session_state.analysis_error = None
+
+                    # Check for errors in the report itself
+                    if report.get('success') is False:
+                        st.session_state.analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
+                    else:
+                        st.session_state.analysis_error = None
+
+                    # Handle generated output files (from RealAnalyzer)
+                    print(f"[Main] Report: success={report.get('success')}, excel={report.get('excel_path')}, word={report.get('word_path')}")
+                    if report.get('success') and report.get('excel_path') and report.get('word_path'):
+                        _handle_generated_outputs(report.get('excel_path'), report.get('word_path'), lang)
                 else:
                     st.session_state.analysis_error = "Analysis returned no data"
             except Exception as e:
@@ -2567,6 +2662,7 @@ def inquiries_page(lang):
                 st.session_state.analysis_error = f"Analysis failed: {str(e)}"
                 import traceback
                 st.session_state.error_traceback = traceback.format_exc()
+                print(f"[Main] Exception: {str(e)}\n{traceback.format_exc()}")
 
             st.markdown('</div>', unsafe_allow_html=True)
             st.rerun()

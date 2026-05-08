@@ -99,6 +99,7 @@ class PipelineOrchestrator:
         try:
             self.state = run_stage1(self.state, df)
             self.save_state()
+            print(f"[Stage1] Case count audit: total_cases={self.state.total_cases}, validated_count={len(self.state.all_validated)}")
             return True, "Schema validation passed", self.state.validated_schema
         except ValueError as e:
             return False, str(e), {}
@@ -120,6 +121,13 @@ class PipelineOrchestrator:
             self.state.llm_queue_count = len(self.state.llm_queue)
 
             self.save_state()
+
+            # Log case counts
+            print(f"[Stage2] Case count audit:")
+            print(f"  total_cases: {self.state.total_cases}")
+            print(f"  rule_classified: {len(self.state.rule_classified)}")
+            print(f"  llm_queue: {len(self.state.llm_queue)}")
+            print(f"  Sum: {len(self.state.rule_classified) + len(self.state.llm_queue)}")
 
             msg = f"Classified {len(self.state.rule_classified)} cases, queued {len(self.state.llm_queue)} for LLM review"
             return True, msg
@@ -156,6 +164,15 @@ class PipelineOrchestrator:
 
             # Preserve human review count
             self.state.human_review_count = len(self.state.human_review_queue)
+
+            # Log case counts for debugging
+            print(f"[Stage3] Case count audit:")
+            print(f"  total_cases (from Stage 1): {self.state.total_cases}")
+            print(f"  rule_classified: {len(self.state.rule_classified)}")
+            print(f"  llm_classified: {len(self.state.llm_classified)}")
+            print(f"  human_review_queue: {len(self.state.human_review_queue)}")
+            print(f"  all_classified: {len(self.state.all_classified)}")
+            print(f"  Sum: {len(self.state.rule_classified) + len(self.state.llm_classified) + len(self.state.human_review_queue)}")
 
             # Extract month_year range from date_opened fields
             self.state.month_year = extract_month_year_range(

@@ -74,19 +74,27 @@ class RealAnalyzer(Analyzer):
             # Read Excel file
             if uploaded_file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                        'application/vnd.ms-excel']:
-                # Try to read with various headers
-                for header_row in [None, 0, 4]:  # Try no header, row 0, row 4
+                # Try to read with various headers and find one with required columns
+                required_cols = ['رقم الطلب', 'تفاصيل الطلب', 'نوع المكالمة', 'الحل']
+                df = None
+
+                for header_row in [None, 0, 1, 2, 3, 4]:  # Try multiple header rows
                     try:
-                        df = pd.read_excel(uploaded_file, header=header_row)
-                        if len(df) > 0:
+                        test_df = pd.read_excel(uploaded_file, header=header_row)
+
+                        # Check if this has the required columns
+                        if all(col in test_df.columns for col in required_cols):
+                            df = test_df
+                            print(f"[RealAnalyzer] Successfully read Excel with header={header_row}")
                             break
-                    except Exception:
+                    except Exception as e:
+                        print(f"[RealAnalyzer] Failed to read with header={header_row}: {e}")
                         continue
+
+                if df is None or len(df) == 0:
+                    raise ValueError("Could not read Excel file with required columns: رقم الطلب, تفاصيل الطلب, نوع المكالمة, الحل")
             else:
                 raise ValueError("PDF processing not yet implemented")
-
-            if len(df) == 0:
-                raise ValueError("No data found in file")
 
             # Create session ID for state tracking
             session_id = uploaded_file.name.replace('.', '_').replace(' ', '_')
@@ -99,24 +107,13 @@ class RealAnalyzer(Analyzer):
             excel_path = str(self.output_dir / f"{session_id}_inquiries.xlsx")
             word_path = str(self.output_dir / f"{session_id}_inquiries.docx")
 
-            # Update progress before pipeline run
-            if progress_callback:
-                progress_callback(0.10, "التحقق من صيغة البيانات", "Stage 1: File Validation")
-
             results = orchestrator.run_full_pipeline(
                 df=df,
                 excel_path=excel_path,
                 word_path=word_path,
-                language='ar'
+                language='ar',
+                progress_callback=progress_callback
             )
-
-            # Update progress during pipeline
-            if progress_callback:
-                progress_callback(0.50, "تصنيف البيانات", "Stage 2-3: Classification")
-
-            # Update progress for reporting
-            if progress_callback:
-                progress_callback(0.85, "توليد التقرير", "Stage 6: Report Generation")
 
             if not results['success']:
                 raise ValueError(f"Pipeline failed: {results['errors']}")

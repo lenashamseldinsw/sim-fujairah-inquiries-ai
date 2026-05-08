@@ -141,16 +141,23 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     new_columns = {}
     seen_normalized = set()
+    mappings = []
 
     for col in df.columns:
+        # Convert column name to string to handle integer column names
+        col_str = str(col)
+
         # Try exact match first
         if col in COLUMN_MAPPING:
             normalized = COLUMN_MAPPING[col]
+            mappings.append(f"  {col} → {normalized} (exact)")
         # Try fuzzy match (remove extra spaces)
-        elif col.strip() in COLUMN_MAPPING:
-            normalized = COLUMN_MAPPING[col.strip()]
+        elif col_str.strip() in COLUMN_MAPPING:
+            normalized = COLUMN_MAPPING[col_str.strip()]
+            mappings.append(f"  {col} → {normalized} (fuzzy)")
         else:
             normalized = col
+            mappings.append(f"  {col} → {col} (no mapping)")
 
         # Avoid duplicate normalized column names
         if normalized not in seen_normalized:
@@ -159,6 +166,10 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         # If already seen, keep original name to avoid duplicate
         else:
             new_columns[col] = col
+            mappings[-1] += " [duplicate, keeping original]"
+
+    if mappings:
+        print(f"[Stage1] Column mappings:\n" + "\n".join(mappings[:10]))
 
     df_norm = df.rename(columns=new_columns)
     return df_norm
@@ -181,6 +192,7 @@ def validate_excel(df: pd.DataFrame) -> Tuple[bool, Dict[str, Any]]:
 
     # 1. Check required columns exist
     missing_cols = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+    print(f"[Stage1] Missing columns: {missing_cols}")
     if missing_cols:
         return False, {
             'status': 'FAILED',
@@ -270,9 +282,12 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     """
     # Store original column names before normalization
     state.original_columns = df.columns.tolist()
+    print(f"[Stage1] Original columns detected: {state.original_columns}")
 
     # Normalize column names
     df_normalized = normalize_columns(df)
+    print(f"[Stage1] Normalized columns: {list(df_normalized.columns)}")
+    print(f"[Stage1] Required columns: {REQUIRED_COLUMNS}")
 
     # Validate
     is_valid, result = validate_excel(df_normalized)
