@@ -99,7 +99,7 @@ class PipelineOrchestrator:
         try:
             self.state = run_stage1(self.state, df)
             self.save_state()
-            print(f"[Stage1] Case count audit: total_cases={self.state.total_cases}, validated_count={len(self.state.all_validated)}")
+            print(f"[Stage1] Case count audit: total_cases={self.state.total_cases}, raw_df_rows={len(self.state.raw_df) if self.state.raw_df is not None else 0}")
             return True, "Schema validation passed", self.state.validated_schema
         except ValueError as e:
             return False, str(e), {}
