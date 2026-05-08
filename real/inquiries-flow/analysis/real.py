@@ -10,7 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import os
-
+import anthropic  # ADD THIS
+import pandas as pd
 from .base import Analyzer
 
 # Import pipeline (located in parent inquiries-flow folder)
@@ -23,6 +24,7 @@ class RealAnalyzer:
         api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in secrets or environment")
+        self.api_key = api_key  # ← was missing self.
         self.client = anthropic.Anthropic(api_key=api_key)
 
         # Create temp directory for outputs
