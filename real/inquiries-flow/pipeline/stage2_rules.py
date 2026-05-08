@@ -97,8 +97,15 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
 
     # --- PRIORITY 1: Traffic Fine Disputes (Contesting a fine, not filing) ---
     # Require اعتراض or خطأ alongside مخالفة to avoid shadowing "filing a report" cases
-    has_contest = any(k in title_norm for k in [normalize_arabic(w) for w in ['اعتراض', 'خطأ في اللوحة']])
-    has_fine = normalize_arabic('مخالفة') in title_norm
+    # Also check for English equivalents: incorrect, dispute, contest, disagree, wrong, object
+    arabic_contest = any(k in title_norm for k in [normalize_arabic(w) for w in ['اعتراض', 'خطأ في اللوحة']])
+    english_contest = any(k in title_norm for k in ['incorrect', 'dispute', 'contest', 'disagree', 'wrong fine', 'objection'])
+    has_contest = arabic_contest or english_contest
+
+    arabic_fine = normalize_arabic('مخالفة') in title_norm
+    english_fine = any(k in title_norm for k in ['fine', 'traffic fine', 'speeding', 'violation'])
+    has_fine = arabic_fine or english_fine
+
     if has_contest and has_fine:
         return 'شكوى', 'اعتراض على مخالفة مرورية', 'اعتراض صريح على مخالفة مرورية', 0.92
 
@@ -154,6 +161,51 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     has_complaint_signal = any(k in title_norm for k in [normalize_arabic(w) for w in complaint_request_signals])
     if not has_complaint_signal and any(k in title_norm for k in [normalize_arabic(w) for w in praise_keywords]):
         return 'شكر وثناء', 'شكر وتقدير عام', 'شكر وتقدير صريح', 0.93
+
+    # --- PRIORITY 9: Resolution-Based Fine Classification ---
+    # Distinguish "اعتراض على مخالفة مرورية" from "شكوى عن مخالفة مشكوك فيها"
+    # based on whether resolution confirms fine validity or reveals error.
+    #
+    # Catches cases where title mentions fine (has_fine=True) but no explicit contest language (has_contest=False).
+    # Resolution signals determine the actual sub-classification.
+    #
+    # If resolution confirms fine is valid, classify as "اعتراض" (objection to valid fine)
+    # If resolution confirms fine was erroneous, classify as "مشكوك فيها" (complaint about error)
+
+    fine_confirmed_valid_keywords = [
+        'المخالفة صحيحة',           # Fine is correct
+        'تم التحقق',                # Verified
+        'مخالفة قانونية',          # Legal fine
+        'النقاط صحيحة',             # Points are correct
+        'صحت المخالفة',             # Fine was correct
+        'النقاط المخصومة صحيحة',    # Deducted points are correct
+        'تجاوز الحد',                # Exceeded limit
+        'ثبت ارتكاب',               # Proven to have committed
+        'تم إثبات',                  # Proven/confirmed
+    ]
+    fine_found_erroneous_keywords = [
+        'لا توجد مخالفة',           # No fine exists
+        'تم الإلغاء',                # Was cancelled
+        'خطأ في البيانات',          # Error in data
+        'لم تدخل',                   # Did not enter (speeding zone)
+        'ليست مركبته',              # Not his vehicle
+        'خطأ في اللوحة',            # License plate error
+        'مركبة غير عائدة',          # Vehicle not belonging (to owner)
+        'إلغاء المخالفة',           # Fine cancelled
+    ]
+
+    fine_confirmed_valid = any(k in res_norm for k in [normalize_arabic(w) for w in fine_confirmed_valid_keywords])
+    fine_found_erroneous = any(k in res_norm for k in [normalize_arabic(w) for w in fine_found_erroneous_keywords])
+
+    if has_fine and fine_confirmed_valid:
+        # Customer mentioned fine, and resolution confirms it was correct
+        print(f"[Stage2] Case {case_row.get('رقم_الطلب', 'UNKNOWN')}: Priority 9 fine_confirmed_valid → اعتراض على مخالفة مرورية")
+        return 'شكوى', 'اعتراض على مخالفة مرورية', 'اعتراض على مخالفة صحيحة (من الحل)', 0.82
+
+    if has_fine and fine_found_erroneous:
+        # Customer mentioned fine, and resolution confirms it was an error
+        print(f"[Stage2] Case {case_row.get('رقم_الطلب', 'UNKNOWN')}: Priority 9 fine_found_erroneous → شكوى عن مخالفة مشكوك فيها")
+        return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', 'شكوى عن مخالفة خاطئة (من الحل)', 0.85
 
     # --- DEFAULT FALLTHROUGH ---
     # Map CRM label to taxonomy if available (last resort)

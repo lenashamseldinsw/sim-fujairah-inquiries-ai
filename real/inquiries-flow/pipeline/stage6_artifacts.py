@@ -32,38 +32,12 @@ from .generate_ai_use_cases_section import generate_ai_use_cases_section
 from .generate_improvement_roadmap_section import generate_improvement_roadmap_section
 from .generate_conclusion_section import generate_conclusion_section
 
-# Load sword_word_builder from local path
-WordBuilder = None
-DocumentConfig = None
-TextStyle = None
-TableStyle = None
-CoverPage = None
-
+# Import build_report_ar to generate Word document from JSON
 try:
-    sword_word_builder_path = Path(__file__).parent.parent.parent / 'sword_word_builder'
-
-    if sword_word_builder_path.exists():
-        # Try method 1: Add to sys.path and import normally
-        sys.path.insert(0, str(sword_word_builder_path.parent))
-        try:
-            from sword_word_builder import WordBuilder, DocumentConfig, TextStyle, TableStyle, CoverPage
-        except ImportError:
-            # Try method 2: Load module directly from file path
-            init_file = sword_word_builder_path / '__init__.py'
-            if init_file.exists():
-                spec = importlib.util.spec_from_file_location("sword_word_builder", init_file)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules['sword_word_builder'] = module
-                    spec.loader.exec_module(module)
-                    WordBuilder = module.WordBuilder
-                    DocumentConfig = module.DocumentConfig
-                    TextStyle = module.TextStyle
-                    TableStyle = module.TableStyle
-                    CoverPage = module.CoverPage
-except Exception as e:
-    print(f"[Warning] Could not load sword_word_builder: {e}")
-    WordBuilder = None
+    from .build_report_ar import build_report
+except ImportError:
+    build_report = None
+    print("[Warning] Could not import build_report_ar")
 
 
 # Excel formatting
@@ -217,8 +191,10 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
 def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) -> None:
     """Populate sheet with case data (RTL).
 
-    Preserves all meaningful input columns in original order + adds 4 AI-generated columns at end.
-    Filters out empty/unnamed columns from input Excel.
+    Uses fixed column order across all sheets:
+    رقم_الطلب, تفاصيل_الطلب, الحل, الخدمة, الخدمة_الرئيسية, نوع_المكالمة,
+    التصنيف_الفعلي, التصنيف_الفرعي, السبب, إعادة_التصنيف, قناة_تقديم_الخدمة,
+    الحالة_SLA, تاريخ_الإنشاء, الإدارة_العامة
     """
     # Enable RTL layout
     ws.sheet_view.rightToLeft = True
@@ -234,54 +210,30 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         'الحل': 'resolution_response',
         'الحالة_SLA': 'sla_color',
         'الإدارة_العامة': 'admin',
+        'الخدمة': 'service',  # May not exist in CaseRow — pull from raw_df if available
     }
 
     # Import COLUMN_MAPPING for validation
     from .stage1_validator import COLUMN_MAPPING
 
-    # Filter original columns to only include meaningful ones (mapped or already normalized)
-    # This removes empty "Unnamed: X" columns from input Excel
-    meaningful_columns = []
-    if state.original_columns:
-        for col in state.original_columns:
-            # Check if it's an empty/unnamed column
-            if col.startswith('Unnamed'):
-                continue
-            # Keep if it's in mapping (will be normalized) or already normalized
-            if col in COLUMN_MAPPING or col in NORMALIZED_TO_CASEROW:
-                meaningful_columns.append(col)
-
-    # Map original column names to normalized names
-    normalized_columns = []
-    if meaningful_columns:
-        for col in meaningful_columns:
-            if col in COLUMN_MAPPING:
-                normalized_columns.append(COLUMN_MAPPING[col])
-            else:
-                normalized_columns.append(col)
-
-    # Use filtered columns, fallback to defaults if none found
-    input_columns = normalized_columns if normalized_columns else [
-        'رقم_الطلب',
-        'تفاصيل_الطلب',
-        'نوع_المكالمة',
-        'تاريخ_الإنشاء',
-        'قناة_تقديم_الخدمة',
-        'الخدمة_الرئيسية',
-        'الحل',
-        'الحالة_SLA',
-        'الإدارة_العامة',
+    # FIXED COLUMN ORDER (all data sheets use this exact sequence)
+    # Input columns (1-6), then AI-generated (7-10), then remaining input (11-14)
+    headers = [
+        'رقم_الطلب',               # 1
+        'تفاصيل_الطلب',            # 2
+        'الحل',                    # 3
+        'الخدمة',                  # 4
+        'الخدمة_الرئيسية',         # 5
+        'نوع_المكالمة',            # 6
+        'التصنيف_الفعلي',          # 7 (AI-generated)
+        'التصنيف_الفرعي',          # 8 (AI-generated)
+        'السبب',                   # 9 (AI-generated)
+        'إعادة_التصنيف',           # 10 (AI-generated)
+        'قناة_تقديم_الخدمة',        # 11
+        'الحالة_SLA',              # 12
+        'تاريخ_الإنشاء',           # 13
+        'الإدارة_العامة',          # 14
     ]
-
-    # New AI-generated columns (added at end)
-    ai_columns = [
-        'التصنيف_الفعلي',
-        'التصنيف_الفرعي',
-        'السبب',
-        'إعادة_التصنيف',
-    ]
-
-    headers = input_columns + ai_columns
 
     # Write headers
     for col, header in enumerate(headers, 1):
@@ -315,47 +267,75 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         # Get raw row data for this case (for unmapped columns)
         raw_row = raw_df_lookup.get(case.case_number)
 
-        # Build input data by mapping normalized columns to CaseRow attributes
-        input_data = []
-        for normalized_col in input_columns:
-            caserow_attr = NORMALIZED_TO_CASEROW.get(normalized_col, None)
+        # Build data in the exact order specified by headers
+        # Note: Headers are interleaved with input + AI columns
+        row_data = []
 
-            if caserow_attr:
-                # Get value from CaseRow
-                value = getattr(case, caserow_attr, '')
-                # Handle None values
-                input_data.append(value if value is not None else '')
-            elif raw_row is not None and normalized_col in raw_row.index:
-                # Column exists in raw data but not mapped to CaseRow - preserve original value
-                value = raw_row[normalized_col]
-                input_data.append(value if pd.notna(value) else '')
-            else:
-                # Column not found anywhere - leave empty
-                input_data.append('')
+        for header_col in headers:
+            value = ''
 
-        # AI-generated columns
-        ai_data = [
-            case.actual_contact_type,
-            case.sub_classification or '',
-            case.classification_reason,
-            reclassified,
-        ]
+            # Input columns from CaseRow
+            if header_col == 'رقم_الطلب':
+                value = case.case_number
+            elif header_col == 'تفاصيل_الطلب':
+                value = case.case_title or ''
+            elif header_col == 'الحل':
+                value = case.resolution_response or ''
+            elif header_col == 'الخدمة':
+                # Try to get من raw_df (not in CaseRow)
+                if raw_row is not None:
+                    for col_name in ['الخدمة', 'الخدمة ', 'Service']:
+                        if col_name in raw_row.index:
+                            val = raw_row[col_name]
+                            if val == val:  # pd.notna check
+                                value = val
+                            break
+            elif header_col == 'الخدمة_الرئيسية':
+                value = case.service_name or ''
+            elif header_col == 'نوع_المكالمة':
+                value = case.case_type or ''
+            elif header_col == 'قناة_تقديم_الخدمة':
+                value = case.case_channel or ''
+            elif header_col == 'الحالة_SLA':
+                value = case.sla_color or ''
+            elif header_col == 'تاريخ_الإنشاء':
+                value = case.date_opened or ''
+            elif header_col == 'الإدارة_العامة':
+                value = case.admin or ''
+            # AI-generated columns
+            elif header_col == 'التصنيف_الفعلي':
+                value = case.actual_contact_type or ''
+            elif header_col == 'التصنيف_الفرعي':
+                value = case.sub_classification or ''
+            elif header_col == 'السبب':
+                value = case.classification_reason or ''
+            elif header_col == 'إعادة_التصنيف':
+                value = reclassified
 
-        data = input_data + ai_data
+            row_data.append(value)
 
-        for col_idx, value in enumerate(data, 1):
+        for col_idx, value in enumerate(row_data, 1):
             cell = ws.cell(row_idx, col_idx, value)
             cell.border = BORDER
             if row_idx % 2 == 0:
                 cell.fill = ALT_ROW_FILL
             cell.alignment = Alignment(horizontal='right', vertical='top', wrap_text=True)
 
-    # Auto-size columns
-    ws.column_dimensions['A'].width = 18
-    ws.column_dimensions['B'].width = 80
-    ws.column_dimensions['C'].width = 20
-    for col in range(4, len(headers) + 1):
-        ws.column_dimensions[get_column_letter(col)].width = 20
+    # Auto-size columns (fixed order per headers)
+    ws.column_dimensions['A'].width = 12   # رقم_الطلب
+    ws.column_dimensions['B'].width = 80   # تفاصيل_الطلب
+    ws.column_dimensions['C'].width = 60   # الحل
+    ws.column_dimensions['D'].width = 20   # الخدمة
+    ws.column_dimensions['E'].width = 20   # الخدمة_الرئيسية
+    ws.column_dimensions['F'].width = 18   # نوع_المكالمة
+    ws.column_dimensions['G'].width = 18   # التصنيف_الفعلي
+    ws.column_dimensions['H'].width = 18   # التصنيف_الفرعي
+    ws.column_dimensions['I'].width = 18   # السبب
+    ws.column_dimensions['J'].width = 18   # إعادة_التصنيف
+    ws.column_dimensions['K'].width = 18   # قناة_تقديم_الخدمة
+    ws.column_dimensions['L'].width = 18   # الحالة_SLA
+    ws.column_dimensions['M'].width = 18   # تاريخ_الإنشاء
+    ws.column_dimensions['N'].width = 18   # الإدارة_العامة
 
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{len(cases) + 1}'
@@ -368,106 +348,36 @@ def generate_word_report(
     api_key: str = ""
 ) -> None:
     """
-    Generate Word report using sword-word-builder.
+    Generate Word report using build_report_ar.py.
+
+    Generates JSON report, saves it to disk, then uses build_report_ar.build_report()
+    to create the styled Word document. Note: build_report_ar only supports Arabic.
 
     Args:
         state: Pipeline state with report_sections
         output_path: Path to save .docx
-        language: 'ar' or 'en'
+        language: Kept for backward compatibility (build_report_ar is Arabic-only)
         api_key: Anthropic API key for LLM report generation
     """
-    # Report sections should already be generated by run_stage6
-    # No need to regenerate here
-
-    if WordBuilder is None:
-        print(f"⚠️  Skipping Word report generation (sword-word-builder not installed)")
+    if build_report is None:
+        print(f"⚠️  Skipping Word report generation (build_report_ar not available)")
         return
 
-    # Select appropriate language dict
-    report_sections = state.report_sections_ar if language == 'ar' else state.report_sections_en
+    # Generate JSON report from state
+    report_data = generate_json_report(state)
 
-    # Create builder
-    is_arabic = language == 'ar'
-    builder = WordBuilder(
-        DocumentConfig(
-            default_font="Calibri",
-            default_rtl=is_arabic,
-            heading_font="Arial",
-            accent_color="B68A35",  # Gold
-            secondary_color="1A6080",  # Dark blue
-            body_color="333333",
-            line_spacing=14,
-        )
-    )
+    # Create output path and derive JSON path from it
+    output_path = Path(output_path)
+    json_path = output_path.with_stem(output_path.stem + "_data").with_suffix(".json")
 
-    # Add cover page
-    if is_arabic:
-        title = "نبض الفجيرة"
-        subtitle = f"تقرير تحليل الاستفسارات — {convert_month_year_to_arabic(state.month_year) or 'الربع الأول 2026'}"
-    else:
-        title = "Fujairah Pulse"
-        subtitle = f"Inquiry Analysis Report — {state.month_year or 'Q1 2026'}"
+    # Save JSON to disk
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(report_data, f, ensure_ascii=False, indent=2)
+    print(f"[Stage6] Saved report JSON: {json_path}")
 
-    cover = CoverPage.preset(
-        title=title,
-        subtitle=subtitle,
-        metadata={
-            "Total Cases": state.total_cases,
-            "Report Date": state.created_at.split('T')[0],
-        }
-    )
-    builder.add_cover_page(cover)
-
-    # Add sections
-    section_order = [
-        'executive_summary',
-        'methodology',
-        'classification_summary',
-        'workload_distribution',
-        'top_patterns',
-        'friction_analysis',
-        'gap_analysis',
-        'faq_summary',
-        'recommendations',
-        'conclusion',
-    ]
-
-    for section_key in section_order:
-        if section_key not in report_sections:
-            continue
-
-        section_data = report_sections[section_key]
-
-        # Get language-specific content (already selected language dict above)
-        heading = section_data.get('heading', '')
-        body = section_data.get('body', '')
-
-        if not heading:
-            continue
-
-        # Add section heading
-        builder.add_heading(heading, level=2, rtl=is_arabic)
-
-        # Add body text
-        if body:
-            builder.add_paragraph(body, rtl=is_arabic)
-
-        # Add tables if present
-        if 'tables' in section_data:
-            tables = section_data['tables']
-            if isinstance(tables, list) and tables:
-                for table_data in tables:
-                    if isinstance(table_data, (list, dict)):
-                        try:
-                            builder.add_table(table_data, rtl=is_arabic)
-                        except Exception as e:
-                            print(f"Warning: Failed to add table in {section_key}: {e}")
-
-        # Add spacer between sections
-        builder.add_spacer(12)
-
-    # Save
-    builder.save(output_path)
+    # Build Word document from JSON
+    build_report(json_path, output_path)
+    print(f"[Stage6] Generated Word report: {output_path}")
 
 
 def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
@@ -647,6 +557,144 @@ def _fix_unescaped_newlines(json_str: str) -> str:
     return ''.join(result)
 
 
+def _build_pre_computed_findings(
+    total_cases: int,
+    misclassification_count: int,
+    misclassification_rate: float,
+    dominant_type: str,
+    dominant_type_count: int,
+    dominant_type_pct: float,
+    complaint_subcategories: list,
+    friction_points: list,
+    friction_count: int,
+    sla_closed: int,
+    sla_rate: float,
+) -> list:
+    """
+    Pre-compute the findings table deterministically from state data.
+
+    This avoids the ambiguity where the LLM combined case counts from multiple friction points
+    and readers couldn't distinguish between "N friction points" and "N cases".
+
+    Each finding row is built from a template where:
+    - The title (الاكتشاف) is ALWAYS deterministic from state, never LLM-generated
+    - Case counts are separated from friction point counts in the description
+    - Friction point groupings are explicit: "نقطتا احتكاك" (2 points) vs "N حالة" (N cases)
+
+    Returns list of dicts with keys: number, title, description, importance
+    """
+    findings = []
+
+    # ROW 1 — Classification accuracy gap
+    findings.append({
+        "number": 1,
+        "title": f"تصنيف غير دقيق بنسبة {misclassification_rate:.1f}%",
+        "description": (
+            f"كانت {misclassification_count} من {total_cases} حالة مُصنَّفة أصلاً بشكل غير صحيح. "
+            f"تمثل هذه الفجوة أساس التحديات التشغيلية المُكتشفة في هذا التحليل."
+        ),
+        "importance": "🔴 حرجة"
+    })
+
+    # ROW 2 — Dominant contact type dominance
+    top_2_complaints = complaint_subcategories[:2]
+    complaint_text = ""
+    if len(top_2_complaints) >= 2:
+        complaint_text = (
+            f"أكبرها: {top_2_complaints[0]['name']} ({top_2_complaints[0]['count']} حالة) و"
+            f"{top_2_complaints[1]['name']} ({top_2_complaints[1]['count']} حالة)"
+        )
+    elif len(top_2_complaints) == 1:
+        complaint_text = f"{top_2_complaints[0]['name']} ({top_2_complaints[0]['count']} حالة)"
+
+    findings.append({
+        "number": 2,
+        "title": f"الشكاوى تهيمن بـ {dominant_type_pct:.1f}% على عبء العمل",
+        "description": (
+            f"{dominant_type_count} حالة من {total_cases} كانت شكاوى بعد إعادة التصنيف. "
+            f"{complaint_text}. هذا التركيز يعكس محور التحسين الأساسي للعمليات."
+        ),
+        "importance": "🔴 حرجة"
+    })
+
+    # ROW 3 — Largest friction point (SINGLE POINT, not grouped)
+    if friction_points:
+        top_friction = friction_points[0]
+        findings.append({
+            "number": 3,
+            "title": f"نقطة احتكاك واحدة: {top_friction['name']} ({top_friction['case_count']} حالة، {round(top_friction['case_count']/total_cases*100, 1)}%)",
+            "description": (
+                f"تؤثر هذه النقطة على {top_friction['case_count']} حالة ({round(top_friction['case_count']/total_cases*100, 1)}% من الإجمالي). "
+                f"السبب الجذري: {_root_cause_label(top_friction['root_cause'])}"
+            ),
+            "importance": top_friction['gap_severity']
+        })
+
+    # ROW 4 — Multiple friction points grouped by shared root cause
+    # FIX: Use friction point COUNT, not case count, as the leading number
+    if len(friction_points) >= 2:
+        grouped_by_cause = {}
+        for fp in friction_points[1:]:
+            cause = fp['root_cause']
+            if cause not in grouped_by_cause:
+                grouped_by_cause[cause] = []
+            grouped_by_cause[cause].append(fp)
+
+        # Pick the largest group
+        largest_group = max(grouped_by_cause.values(), key=lambda g: sum(f['case_count'] for f in g))
+        friction_point_count_in_group = len(largest_group)
+        case_count_in_group = sum(f['case_count'] for f in largest_group)
+        group_cause = largest_group[0]['root_cause']
+        group_cause_label = _root_cause_label(group_cause)
+
+        # Title: Leading number is FRICTION POINT COUNT, not case count
+        if friction_point_count_in_group == 1:
+            point_label = "نقطة احتكاك واحدة"
+        elif friction_point_count_in_group == 2:
+            point_label = "نقطتا احتكاك"
+        else:
+            point_label = f"{friction_point_count_in_group} نقاط احتكاك"
+
+        # Build point list for description
+        point_names = ", ".join([f['name'] for f in largest_group])
+
+        findings.append({
+            "number": 4,
+            "title": f"{point_label} — {group_cause_label} ({case_count_in_group} حالة)",
+            "description": (
+                f"تشترك {point_label} في سبب جذري مشترك: {point_names}. "
+                f"إجمالي الحالات المتأثرة: {case_count_in_group} حالة. "
+                f"تحسين هذه المجموعة سيسهم بشكل كبير في تقليل الاحتكاكات."
+            ),
+            "importance": largest_group[0]['gap_severity']
+        })
+
+    # ROW 5 — SLA / operational performance
+    findings.append({
+        "number": 5,
+        "title": f"{sla_rate:.1f}% إغلاق في الوقت المحدد",
+        "description": (
+            f"تم إغلاق {sla_closed} من {total_cases} حالة في الوقت المحدد (معدل {sla_rate:.1f}%). "
+            f"هذا يثبت القدرة التشغيلية، لكنه لا يعالج الفجوات الهيكلية في الدقة والفهم."
+        ),
+        "importance": "🟢 إيجابية"
+    })
+
+    return findings
+
+
+def _root_cause_label(root_cause_category: str) -> str:
+    """Map root cause category to Arabic label."""
+    mapping = {
+        'missing_info': 'غياب معلومات من الدليل',
+        'inaccessible_info': 'معلومات موجودة لكنها صعبة الوصول',
+        'no_proactive_notification': 'غياب الإشعار الاستباقي',
+        'platform_bug': 'خلل تقني في المنصة',
+        'policy_complexity': 'تعقيد إجراءات السياسة'
+    }
+    return mapping.get(root_cause_category, root_cause_category)
+
+
 def generate_executive_summary_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
     """
     Generate the executive summary section using Claude API.
@@ -703,6 +751,10 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
 
         # Extract friction points
         friction_points = []
+        top_friction_point_name = ""
+        top_friction_case_count = 0
+        top_friction_pct = 0.0
+
         if state.journey_map:
             for friction in state.journey_map[:10]:
                 # Map severity from root_cause_category
@@ -721,6 +773,34 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
                     'root_cause': friction.root_cause_category,
                     'gap_severity': severity
                 })
+
+            # Extract top friction for direct injection into prompt
+            if friction_points:
+                top_friction_point_name = friction_points[0]['name']
+                top_friction_case_count = friction_points[0]['case_count']
+                top_friction_pct = round(top_friction_case_count / total_cases * 100, 1) if total_cases > 0 else 0.0
+
+        # Calculate SLA metrics — check for 'نعم' (yes) in SLA compliance field
+        # Must be done BEFORE _build_pre_computed_findings call
+        sla_closed = sum(1 for c in all_classified if c.sla_color == 'نعم')
+        sla_rate = (sla_closed / total_cases * 100) if total_cases > 0 else 0
+
+        # FIX: Pre-compute findings table deterministically from state before LLM call
+        # Avoids LLM inventing ambiguous case-count titles
+        friction_count = len(state.journey_map or [])
+        pre_computed_findings = _build_pre_computed_findings(
+            total_cases=total_cases,
+            misclassification_count=misclassification_count,
+            misclassification_rate=misclassification_rate,
+            dominant_type=dominant_type,
+            dominant_type_count=dominant_type_count,
+            dominant_type_pct=dominant_type_pct,
+            complaint_subcategories=complaint_subcategories,
+            friction_points=friction_points,
+            friction_count=friction_count,
+            sla_closed=sla_closed,
+            sla_rate=sla_rate,
+        )
 
         # Extract gaps with enhanced guidebook intelligence
         gap_table = []
@@ -778,10 +858,6 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             if match_confidences:
                 guidebook_coverage_metrics['avg_match_confidence'] = sum(match_confidences) / len(match_confidences)
 
-        # Calculate SLA metrics — check for 'نعم' (yes) in SLA compliance field
-        sla_closed = sum(1 for c in all_classified if c.sla_color == 'نعم')
-        sla_rate = (sla_closed / total_cases * 100) if total_cases > 0 else 0
-
         # Calculate proactive notification impact (from notification opportunities)
         proactive_notification_total = 0
         if state.notification_opportunities:
@@ -796,7 +872,10 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         date_range = convert_month_year_to_arabic(state.month_year) or "يناير — مارس 2026"
         quarter_label = "Q1 2026"  # Would be calculated from month_year
 
-        # Build the prompt
+        # Serialize pre-computed findings for the prompt
+        findings_json = json.dumps(pre_computed_findings, ensure_ascii=False, indent=2)
+
+        # Build the prompt with PRE-COMPUTED findings table (locked, not LLM-generated)
         prompt = f"""You are an expert CX strategist writing the executive summary of a formal Arabic government report on customer inquiry analysis.
 
 OUTPUT LANGUAGE: Arabic only. Do not generate English translations.
@@ -804,156 +883,78 @@ OUTPUT LANGUAGE: Arabic only. Do not generate English translations.
 INPUTS PROVIDED:
 - total_cases: {total_cases}
 - date_range: {date_range}
-- quarter_label: {quarter_label}
-- source_1: "تصدير نظام إدارة علاقات العملاء — نصوص غير منسقة"
-- source_2: "دليل الخدمات والأسئلة الشائعة"
-- distribution: {json.dumps(distribution, ensure_ascii=False)}
-- original_distribution: {json.dumps(original_distribution, ensure_ascii=False)}
-- misclassification_count: {misclassification_count}
-- misclassification_rate: {misclassification_rate:.1f}%
-- dominant_type: {dominant_type}
-- dominant_type_count: {dominant_type_count}
-- dominant_type_pct: {dominant_type_pct:.1f}%
-- complaint_subcategories: {json.dumps(complaint_subcategories, ensure_ascii=False)}
-- friction_points: {json.dumps(friction_points, ensure_ascii=False)}
+- friction_count: {friction_count} (total distinct friction points identified)
 - gap_table: {json.dumps(gap_table, ensure_ascii=False)}
 - guidebook_coverage_metrics: {json.dumps(guidebook_coverage_metrics, ensure_ascii=False)}
-- proactive_notification_total: {proactive_notification_total}
-- proactive_notification_pct: {proactive_notification_pct:.1f}%
-- sla_closed_count: {sla_closed}
 - sla_rate: {sla_rate:.1f}%
-- digital_channel_pct: {digital_channel_pct:.1f}%
 
-GUIDEBOOK INTELLIGENCE AVAILABLE:
-The gap_table entries include:
-- coverage_percentage: How much of each issue is addressed by current guidebook (0-100%)
-- clarity: Assessment of guidebook text (plain_language | bureaucratic | unclear)
-- format: How content is presented (step_by_step | wall_of_text | mixed)
-- has_visuals: Whether guidebook includes diagrams/screenshots
-- match_confidence: How well guidebook content matches actual customer needs (0.0-1.0)
-- can_use_proactive_notification: Whether issue could be solved by proactive SMS/email
-- guidebook_excerpt: The actual relevant guidebook text for the issue
+KEY STRUCTURAL INSIGHT FOR YOUR REFERENCE:
+The main reclassification finding: {misclassification_rate:.1f}% of cases were initially misclassified.
+When corrected, {dominant_type} rises to {dominant_type_pct:.1f}% of total workload ({dominant_type_count} cases).
 
-Use guidebook_coverage_metrics to quantify guidebook comprehensiveness:
-- Percentage of gaps covered vs. partially covered vs. missing
-- Average coverage score for all identified gaps
-- Average match confidence between customer needs and guidebook content
-- Count of opportunities for proactive notification to prevent inquiries
-
-YOUR TASK:
-Write the executive summary section and its النتائج الرئيسية subsection.
-Leverage the guidebook intelligence to demonstrate how the guidebook aligns with or fails to address customer needs.
-
-─────────────────────────────────────────────
-SECTION STRUCTURE (follow exactly):
+YOUR TASK — WRITE ONLY TWO SECTIONS:
 ─────────────────────────────────────────────
 
 1. FRAMING PARAGRAPH (فقرة الإطار)
    Write 2–3 sentences that:
    - State how many cases were analyzed, from which CRM source, and for which period
-   - Name both data sources (source_1 and source_2)
-   - Declare the report's purpose as transforming data into actionable decisions —
-     not presenting numbers
-   - End with the single most striking structural discovery revealed by reclassification
-     (e.g., the dominant type and its reclassified share)
+   - Name both data sources: "تصدير نظام إدارة علاقات العملاء" and "دليل الخدمات والأسئلة الشائعة"
+   - Declare the report's purpose: transforming data into actionable decisions, not just presenting numbers
+   - End with the most striking structural discovery: the {dominant_type} reclassification finding
 
    Style: Open with "يُقدّم هذا التقرير...". Third sentence must begin with
-   "المُستجد الجوهري:" and deliver an insight, not a description.
+   "المُستجد الجوهري:" and deliver insight, not description.
 
-2. النتائج الرئيسية TABLE
-   Produce a table with exactly these 4 columns:
-   # | الاكتشاف | الوصف | مستوى الأهمية
-
-   The table must have exactly 5 rows. Derive each finding entirely from the
-   provided inputs — never invent numbers. The 5 findings must follow this logic:
-
-   ROW 1 — Classification accuracy gap
-   - Title: state the misclassification_rate in the title itself
-     (e.g., "تصنيف غير دقيق بنسبة X%")
-   - Description: 2 sentences —
-     Sentence 1: exact count of misclassified cases out of total, what the original
-     label was, what the corrected labels revealed
-     Sentence 2: the misclassification_rate for this period vs. any prior period
-     if available in inputs, otherwise state it stands as a critical data quality gap
-   - Importance: 🔴 حرجة
-
-   ROW 2 — Dominant contact type dominance
-   - Title: state the dominant_type and its percentage in the title itself
-     (e.g., "الشكاوى تهيمن بـ X% على عبء العمل")
-   - Description: 2 sentences —
-     Sentence 1: dominant_type_count and dominant_type_pct, contrast with original
-     CRM label if the gap is significant
-     Sentence 2: name the top 2 complaint subcategories with their case counts,
-     explaining what this concentration reveals about the operational focus area
-   - Importance: 🔴 حرجة
-
-   ROW 3 — Largest friction cluster (no digital path)
-   - Title: state the case count and friction name of the single highest-volume
-     friction point from friction_points
-   - Description: 2 sentences —
-     Sentence 1: total cases affected, break down sub-components if available
-     Sentence 2: the root cause and the specific access barrier it creates for users
-   - Importance: use gap_severity from that friction point
-
-   ROW 4 — Operational root cause cluster
-   - Title: state the combined case count and the shared root cause theme of the
-     2nd and 3rd largest friction points (e.g., "X حالة ناتجة عن فجوة Y")
-   - Description: 2 sentences —
-     Sentence 1: name both friction points with exact case counts and the shared
-     root cause linking them
-     Sentence 2: what the data shows as the immediate fix and its projected impact
-   - Importance: use the higher severity of the two from gap_table
-
-   ROW 5 — SLA / operational performance
-   - Title: state the sla_rate in the title itself
-     (e.g., "X% إغلاق في الوقت المحدد")
-   - Description: 2 sentences —
-     Sentence 1: sla_closed_count out of total_cases and the sla_rate
-     Sentence 2: contextualise — even strong SLA performance does not address the
-     structural reclassification gap; this is positive evidence of execution capacity
-   - Importance: 🟢 إيجابية
-
-3. الرسالة الجوهرية (CORE MESSAGE)
-   One paragraph placed after the table. Must:
+2. الرسالة الجوهرية (CORE MESSAGE)
+   One paragraph placed AFTER the locked findings table below. Must:
    - Begin with "الرسالة الجوهرية:"
-   - Name the specific systemic failure the data exposes (derived from
-     misclassification pattern + dominant friction theme)
-   - State what fixing it unlocks, using at least one specific number
-   - End with a forward-looking strategic statement about what this reclassification
-     enables (data-driven strategy, not guesswork)
+   - Name the specific systemic failure: {misclassification_rate:.1f}% misclassification + {friction_count} distinct friction points
+   - State what fixing it unlocks, using specific numbers from the inputs
+   - End with a forward-looking statement about data-driven strategy
 
    Style: 3 sentences maximum. No bullet points. Assertive, not descriptive.
 
 ─────────────────────────────────────────────
-TONE AND STYLE RULES:
+LOCKED FINDINGS TABLE — COPY VERBATIM, DO NOT MODIFY:
 ─────────────────────────────────────────────
-- Formal Arabic (MSA), consultant register, no filler phrases
-- Lead with insight, not description — do not say what the section contains,
-  state what the data reveals
-- Every number in every sentence must come from the provided inputs
-- Discovery titles (الاكتشاف column) must embed the key metric in the title text —
-  a reader scanning only titles should grasp the magnitude of each finding
-- Importance levels use exactly: 🔴 حرجة | 🟡 عالية | 🟢 إيجابية
-  (not متوسطة — reserve that label for internal gap tables, not executive findings)
+
+This table is LOCKED and pre-computed from authoritative state data.
+Your ONLY task is to write framing_paragraph and core_message.
+Do NOT invent, modify, or re-order the findings table rows.
+Do NOT change any number in the table — case counts, percentages, or friction point descriptions.
+
+Pre-computed key_findings table (5 rows):
+{findings_json}
+
+CRITICAL DISTINCTION (重要):
+- Friction point COUNT = total number of distinct access barriers (نقاط احتكاك)
+- Case COUNT = number of cases affected by that friction point (حالات)
+- These are different numbers. Do NOT confuse them.
+- Example: If ROW 4 says "نقطتا احتكاك — ... (10 حالة)", that means:
+  - 2 friction points (نقطتا احتكاك)
+  - Affecting 10 cases total (10 حالة)
+  - NOT 10 friction points
+
+VALIDATION RULE:
+If any finding headline number exceeds {friction_count}, that finding is invalid.
+Example: "10 نقاط احتكاك" is invalid if friction_count={friction_count}.
+(This validates that we're counting the right dimension.)
 
 ─────────────────────────────────────────────
-OUTPUT FORMAT:
+OUTPUT FORMAT — return JSON with THREE fields:
 ─────────────────────────────────────────────
-Return a single Arabic JSON object:
 {{
   "section": "executive_summary",
-  "framing_paragraph": "...",
-  "key_findings": [
-    {{
-      "number": 1,
-      "title": "...",
-      "description": "...",
-      "importance": "🔴 حرجة"
-    }}
-    // 5 total
-  ],
-  "core_message": "..."
+  "framing_paragraph": "...",  ← Your writing (2–3 sentences, Arabic only)
+  "key_findings": {findings_json},  ← LOCKED: return as provided above, no changes
+  "core_message": "..."  ← Your writing (1 paragraph, 3 sentences max)
 }}
+
+RULES:
+- key_findings: Return EXACTLY as provided above — every row, every value, unchanged.
+- framing_paragraph: Arabic only, 2–3 sentences, cite date_range and both data sources.
+- core_message: Arabic only, 3 sentences max, begin with "الرسالة الجوهرية:".
+- No markdown, no extra keys, no extra nesting.
 """
 
         client = anthropic.Anthropic(api_key=api_key)
@@ -978,71 +979,109 @@ Return a single Arabic JSON object:
 
         # First try: look for ```json ... ``` block (with or without closing ```)
         # Handle both complete and incomplete code blocks
+        result = None
         json_code_block = re.search(r'```\s*(?:json)?\s*\n(.*?)(?:\n```|$)', response_text, re.DOTALL)
         if json_code_block:
             json_candidate = json_code_block.group(1).strip()
             try:
                 result = json.loads(json_candidate)
-                return result
             except json.JSONDecodeError:
                 pass  # Fall through to next method
 
         # Second try: extract between first { and last } using state machine
-        first_brace = response_text.find('{')
-        if first_brace != -1:
-            # Use state machine to find matching closing brace
-            depth = 0
-            in_string = False
-            escape = False
+        if not result:
+            first_brace = response_text.find('{')
+            if first_brace != -1:
+                # Use state machine to find matching closing brace
+                depth = 0
+                in_string = False
+                escape = False
 
-            for i in range(first_brace, len(response_text)):
-                char = response_text[i]
+                for i in range(first_brace, len(response_text)):
+                    char = response_text[i]
 
-                # Handle escape sequences
-                if escape:
-                    escape = False
-                    continue
+                    # Handle escape sequences
+                    if escape:
+                        escape = False
+                        continue
 
-                if char == '\\' and in_string:
-                    escape = True
-                    continue
+                    if char == '\\' and in_string:
+                        escape = True
+                        continue
 
-                # Track string boundaries (only outside strings do braces matter)
-                if char == '"':
-                    in_string = not in_string
-                    continue
+                    # Track string boundaries (only outside strings do braces matter)
+                    if char == '"':
+                        in_string = not in_string
+                        continue
 
-                if in_string:
-                    continue
+                    if in_string:
+                        continue
 
-                # Track brace depth
-                if char == '{':
-                    depth += 1
-                elif char == '}':
-                    depth -= 1
-                    if depth == 0:
-                        # Found closing brace
-                        json_str = response_text[first_brace:i + 1]
-                        try:
-                            result = json.loads(json_str)
-                            return result
-                        except json.JSONDecodeError as e:
-                            # Try to fix unescaped newlines in JSON strings
-                            fixed_json = _fix_unescaped_newlines(json_str)
+                    # Track brace depth
+                    if char == '{':
+                        depth += 1
+                    elif char == '}':
+                        depth -= 1
+                        if depth == 0:
+                            # Found closing brace
+                            json_str = response_text[first_brace:i + 1]
                             try:
-                                result = json.loads(fixed_json)
-                                return result
-                            except json.JSONDecodeError:
-                                raise RuntimeError(
-                                    f"[ExecSummary] Failed to parse executive summary JSON: {e}\n"
-                                    f"Attempted string length: {len(json_str)}\n"
-                                    f"First 500 chars: {json_str[:500]}\n"
-                                    f"Last 500 chars: {json_str[-500:] if len(json_str) > 500 else 'N/A'}"
-                                )
+                                result = json.loads(json_str)
+                                break
+                            except json.JSONDecodeError as e:
+                                # Try to fix unescaped newlines in JSON strings
+                                fixed_json = _fix_unescaped_newlines(json_str)
+                                try:
+                                    result = json.loads(fixed_json)
+                                    break
+                                except json.JSONDecodeError:
+                                    raise RuntimeError(
+                                        f"[ExecSummary] Failed to parse executive summary JSON: {e}\n"
+                                        f"Attempted string length: {len(json_str)}\n"
+                                        f"First 500 chars: {json_str[:500]}\n"
+                                        f"Last 500 chars: {json_str[-500:] if len(json_str) > 500 else 'N/A'}"
+                                    )
 
-        print("No JSON found in executive summary response")
-        print(f"Response first 500 chars: {response_text[:500]}")
-        raise RuntimeError("Executive summary: No JSON found in API response")
+        if not result:
+            print("No JSON found in executive summary response")
+            print(f"Response first 500 chars: {response_text[:500]}")
+            raise RuntimeError("Executive summary: No JSON found in API response")
+
+        # ── FIX: Validate and reinject pre-computed findings ────────────────────────
+        # The LLM should NOT have modified the findings table, but we validate and reinject anyway
+        if 'key_findings' in result and isinstance(result['key_findings'], list):
+            if len(result['key_findings']) != len(pre_computed_findings):
+                print(
+                    f"[ExecSummary] WARNING: LLM returned {len(result['key_findings'])} findings, "
+                    f"expected {len(pre_computed_findings)}. Reinjecting pre-computed findings."
+                )
+            # Validate that leading numbers don't exceed friction_count
+            for finding in result.get('key_findings', []):
+                title = finding.get('title', '')
+                # Extract first number from title (simple heuristic)
+                import re as re_module
+                numbers = re_module.findall(r'\d+', title)
+                if numbers:
+                    first_num = int(numbers[0])
+                    if first_num > friction_count:
+                        print(
+                            f"[ExecSummary] WARNING: Finding title contains number {first_num} "
+                            f"which exceeds friction_count={friction_count}. "
+                            f"This suggests confusion between friction points and case counts. "
+                            f"Reinjecting pre-computed findings to ensure consistency."
+                        )
+                        break
+
+        # Reinject pre-computed findings
+        result['key_findings'] = pre_computed_findings
+
+        print(
+            f"[ExecSummary] ✅ OK — "
+            f"framing_paragraph_len={len(result.get('framing_paragraph', ''))}, "
+            f"key_findings_rows={len(result.get('key_findings', []))}, "
+            f"core_message_len={len(result.get('core_message', ''))}"
+        )
+        return result
 
     except Exception as e:
         print(f"[ExecSummary] ❌ Error: {type(e).__name__}: {e}")
@@ -1687,7 +1726,9 @@ Rules:
         ]
 
         # HARDCODED SECTION 2.3: الحقول المحللة
-        analyzed_fields_text = """الحقول المستخدمة في التحليل — وتحديداً رقم الطلب، تاريخ، قناة التقديم، الخدمة الرئيسية، نوع المكالمة، الجنسية، الإدارة المختصة، تفاصيل الطلب (نص متوسط 180 حرف)، وحل الحالة (متوسط 120 حرف) — هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بما يتجاوز التصنيف الأصلي في نظام CRM"""
+        analyzed_fields_text = """الحقول المنظمة: رقم الطلب، الخدمة الرئيسية، نوع المكالمة الأصلي، الحالة، قناة التواصل، الجنسية، الإدارة المختصة.
+الحقول غير المنظمة — محور هذا التحليل: تفاصيل الطلب ورد المعالجة هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بعيداً عن التصنيف الشكلي في النظام. 
+"""
 
         return {
             "sources_table": sources_rows,
@@ -1826,21 +1867,16 @@ def run_stage6(
         if state.total_cases > 0 else 0.0
     )
 
-    # Generate all report sections (including sections 6-8 for JSON/Word output)
-    sections_ar = state.report_sections_ar or {}
-    missing_sections = not all(key in sections_ar for key in [
-        'digital_transformation', 'ai_use_cases', 'improvement_roadmap', 'conclusion'
-    ])
+    # CRITICAL: Always clear and regenerate report sections to ensure LLM prompts
+    # use the latest reconciled data (state.journey_map, state.gap_table, etc.)
+    # and updated friction counts. Stale cached sections will have outdated prose.
+    print(f"[Stage6] Clearing cached report_sections_ar and report_sections_en to ensure fresh generation...")
+    state.report_sections_ar = {}
+    state.report_sections_en = {}
 
-    # DEBUG
-    print(f"[Stage6] report_sections_ar has {len(sections_ar)} sections")
-    print(f"[Stage6] missing_sections = {missing_sections}")
-    print(f"[Stage6] api_key present: {bool(api_key)}, length: {len(api_key) if api_key else 0}")
-
-    if (not state.report_sections_ar and not state.report_sections_en) or missing_sections:
-        print(f"[Stage6] Calling _generate_report_sections...")
-        _generate_report_sections(state, api_key)
-        print(f"[Stage6] After generation: {len(state.report_sections_ar or {})} sections")
+    print(f"[Stage6] Calling _generate_report_sections with fresh state...")
+    _generate_report_sections(state, api_key)
+    print(f"[Stage6] After generation: {len(state.report_sections_ar or {})} sections in report_sections_ar")
 
     # Generate Excel
     generate_excel(state, excel_path)

@@ -10,6 +10,8 @@ App.py imports from here and uses conditional logic to select the flow.
 """
 
 import os
+import sys
+import importlib.util
 from pathlib import Path
 
 # Get current app mode from environment
@@ -17,17 +19,16 @@ APP_MODE = os.getenv('APP_MODE', 'inquiries').lower()
 
 # Import from the appropriate flow folder
 if APP_MODE == 'inquiries' or True:  # Default to inquiries for now
-    # Add inquiries flow to path
-    _inquiries_path = Path(__file__).parent.parent / "inquiries-flow"
-    import sys
-    if str(_inquiries_path) not in sys.path:
-        sys.path.insert(0, str(_inquiries_path))
+    # Load inquiries-flow analysis module
+    _inquiries_path = Path(__file__).parent.parent / "inquiries-flow" / "analysis" / "__init__.py"
+    spec = importlib.util.spec_from_file_location("_inquiries_analysis", _inquiries_path)
+    _inquiries_analysis = importlib.util.module_from_spec(spec)
+    sys.modules["_inquiries_analysis"] = _inquiries_analysis
+    spec.loader.exec_module(_inquiries_analysis)
 
-    from analysis import (
-        RealAnalyzer,
-        DynamicReportDisplay,
-        Analyzer
-    )
+    RealAnalyzer = _inquiries_analysis.RealAnalyzer
+    DynamicReportDisplay = _inquiries_analysis.DynamicReportDisplay
+    Analyzer = _inquiries_analysis.Analyzer
 
 __all__ = [
     'RealAnalyzer',

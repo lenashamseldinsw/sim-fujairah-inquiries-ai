@@ -257,7 +257,8 @@ class TocStyle:
     heading_text_color: str = "FFFFFF"
     heading_font: str = "TheSans"
     entry_font: str = "Sakkal Majalla"
-    levels: int = 3
+    levels: list[int] = field(default_factory=lambda: [1, 2, 3])
+    exclude_cover_page: bool = False
     rtl: bool = True
 
 

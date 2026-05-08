@@ -323,7 +323,8 @@ def build_toc_sdt(
     hl = first_p.find(qn("w:hyperlink"))
     idx = list(first_p).index(hl)
     first_p.insert(idx, _r_fld_sep())
-    first_p.insert(idx, _r_fld_instr(' TOC \\o "1-3" \\h \\z \\u '))
+    lo, hi = min(style.levels), max(style.levels)
+    first_p.insert(idx, _r_fld_instr(f' TOC \\o "{lo}-{hi}" \\h \\z \\u '))
     first_p.insert(idx, _r_fld_begin())
 
     for p in entry_paragraphs:

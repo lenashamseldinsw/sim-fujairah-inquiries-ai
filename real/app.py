@@ -3,6 +3,7 @@ import time
 import os
 import json
 import random
+import traceback
 from pathlib import Path
 from analysis import RealAnalyzer, DynamicReportDisplay
 from dotenv import load_dotenv
@@ -53,23 +54,39 @@ T = {
         'nav_back':          '← العودة للرئيسية',
         'hero_eyebrow':      'شرطة الفجيرة · الخدمات الذكية',
         'hero_title':        'نبض الفجيرة',
-        'hero_subtitle':     'منصة ذكاء اصطناعي لتحليل استفسارات وشكاوى المتعاملين وتحسين جودة الخدمات الحكومية',
+        'hero_subtitle':     'منصة ذكاء اصطناعي متقدمة لتحليل شكاوى المتعاملين واستخراج الرؤى والتوصيات لتحسين جودة الخدمات الحكومية',
         'badge_speed':       '⚡ معالجة فورية',
         'badge_accuracy':    '🎯 دقة عالية',
         'badge_security':    '🔒 بيانات آمنة',
         'badge_reports':     '📊 تقارير شاملة',
-        'section_label':     'اختر الخدمة',
-        'section_title':     'ماذا تريد أن تحلل؟',
-        'inq_card_title':    'تحليل الاستفسارات',
-        'inq_card_desc':     'حلّل استفسارات المتعاملين واستخرج الأنماط والتوجهات لتحسين مستوى الخدمة وسرعة الاستجابة.',
-        'inq_tag1':          'Excel / PDF',
-        'inq_tag2':          'تقرير Word',
-        'inq_tag3':          'نتائج فورية',
+        'section_label':     'تحليل ذكي للشكاوى',
+        'section_title':     'استخرج الرؤى والتوصيات من شكاوى المتعاملين',
+        'cmp_description':   'حول شكاوى المتعاملين إلى أفكار قابلة للتنفيذ باستخدام الذكاء الاصطناعي',
+        'feat1_title':       'تصنيف تلقائي',
+        'feat1_desc':        'صنّف الشكاوى حسب النوع والمجال والأولوية تلقائياً',
+        'feat2_title':       'تحليل الأولويات',
+        'feat2_desc':        'حدّد الشكاوى الحرجة والمتكررة والأنماط المهمة',
+        'feat3_title':       'توصيات ذكية',
+        'feat3_desc':        'احصل على توصيات قابلة للتطبيق لمعالجة الأسباب الجذرية',
+        'how_label':         'كيف يعمل',
+        'how_title':         'ثلاث خطوات بسيطة لتحليل شامل',
+        'step1_title':       'ارفع الملف',
+        'step1_sub':         'أرسل ملف الشكاوى (Excel أو PDF)',
+        'step2_title':       'التحليل الفوري',
+        'step2_sub':         'يقوم الذكاء الاصطناعي بالتحليل والتصنيف',
+        'step3_title':       'التقرير الشامل',
+        'step3_sub':         'احصل على تقرير مفصل مع التوصيات',
+        'cta_btn':           'ابدأ تحليل الشكاوى الآن  ←',
         'cmp_card_title':    'تحليل الشكاوى',
         'cmp_card_desc':     'حلّل شكاوى المتعاملين وصنّفها حسب الأولوية والنوع واستخرج توصيات لمعالجة الأسباب الجذرية.',
         'cmp_tag1':          'Excel / PDF',
         'cmp_tag2':          'تقرير Word',
         'cmp_tag3':          'نتائج فورية',
+        'inq_card_title':    'تحليل الاستفسارات',
+        'inq_card_desc':     'حلّل استفسارات المتعاملين واستخرج الأنماط والتوجهات لتحسين مستوى الخدمة وسرعة الاستجابة.',
+        'inq_tag1':          'Excel / PDF',
+        'inq_tag2':          'تقرير Word',
+        'inq_tag3':          'نتائج فورية',
         'btn_inq':           'ابدأ تحليل الاستفسارات  ←',
         'btn_cmp':           'ابدأ تحليل الشكاوى  ←',
         'footer_copy':       '© 2026 شرطة الفجيرة · جميع الحقوق محفوظة',
@@ -114,33 +131,44 @@ T = {
         'login_button':      'تسجيل الدخول',
         'cancel_button':     'إلغاء',
         'login_error':       'اسم المستخدم أو كلمة المرور غير صحيحة',
-        'processing_title':  'جاري تحليل الملف',
-        'initializing':      'جاري تهيئة خط الأنابيب...',
-        'starting_analysis': 'جاري بدء التحليل...',
-        'analyzing_file':    'جاري تحليل ملفك... قد يستغرق دقيقة واحدة.',
-        'artifacts_generating': 'جاري إنشاء المرفقات. سيتم إضافتها للتحميل عند الانتهاء.',
     },
     'en': {
         'nav_back':          '← Back to Home',
         'hero_eyebrow':      'Fujairah Police · Smart Services',
         'hero_title':        'Fujairah Pulse',
-        'hero_subtitle':     'An AI platform for analyzing citizen inquiries and complaints to improve government service quality',
+        'hero_subtitle':     'Advanced AI platform for analyzing citizen complaints and extracting insights and recommendations to improve government service quality',
         'badge_speed':       '⚡ Instant Processing',
         'badge_accuracy':    '🎯 High Accuracy',
         'badge_security':    '🔒 Secure Data',
         'badge_reports':     '📊 Comprehensive Reports',
-        'section_label':     'Choose a Service',
-        'section_title':     'What would you like to analyze?',
-        'inq_card_title':    'Inquiries Analysis',
-        'inq_card_desc':     'Analyze citizen inquiries and extract patterns and trends to improve service quality and response speed.',
-        'inq_tag1':          'Excel / PDF',
-        'inq_tag2':          'Word Report',
-        'inq_tag3':          'Instant Results',
+        'section_label':     'Smart Complaints Analysis',
+        'section_title':     'Extract insights and recommendations from citizen complaints',
+        'cmp_description':   'Turn citizen complaints into actionable intelligence using advanced AI',
+        'feat1_title':       '🔍 Automatic Classification',
+        'feat1_desc':        'Classify complaints by type, category, and priority automatically',
+        'feat2_title':       '📊 Priority Analysis',
+        'feat2_desc':        'Identify critical, recurring, and high-impact complaints instantly',
+        'feat3_title':       '💡 Smart Recommendations',
+        'feat3_desc':        'Get actionable recommendations to address root causes',
+        'how_label':         'How it Works',
+        'how_title':         'Three simple steps to comprehensive analysis',
+        'step1_title':       'Upload File',
+        'step1_sub':         'Submit your complaints file (Excel or PDF)',
+        'step2_title':       'Instant Analysis',
+        'step2_sub':         'AI analyzes and classifies complaints',
+        'step3_title':       'Full Report',
+        'step3_sub':         'Get detailed report with recommendations',
+        'cta_btn':           'Start Complaints Analysis Now  →',
         'cmp_card_title':    'Complaints Analysis',
         'cmp_card_desc':     'Analyze citizen complaints, classify by priority and type, and extract recommendations to address root causes.',
         'cmp_tag1':          'Excel / PDF',
         'cmp_tag2':          'Word Report',
         'cmp_tag3':          'Instant Results',
+        'inq_card_title':    'Inquiries Analysis',
+        'inq_card_desc':     'Analyze citizen inquiries and extract patterns and trends to improve service quality and response speed.',
+        'inq_tag1':          'Excel / PDF',
+        'inq_tag2':          'Word Report',
+        'inq_tag3':          'Instant Results',
         'btn_inq':           'Start Inquiries Analysis  →',
         'btn_cmp':           'Start Complaints Analysis  →',
         'footer_copy':       '© 2026 Fujairah Police · All Rights Reserved',
@@ -185,11 +213,6 @@ T = {
         'login_button':      'Login',
         'cancel_button':     'Cancel',
         'login_error':       'Invalid username or password',
-        'processing_title':  'Processing File Through Pipeline',
-        'initializing':      'Initializing pipeline...',
-        'starting_analysis': 'Starting analysis...',
-        'analyzing_file':    'Analyzing your file... This may take a minute.',
-        'artifacts_generating': 'Generating artifacts. Download will include them once ready.',
     }
 }
 
@@ -416,10 +439,11 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
     }}
     .hero-subtitle {{
+        display: block;
         font-size: 1.35rem;
         font-weight: 400;
         color: rgba(228,228,240,0.75);
-        max-width: 640px;
+        max-width: 780px;
         margin: 0 auto 2.5rem;
         line-height: 1.9;
         text-align: center !important;
@@ -575,7 +599,7 @@ def load_css(lang='ar'):
         padding: 4rem 0 2.5rem;
     }}
     .section-label {{
-        display: inline-block;
+        display: block;
         font-size: 0.78rem;
         font-weight: 700;
         letter-spacing: 3px;
@@ -589,7 +613,6 @@ def load_css(lang='ar'):
         color: {TEXT};
         margin: 0 0 1rem;
         direction: {DIR} !important;
-        text-align: center !important;
     }}
     .section-ornament {{
         display: flex;
@@ -741,6 +764,9 @@ def load_css(lang='ar'):
     }}
 
     /* ── GOLD BUTTONS (default) ── */
+    button, .stButton button, .stButton > button {{
+        background-color: transparent !important;
+    }}
     .stButton > button {{
         background: linear-gradient(
             110deg,
@@ -750,25 +776,25 @@ def load_css(lang='ar'):
             {GOLD_PALE}  66%,
             {GOLD_LIGHT} 80%,
             {GOLD}      100%
-        );
-        background-size: 260% 260%;
-        animation: gradientFlow 5s ease infinite;
+        ) !important;
+        background-size: 260% 260% !important;
+        animation: gradientFlow 5s ease infinite !important;
         color: {BG_DEEP} !important;
         font-family: {FONT} !important;
-        font-weight: 700;
-        font-size: 1.05rem;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
         border: none !important;
-        border-radius: 12px;
-        padding: 0.85rem 2rem;
-        width: 100%;
-        cursor: pointer;
-        position: relative;
-        overflow: hidden;
+        border-radius: 12px !important;
+        padding: 0.85rem 2rem !important;
+        width: 100% !important;
+        cursor: pointer !important;
+        position: relative !important;
+        overflow: hidden !important;
         transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
-                    box-shadow 0.25s ease;
-        box-shadow: 0 4px 20px rgba(201,150,60,0.28);
+                    box-shadow 0.25s ease !important;
+        box-shadow: 0 4px 20px rgba(201,150,60,0.28) !important;
         direction: {DIR} !important;
-        letter-spacing: 0.3px;
+        letter-spacing: 0.3px !important;
     }}
     .stButton > button::before {{
         content: '';
@@ -786,17 +812,42 @@ def load_css(lang='ar'):
         pointer-events: none;
     }}
     .stButton > button:hover {{
-        transform: translateY(-3px);
-        box-shadow: 0 10px 38px rgba(201,150,60,0.52);
-        animation: gradientFlow 2.2s ease infinite;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 10px 38px rgba(201,150,60,0.52) !important;
+        animation: gradientFlow 2.2s ease infinite !important;
         color: {BG_DEEP} !important;
     }}
     .stButton > button:hover::before {{
-        animation: shimmerSweep 0.85s ease forwards;
+        animation: shimmerSweep 0.85s ease forwards !important;
     }}
     .stButton > button:active {{
-        transform: translateY(0);
-        box-shadow: 0 3px 14px rgba(201,150,60,0.35);
+        transform: translateY(0) !important;
+        box-shadow: 0 3px 14px rgba(201,150,60,0.35) !important;
+    }}
+
+    /* ── FORM SUBMIT BUTTONS ── */
+    [data-testid="stForm"] button {{
+        background: linear-gradient(
+            110deg,
+            {GOLD_DARK} 0%,
+            {GOLD}      28%,
+            {GOLD_LIGHT} 52%,
+            {GOLD_PALE}  66%,
+            {GOLD_LIGHT} 80%,
+            {GOLD}      100%
+        ) !important;
+        background-size: 260% 260% !important;
+        color: {BG_DEEP} !important;
+        font-weight: 700 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.7rem 1.5rem !important;
+        cursor: pointer !important;
+        box-shadow: 0 4px 20px rgba(201,150,60,0.28) !important;
+    }}
+    [data-testid="stForm"] button:hover {{
+        box-shadow: 0 10px 38px rgba(201,150,60,0.52) !important;
+        transform: translateY(-2px) !important;
     }}
 
     /* ── BLUE BUTTON (complaints) ── */
@@ -1216,6 +1267,167 @@ def load_css(lang='ar'):
         direction: {DIR} !important;
     }}
 
+    /* ── COMPLAINTS SHOWCASE SECTION ── */
+    .complaints-showcase {{
+        max-width: 900px;
+        margin: 3rem auto 2rem;
+        padding: 0 1rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+    }}
+    .complaints-feature-card {{
+        background: {BG_CARD};
+        border: 1.5px solid {BORDER_B};
+        border-radius: 24px;
+        padding: 3rem 2.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 3rem;
+    }}
+    .complaints-feature-card::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, {BLUE}, transparent);
+    }}
+    .complaints-feature-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 24px 80px rgba(46,134,171,0.15);
+        transform: translateY(-4px);
+    }}
+    .complaints-feature-card .title {{
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: {BLUE_LIGHT};
+        margin: 0 0 1rem;
+        text-align: center !important;
+    }}
+    .complaints-feature-card .desc {{
+        color: {TEXT_MUTED};
+        font-size: 1.05rem;
+        line-height: 1.8;
+        margin: 0;
+        text-align: center !important;
+    }}
+
+    /* ── BLUE FEATURE CARDS ── */
+    .blue-feature-card {{
+        background: {BG_CARD};
+        border: 1px solid {BORDER_B};
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        direction: {DIR} !important;
+        display: flex;
+        flex-direction: column;
+        text-align: center !important;
+        min-height: 270px;
+    }}
+    .blue-feature-card::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, {BLUE}, transparent);
+        opacity: 0.6;
+    }}
+    .blue-feature-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 24px 64px rgba(46,134,171,0.09), 0 0 0 1px {BORDER_B};
+        transform: translateY(-4px);
+    }}
+    .blue-feature-card .feature-icon-wrap {{
+        width: 58px; height: 58px;
+        background: linear-gradient(135deg, rgba(46,134,171,0.15), rgba(46,134,171,0.04));
+        border: 1px solid {BORDER_B2};
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        margin: 0 auto 1.4rem;
+    }}
+    .blue-feature-card .feature-title {{
+        color: {BLUE_LIGHT};
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0 0 0.7rem;
+        direction: {DIR} !important;
+        text-align: center !important;
+    }}
+    .blue-feature-card .feature-desc {{
+        color: {TEXT_MUTED};
+        font-size: 1rem;
+        line-height: 1.8;
+        margin: 0;
+        direction: {DIR} !important;
+        flex: 1;
+        text-align: center !important;
+    }}
+
+    /* ── BLUE STEP CARDS ── */
+    .blue-step-card {{
+        background: {BG_CARD};
+        border: 1px solid {BORDER_B};
+        border-radius: 16px;
+        padding: 2rem 1.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+        position: relative;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    }}
+    .blue-step-card:hover {{
+        border-color: {BORDER_B2};
+        box-shadow: 0 12px 40px rgba(46,134,171,0.07);
+    }}
+    .blue-step-card .step-number {{
+        font-size: 2.6rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, {BORDER_B2}, rgba(46,134,171,0.1));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1;
+        margin-bottom: 0.6rem;
+        text-align: center !important;
+    }}
+    .blue-step-card .step-icon {{
+        font-size: 2rem;
+        margin-bottom: 0.8rem;
+        text-align: center !important;
+    }}
+    .blue-step-card .step-title {{
+        color: {TEXT};
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem;
+        text-align: center !important;
+        direction: {DIR} !important;
+    }}
+    .blue-step-card .step-desc {{
+        color: {TEXT_MUTED};
+        font-size: 0.9rem;
+        line-height: 1.7;
+        margin: 0;
+        text-align: center !important;
+        direction: {DIR} !important;
+        flex: 1;
+    }}
+
+    /* ── CTA SECTION ── */
+    .cta-section {{
+        max-width: 480px;
+        margin: 3rem auto 3rem;
+        padding: 0 1rem;
+    }}
+
     /* ── FOOTER ── */
     .footer {{
         border-top: 1px solid {BORDER_G};
@@ -1443,8 +1655,8 @@ def init_session_state():
         'show_login': False,
         'pending_page': None,
         'current_user_center': None,
-        'analysis_error': None,
-        'error_traceback': None,
+        'selected_period_inq': None,
+        'selected_period_cmp': None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1456,31 +1668,37 @@ def load_credentials():
     # Try to load from Streamlit secrets first (for deployment)
     try:
         if hasattr(st, 'secrets') and 'users' in st.secrets:
+            print("[Auth] Loading credentials from st.secrets")
             users = []
+            users_section = st.secrets.users
+            print(f"[Auth] Found users section with keys: {list(users_section.keys())[:5]}...")
+
             # Load admin user
-            if 'admin_username' in st.secrets.users:
+            if 'admin_username' in users_section:
                 users.append({
-                    "username": st.secrets.users.admin_username,
-                    "password": st.secrets.users.admin_password,
-                    "center": st.secrets.users.get('admin_center', 'مركز الإدارة المركزية')
+                    "username": users_section['admin_username'],
+                    "password": users_section['admin_password'],
+                    "center": users_section.get('admin_center', 'مركز الإدارة المركزية')
                 })
+
             # Load demo user
-            if 'demo_username' in st.secrets.users:
+            if 'demo_username' in users_section:
                 users.append({
-                    "username": st.secrets.users.demo_username,
-                    "password": st.secrets.users.demo_password,
-                    "center": st.secrets.users.get('demo_center', 'مركز التجريب والعروض التوضيحية')
+                    "username": users_section['demo_username'],
+                    "password": users_section['demo_password'],
+                    "center": users_section.get('demo_center', 'مركز التجريب والعروض التوضيحية')
                 })
+
             # Load fujairah-user
-            if 'fujairah_username' in st.secrets.users:
+            if 'fujairah_username' in users_section:
                 users.append({
-                    "username": st.secrets.users.fujairah_username,
-                    "password": st.secrets.users.fujairah_password,
-                    "center": st.secrets.users.get('fujairah_center', 'مركز الفجيرة الرئيسي')
+                    "username": users_section['fujairah_username'],
+                    "password": users_section['fujairah_password'],
+                    "center": users_section.get('fujairah_center', 'مركز الفجيرة الرئيسي')
                 })
-            # Load Fujairah Police Center users (20 total: 10 existing + 10 new)
+
+            # Load Fujairah Police Center users
             user_configs = [
-                # Existing users
                 ('myaalali_email', 'myaalali_password', 'myaalali_center'),
                 ('umahmed_email', 'umahmed_password', 'umahmed_center'),
                 ('kh17878_email', 'kh17878_password', 'kh17878_center'),
@@ -1491,7 +1709,6 @@ def load_credentials():
                 ('fatima_email', 'fatima_password', 'fatima_center'),
                 ('saeed_al_soghairi_email', 'saeed_al_soghairi_password', 'saeed_al_soghairi_center'),
                 ('ahmed_al_hammadi_email', 'ahmed_al_hammadi_password', 'ahmed_al_hammadi_center'),
-                # New users
                 ('abdul_sief_albadi_email', 'abdul_sief_albadi_password', 'abdul_sief_albadi_center'),
                 ('sulaiman_saeed_email', 'sulaiman_saeed_password', 'sulaiman_saeed_center'),
                 ('fahd_suwaidi_email', 'fahd_suwaidi_password', 'fahd_suwaidi_center'),
@@ -1503,164 +1720,340 @@ def load_credentials():
                 ('ibrahim_taniji_email', 'ibrahim_taniji_password', 'ibrahim_taniji_center'),
                 ('khams_alhamar_email', 'khams_alhamar_password', 'khams_alhamar_center'),
             ]
-            for email_key, password_key, center_key in user_configs:
-                if email_key in st.secrets.users and password_key in st.secrets.users:
-                    users.append({
-                        "username": st.secrets.users[email_key],
-                        "password": st.secrets.users[password_key],
-                        "center": st.secrets.users.get(center_key, "Unknown Center")
-                    })
-            return {"users": users}
-    except Exception:
-        pass
 
-    # No local fallback - credentials must be in Streamlit secrets
+            for email_key, password_key, center_key in user_configs:
+                if email_key in users_section and password_key in users_section:
+                    users.append({
+                        "username": users_section[email_key],
+                        "password": users_section[password_key],
+                        "center": users_section.get(center_key, "Unknown Center")
+                    })
+
+            if users:
+                print(f"[Auth] Successfully loaded {len(users)} users from secrets")
+                return {"users": users}
+            else:
+                print("[Auth] No users loaded from secrets")
+    except Exception as e:
+        print(f"[Auth] Error loading credentials from secrets: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # Fallback: return empty users list
+    print("[Auth] Returning empty users list")
     return {"users": []}
 
 def verify_credentials(username, password):
     creds = load_credentials()
+    print(f"[Login] Verifying credentials for username: '{username}' with password: '{password}'")
+    print(f"[Login] Available users: {[u.get('username') for u in creds.get('users', [])]}")
     for user in creds.get("users", []):
+        print(f"[Login] Checking user '{user['username']}' against input '{username}' (match: {user['username'] == username})")
+        if user["username"] == username:
+            print(f"[Login] Username matched! Checking password: '{user['password']}' vs '{password}' (match: {user['password'] == password})")
         if user["username"] == username and user["password"] == password:
+            print(f"[Login] ✅ Credentials matched for {username}")
             return user  # Return the full user object with center name
+    print(f"[Login] ❌ No matching credentials found for {username}")
     return None
+
+# ── Period Folder Management ──────────────────────────────────────────────────
+def get_period_folders(flow_type: str = 'inquiries'):
+    """Get list of period folders from the output directory.
+
+    Args:
+        flow_type: 'inquiries' or 'complaints'
+
+    Returns:
+        List of period folder names sorted, excluding cache folder
+    """
+    script_dir = Path(__file__).parent
+    if flow_type == 'complaints':
+        output_path = script_dir / "complaints-output"
+    else:
+        output_path = script_dir / "inquiries-output"
+
+    if not output_path.exists():
+        return []
+
+    # Get all subdirectories except cache
+    folders = [
+        d.name for d in output_path.iterdir()
+        if d.is_dir() and d.name != 'cache'
+    ]
+    return sorted(folders)
+
+
+def get_report_files_in_period(flow_type: str, period: str, lang: str = 'ar'):
+    """Get the report and Excel files for a specific period.
+
+    Args:
+        flow_type: 'inquiries' or 'complaints'
+        period: The period folder name
+        lang: Language preference ('ar' or 'en'). For complaints flow in English, looks in english-output folder.
+
+    Returns:
+        Tuple of (docx_path, xlsx_path) or (None, None) if not found
+    """
+    script_dir = Path(__file__).parent
+    if flow_type == 'complaints':
+        # For English mode in complaints, look in english-output subfolder
+        if lang == 'en':
+            period_path = script_dir / "complaints-output" / period / "english-output"
+        else:
+            period_path = script_dir / "complaints-output" / period
+    else:
+        period_path = script_dir / "inquiries-output" / period
+
+    if not period_path.exists():
+        return None, None
+
+    # Find .docx and .xlsx files (excluding temp files starting with ~$)
+    docx_files = [f for f in period_path.glob("*.docx") if not f.name.startswith("~$")]
+    xlsx_files = [f for f in period_path.glob("*.xlsx")]
+
+    docx_path = docx_files[0] if docx_files else None
+    xlsx_path = xlsx_files[0] if xlsx_files else None
+
+    return docx_path, xlsx_path
 
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
 def get_analyzer():
-    """Get the real analyzer."""
+    """Get the demo analyzer."""
     return RealAnalyzer()
 
 ANALYZER = get_analyzer()
 
-# ── Custom Progress Bar for RTL/LTR Support ──────────────────────────────────
-def create_custom_progress_bar(current_pct=0, lang='ar'):
-    """Create a custom HTML progress bar that supports RTL/LTR."""
-    DIR = 'rtl' if lang == 'ar' else 'ltr'
-    percentage = current_pct * 100
-
-    progress_html = f"""
-    <div style="direction: {DIR}; width: 100%; margin: 0;">
-        <div style="
-            width: 100%;
-            height: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            overflow: hidden;
-        ">
-            <div style="
-                height: 100%;
-                background: linear-gradient(90deg, #B68A35, #E2B95A, #F0D080);
-                width: {percentage}%;
-                border-radius: 10px;
-                transition: width 0.4s ease;
-            "></div>
-        </div>
-    </div>
-    """
-    return progress_html
-
-
 # ── Validation ────────────────────────────────────────────────────────────────
 def validate_file(uploaded_file, lang='ar'):
     tx = T[lang]
-    print(f"[Validate] Checking file: {uploaded_file.name}")
     is_valid, error_msg = ANALYZER.validate_file(uploaded_file)
-    print(f"[Validate] Result: valid={is_valid}, error={error_msg}")
     if not is_valid:
         return False, error_msg or tx['err_bad_type']
     return True, ""
 
 
-# ── Display Report ─────────────────────────────────────────────────────────────
-def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries'):
-    """Display report from analyzer output with artifact generation status.
+# ── Process Files with Analyzer ───────────────────────────────────────────────
+def process_with_analyzer(uploaded_files, lang='ar'):
+    """
+    Process uploaded files through the real analyzer pipeline.
+    
+    Args:
+        uploaded_files: List of Streamlit UploadedFile objects
+        lang: Language preference ('ar' or 'en')
+    
+    Returns:
+        Dictionary containing report structure with sections and tables
+    """
+    import streamlit as st
+    
+    if not uploaded_files:
+        raise ValueError("No files provided for processing")
+    
+    # For now, process the first file (single file analysis)
+    # TODO: Support multiple file processing if needed
+    uploaded_file = uploaded_files[0] if isinstance(uploaded_files, list) else uploaded_files
+    
+    print(f"[process_with_analyzer] Starting analysis for: {uploaded_file.name}")
+    
+    # Progress callback for real-time UI updates
+    progress_placeholder = st.empty()
+    progress_bar = st.progress(0)
 
-    Displays the report generated by the RealAnalyzer in the real flow.
-    Shows artifact generation status (generating vs ready).
+    def update_progress(progress_pct, msg_ar, msg_en):
+        """Update UI with progress from pipeline stages."""
+        msg = msg_ar if lang == 'ar' else msg_en
+        pct_display = int(progress_pct * 100)
+
+        # Determine which stage based on progress percentage
+        stages = [
+            ('1', 'التحقق من صيغة الملف', 'File Validation', 0, 10),
+            ('2', 'تصنيف القواعد', 'Rule Classification', 10, 30),
+            ('3', 'معالجة الذكاء الاصطناعي', 'AI Classification', 30, 50),
+            ('4', 'تحليل الأنماط', 'Pattern Analysis', 50, 70),
+            ('5', 'تحليل الفجوات', 'Gap Analysis', 70, 85),
+            ('6', 'توليد التقرير', 'Report Generation', 85, 100),
+        ]
+
+        current_stage = '1'
+        for stage_num, stage_ar, stage_en, start, end in stages:
+            if start <= pct_display <= end:
+                current_stage = stage_num
+                break
+
+        # Build stage indicators
+        stage_html = '<div style="display:flex;gap:0.5rem;justify-content:center;margin-bottom:1rem;">'
+        for stage_num, stage_ar, stage_en, _, _ in stages:
+            is_current = stage_num == current_stage
+            is_complete = int(current_stage) > int(stage_num)
+
+            if is_complete:
+                badge_style = f"background-color:{GREEN_OK};color:#000;border:2px solid {GREEN_OK};"
+                badge_text = "✓"
+            elif is_current:
+                badge_style = f"background-color:{GOLD};color:#000;border:2px solid {GOLD};animation:pulse 1s infinite;"
+                badge_text = stage_num
+            else:
+                badge_style = f"background-color:{BG_CARD};color:{TEXT_MUTED};border:2px solid {BORDER_G};"
+                badge_text = stage_num
+
+            stage_html += f'<div style="width:2.5rem;height:2.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;{badge_style}">{badge_text}</div>'
+
+        stage_html += '</div>'
+
+        progress_placeholder.markdown(f"""
+        <style>
+            @keyframes pulse {{
+                0% {{ opacity: 1; }}
+                50% {{ opacity: 0.7; }}
+                100% {{ opacity: 1; }}
+            }}
+        </style>
+        {stage_html}
+        <div style="text-align:center;padding:0.5rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
+            {msg}
+        </div>
+        <div style="text-align:center;padding:0.5rem;color:{TEXT_MUTED};font-size:0.9rem;">
+            {pct_display}%
+        </div>
+        """, unsafe_allow_html=True)
+        progress_bar.progress(min(progress_pct, 1.0))
+    
+    try:
+        # Call the analyzer's analyze method with progress callback
+        report = ANALYZER.analyze(uploaded_file, progress_callback=update_progress)
+        
+        # Clear progress indicators
+        progress_placeholder.empty()
+        progress_bar.empty()
+        
+        print(f"[process_with_analyzer] Analysis complete! Report has {len(report.get('sections', {}))} sections")
+        return report
+        
+    except Exception as e:
+        # Clear progress indicators on error
+        progress_placeholder.empty()
+        progress_bar.empty()
+        
+        print(f"[process_with_analyzer] ERROR: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise
+
+
+# ── Display Report ─────────────────────────────────────────────────────────────
+def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: str = None):
+    """Display report tabs dynamically based on detected structure.
 
     Args:
         lang: Language preference ('ar' or 'en')
-        flow_type: 'inquiries' or 'complaints'
+        flow_type: 'inquiries' or 'complaints' - determines which output folder to use
+        period: The period folder name (e.g. '2025', 'Q1_2026'). If None, uses root folder.
     """
     try:
-        # Use report data from session state (generated by analyzer)
-        if 'report_data' in st.session_state and st.session_state.report_data:
-            report = st.session_state.report_data
+        # Get the script directory (where app.py is located)
+        script_dir = Path(__file__).parent
 
-            # Show artifact generation status
-            artifacts_status = report.get('artifacts_status', {})
-            if not (artifacts_status.get('excel_ready') and artifacts_status.get('word_ready')):
-                if artifacts_status.get('error'):
-                    st.error(f"⚠️ Artifact generation failed: {artifacts_status['error']}")
+        # Determine output folder and search keywords based on flow type and period
+        if flow_type == 'complaints':
+            # For English mode in complaints, look in english-output subfolder
+            if lang == 'en':
+                if period:
+                    outputs_path = script_dir / "complaints-output" / period / "english-output"
                 else:
-                    st.info("📄 Generating Excel and Word artifacts in background...")
+                    outputs_path = script_dir / "complaints-output"
+                cache_dir = str(script_dir / "complaints-output" / "cache" / "english-cache")
+                search_keywords = ['complaints']  # English keywords for complaints
+            else:
+                if period:
+                    outputs_path = script_dir / "complaints-output" / period
+                else:
+                    outputs_path = script_dir / "complaints-output"
+                cache_dir = str(script_dir / "complaints-output" / "cache")
+                search_keywords = ['تقرير', 'شكاوى']  # Report + Complaints (Arabic)
+        else:  # default to inquiries
+            if period:
+                outputs_path = script_dir / "inquiries-output" / period
+            else:
+                outputs_path = script_dir / "inquiries-output"
+            search_keywords = ['تقرير', 'استفسارات']  # Report + Inquiries (Arabic)
+            cache_dir = str(script_dir / "inquiries-output" / "cache")
 
-            display = DynamicReportDisplay(lang=lang)
-            display.display_report_from_dict(report)
-        else:
-            st.info("ℹ️ No report data available. Please process a file first.")
+        if not outputs_path.exists():
+            st.error(f"❌ {outputs_path.name} folder not found at {outputs_path}")
+            return
+
+        # Find all .docx files (excluding temp files starting with ~$)
+        docx_files = [f for f in outputs_path.glob("*.docx") if not f.name.startswith("~$")]
+
+        if not docx_files:
+            st.error(f"❌ No .docx files found in {outputs_path.name}/")
+            return
+
+        # Try to find the report file with the appropriate keywords
+        report_path = None
+        for docx_file in docx_files:
+            if all(keyword in docx_file.name for keyword in search_keywords):
+                report_path = docx_file
+                break
+
+        if report_path is None:
+            st.error(f"❌ Report file not found. Files: {', '.join([f.name for f in docx_files])}")
+            return
+
+        display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
+        display.display_report(str(report_path))
     except Exception as e:
-        st.error(f"❌ Error displaying report: {str(e)}")
-        import traceback
+        st.error(f"❌ Error: {str(e)}")
         st.code(traceback.format_exc())
 
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
-def create_download_zip(flow_type: str = 'inquiries'):
-    """Create a ZIP file containing analysis outputs.
-
-    For real flow: Uses dynamically generated files from analyzer.
-    Checks that artifacts are ready before including them.
-    For demo flow: Uses pre-existing report files as fallback.
+def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: str = 'ar'):
+    """Create a ZIP file containing the Word report and Excel file
 
     Args:
-        flow_type: 'inquiries' or 'complaints'
+        flow_type: 'inquiries' or 'complaints' - determines which output folder to use
+        period: The period folder name. If None, uses root folder (legacy behavior).
+        lang: Language preference ('ar' or 'en'). For complaints flow in English, uses english-output folder.
     """
+    script_dir = Path(__file__).parent
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Try to get output paths from session state (real flow)
-        output_files = st.session_state.get('output_files', {})
-
         if flow_type == 'complaints':
-            # Real flow: generated files from analyzer (check ready status)
-            if 'word_path' in output_files and output_files.get('word_ready', False):
-                word_path = Path(output_files['word_path'])
-                if word_path.exists():
-                    zip_file.write(str(word_path), "تقرير_تحليل_شكاوى_المتعاملين.docx")
+            if period:
+                report_path, excel_path = get_report_files_in_period('complaints', period, lang=lang)
+                if report_path:
+                    zip_file.write(report_path, report_path.name)
+                if excel_path:
+                    zip_file.write(excel_path, excel_path.name)
+            else:
+                # Legacy behavior - look in root
+                report_path = script_dir / "complaints-output" / "تقرير تحليل شكاوى المتعاملين.docx"
+                if report_path.exists():
+                    zip_file.write(report_path, "تقرير تحليل شكاوى المتعاملين.docx")
 
-            if 'excel_path' in output_files and output_files.get('excel_ready', False):
-                excel_path = Path(output_files['excel_path'])
+                excel_path = script_dir / "complaints-output" / "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx"
                 if excel_path.exists():
-                    zip_file.write(str(excel_path), "تصنيف_شكاوى_المتعاملين.xlsx")
-
-            # Fallback: Demo flow - look for static files if real artifacts not ready
-            demo_report = Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx")
-            if demo_report.exists() and not output_files.get('word_ready', False):
-                zip_file.write(str(demo_report), "تقرير تحليل شكاوى المتعاملين.docx")
-
-            demo_excel = Path("complaints-output/تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
-            if demo_excel.exists() and not output_files.get('excel_ready', False):
-                zip_file.write(str(demo_excel), "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
+                    zip_file.write(excel_path, "تصنيف شكاوى المتعاملين — حسب النوع 2025.xlsx")
         else:
-            # Real flow: generated files from analyzer (check ready status)
-            if 'word_path' in output_files and output_files.get('word_ready', False):
-                word_path = Path(output_files['word_path'])
-                if word_path.exists():
-                    zip_file.write(str(word_path), "تقرير_تحليل_استفسارات_المتعاملين.docx")
+            # Inquiries flow
+            if period:
+                report_path, excel_path = get_report_files_in_period('inquiries', period, lang=lang)
+                if report_path:
+                    zip_file.write(report_path, report_path.name)
+                if excel_path:
+                    zip_file.write(excel_path, excel_path.name)
+            else:
+                # Legacy behavior - look in root
+                report_path = script_dir / "inquiries-output" / "تقرير تحليل استفسارات المتعاملين .docx"
+                if report_path.exists():
+                    zip_file.write(report_path, "تقرير تحليل استفسارات المتعاملين .docx")
 
-            if 'excel_path' in output_files and output_files.get('excel_ready', False):
-                excel_path = Path(output_files['excel_path'])
+                excel_path = script_dir / "inquiries-output" / "Fujairah_Police_Inquiry_Triage_Detail.xlsx"
                 if excel_path.exists():
-                    zip_file.write(str(excel_path), "تحليل_استفسارات_المتعاملين.xlsx")
-
-            # Fallback: Demo flow - look for static files if real artifacts not ready
-            demo_report = Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx")
-            if demo_report.exists() and not output_files.get('word_ready', False):
-                zip_file.write(str(demo_report), "تقرير تحليل استفسارات المتعاملين .docx")
-
-            demo_excel = Path("inquiries-output/Fujairah_Police_Inquiry_Triage_Detail.xlsx")
-            if demo_excel.exists() and not output_files.get('excel_ready', False):
-                zip_file.write(str(demo_excel), "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
+                    zip_file.write(excel_path, "Fujairah_Police_Inquiry_Triage_Detail.xlsx")
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
@@ -1702,96 +2095,49 @@ def create_custom_progress_bar(current_pct=0, lang='ar'):
     return progress_html
 
 # ── Processing ───────────────────────────────────────────────────────────────
-def process_with_analyzer(uploaded_files, lang='ar'):
-    """
-    Process files using analyzer with parallel artifact generation.
+def simulate_period_processing(lang='ar'):
+    """Simulate processing for a selected period (no file upload)."""
+    progress_container = st.empty()
+    pct_container = st.empty()
 
-    Steps:
-    1. Run analyzer (stages 1-5) - blocks until complete
-    2. Return report immediately with analysis results
-    3. Artifact generation (Excel + Word) happens in background
-    """
-    print(f"[process_with_analyzer] Starting function")
-    tx = T[lang]
-    print(f"[process_with_analyzer] Got translations")
+    total_duration = random.randint(30, 60)  # Random 30-60 seconds
+    # total_duration = 1
+    update_interval = 0.5
+    total_steps = int(total_duration / update_interval)
 
-    try:
-        print(f"[process_with_analyzer] Processing {len(uploaded_files)} files")
-        # Process first file
-        uploaded_file = uploaded_files[0] if uploaded_files else None
-        print(f"[process_with_analyzer] Got file: {uploaded_file.name if uploaded_file else 'None'}")
-        if not uploaded_file:
-            st.error(tx['err_no_file'])
-            return None
+    analyzer_stages = ANALYZER.get_processing_stages()
 
-        print(f"[process_with_analyzer] Creating UI elements")
-        # Show persistent progress area during analysis
-        processing_title = tx['processing_title'] if lang == 'ar' else "Processing File Through Pipeline"
-        title_dir = "rtl" if lang == 'ar' else "ltr"
-        st.markdown(f"### <span style='color: #B68A35; direction: {title_dir};'>{processing_title}</span>", unsafe_allow_html=True)
+    for step in range(total_steps + 1):
+        elapsed = step * update_interval
+        current_pct = min(1.0, elapsed / total_duration)
 
-        print(f"[process_with_analyzer] Creating progress bar")
-        # Create custom progress bar placeholder for RTL/LTR support
-        progress_placeholder = st.empty()
-        status_area = st.empty()
-        print(f"[process_with_analyzer] Progress bar and status area created")
+        progress_container.markdown(
+            create_custom_progress_bar(current_pct, lang),
+            unsafe_allow_html=True,
+        )
 
-        # Show that processing has started
-        analyzing_text = tx.get('analyzing_file', 'Analyzing your file... This may take a minute.')
-        status_area.markdown(f"<span style='color: #B68A35;'>{analyzing_text}</span>", unsafe_allow_html=True)
-        progress_placeholder.markdown(create_custom_progress_bar(0.05, lang), unsafe_allow_html=True)
+        current_stage = next(
+            (s for s in analyzer_stages
+             if s.get('percent_start', 0) <= current_pct * 100 < s.get('percent_end', 100)),
+            analyzer_stages[0] if analyzer_stages else None
+        )
 
-        print(f"[process_with_analyzer] Creating progress callback")
-        # Create progress callback that updates the UI with language-aware messages
-        def progress_callback(progress_pct, message_ar, message_en):
-            """Update progress bar and status with language-aware messages."""
-            message = message_ar if lang == 'ar' else message_en
-            print(f"[UI Callback] Progress: {progress_pct:.0%} | {message_en}")
-            progress_placeholder.markdown(create_custom_progress_bar(progress_pct, lang), unsafe_allow_html=True)
-            status_area.markdown(f"<div style='margin-top: 1.5rem; color: #B68A35;'>{message}</div>", unsafe_allow_html=True)
+        if current_stage:
+            stage_label = current_stage.get('label_en', current_stage.get('label', 'Processing...')) if lang == 'en' else current_stage.get('label', 'Processing...')
+            pct_container.markdown(
+                f"<div class='pct-display'>"
+                f"{int(current_pct * 100)}% — {stage_label}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
-        print(f"[process_with_analyzer] Callback created, about to call analyzer")
-        # Run the analyzer - this executes stages 1-5 and queues stage 6 in background
-        print(f"[App] Starting analysis with file: {uploaded_file.name}")
-        report = ANALYZER.analyze(uploaded_file, progress_callback=progress_callback)
-        print(f"[process_with_analyzer] Analyzer returned, got report")
-        print(f"[App] Analysis complete, got report with {len(report.get('sections', {}))} sections")
+        time.sleep(update_interval)
 
-        # Store report and output files in session state
-        st.session_state.report_data = report
-
-        # Extract artifact paths and status (artifacts may still be generating)
-        if 'artifacts_status' in report:
-            artifacts_status = report['artifacts_status']
-            if 'output_files' not in st.session_state:
-                st.session_state.output_files = {}
-
-            # Store paths regardless of ready status - they'll be available when generation completes
-            if artifacts_status.get('excel_path'):
-                st.session_state.output_files['excel_path'] = artifacts_status['excel_path']
-            if artifacts_status.get('word_path'):
-                st.session_state.output_files['word_path'] = artifacts_status['word_path']
-
-            # Store ready flags so UI can show status
-            st.session_state.output_files['excel_ready'] = artifacts_status.get('excel_ready', False)
-            st.session_state.output_files['word_ready'] = artifacts_status.get('word_ready', False)
-
-        # Show completion status with artifact generation notice
-        artifacts_status = report.get('artifacts_status', {})
-        if artifacts_status.get('excel_ready') and artifacts_status.get('word_ready'):
-            completion_text = tx.get('complete_with_artifacts', 'Analysis complete with all artifacts ready.')
-            status_area.markdown(f"<span style='color: #B68A35;'>✅ {completion_text}</span>", unsafe_allow_html=True)
-        else:
-            completion_text = tx.get('complete_generating_artifacts', 'Analysis complete. Generating artifacts in background...')
-            status_area.markdown(f"<span style='color: #B68A35;'>✅ {completion_text}</span>", unsafe_allow_html=True)
-
-        return report
-
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        # Don't catch here - let the caller handle it so error persists in session state
-        raise RuntimeError(f"Processing failed: {str(e)}\n\n{error_details}")
+    progress_container.markdown(
+        create_custom_progress_bar(1.0, lang),
+        unsafe_allow_html=True,
+    )
+    pct_container.empty()
 
 
 def simulate_processing_legacy(stages, pct_class="pct-display"):
@@ -1969,9 +2315,9 @@ def landing_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Use-case selection ──
+    # ── Inquiries Showcase Section ──
     st.markdown(f"""
-    <div style="text-align:center;padding:2.5rem 0 1rem;direction:{DIR};">
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2.5rem 0 1rem;direction:{DIR};">
         <div class="section-label">{tx['section_label']}</div>
         <h2 class="section-title">{tx['section_title']}</h2>
         <div class="section-ornament">
@@ -1982,34 +2328,104 @@ def landing_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
+    # Main feature card
     st.markdown(f"""
-    <div class="use-case-grid">
-        <div class="use-case-card inquiries-card">
-            <div class="use-case-icon-wrap inquiries-icon-wrap">📋</div>
-            <div class="use-case-title">{tx['inq_card_title']}</div>
-            <p class="use-case-desc">{tx['inq_card_desc']}</p>
-            <div class="use-case-tags">
+    <div class="complaints-showcase">
+        <div class="complaints-feature-card">
+            <div class="title">📋 {tx['inq_card_title']}</div>
+            <div class="desc">{tx['inq_card_desc']}</div>
+            <div style="margin-top: 1.8rem; display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center;">
                 <span class="use-case-tag inquiries-tag">{tx['inq_tag1']}</span>
                 <span class="use-case-tag inquiries-tag">{tx['inq_tag2']}</span>
                 <span class="use-case-tag inquiries-tag">{tx['inq_tag3']}</span>
             </div>
         </div>
-        <div class="use-case-card complaints-card">
-            <div class="use-case-icon-wrap complaints-icon-wrap">📣</div>
-            <div class="use-case-title">{tx['cmp_card_title']}</div>
-            <p class="use-case-desc">{tx['cmp_card_desc']}</p>
-            <div class="use-case-tags">
-                <span class="use-case-tag complaints-tag">{tx['cmp_tag1']}</span>
-                <span class="use-case-tag complaints-tag">{tx['cmp_tag2']}</span>
-                <span class="use-case-tag complaints-tag">{tx['cmp_tag3']}</span>
-            </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Feature Highlights ──
+    st.markdown(f"""
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2rem 0 1rem;direction:{DIR};">
+        <div class="section-label">{tx['how_label']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Feature cards row
+    feat_col1, feat_col2, feat_col3 = st.columns([1, 1, 1], gap="medium")
+    with feat_col1:
+        st.markdown(f"""
+        <div class="feature-card">
+            <div class="feature-icon-wrap">🔍</div>
+            <div class="feature-title">{tx['feat1_title']}</div>
+            <div class="feature-desc">{tx['feat1_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with feat_col2:
+        st.markdown(f"""
+        <div class="feature-card">
+            <div class="feature-icon-wrap">📊</div>
+            <div class="feature-title">{tx['feat2_title']}</div>
+            <div class="feature-desc">{tx['feat2_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with feat_col3:
+        st.markdown(f"""
+        <div class="feature-card">
+            <div class="feature-icon-wrap">💡</div>
+            <div class="feature-title">{tx['feat3_title']}</div>
+            <div class="feature-desc">{tx['feat3_desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── How It Works ──
+    st.markdown(f"""
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:2rem 0 1rem;direction:{DIR};">
+        <h3 style="font-size: 2rem; font-weight: 700; color: {TEXT}; margin: 2rem 0 0.5rem;">{tx['how_title']}</h3>
+        <div class="section-ornament">
+            <span class="ornament-line"></span>
+            <span class="ornament-diamond">◆</span>
+            <span class="ornament-line right"></span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Buttons below the cards
-    col1, col2 = st.columns([1, 1], gap="medium")
-    with col1:
+    step_col1, step_col2, step_col3 = st.columns([1, 1, 1], gap="medium")
+    with step_col1:
+        st.markdown(f"""
+        <div class="step-card">
+            <div class="step-number">1</div>
+            <div class="step-icon">📤</div>
+            <div class="step-title">{tx['step1_title']}</div>
+            <div class="step-desc">{tx['step1_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with step_col2:
+        st.markdown(f"""
+        <div class="step-card">
+            <div class="step-number">2</div>
+            <div class="step-icon">⚙️</div>
+            <div class="step-title">{tx['step2_title']}</div>
+            <div class="step-desc">{tx['step2_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with step_col3:
+        st.markdown(f"""
+        <div class="step-card">
+            <div class="step-number">3</div>
+            <div class="step-icon">📥</div>
+            <div class="step-title">{tx['step3_title']}</div>
+            <div class="step-desc">{tx['step3_sub']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── CTA Button ──
+    st.markdown('<div class="cta-section">', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
         if st.button(tx['btn_inq'], key="cta_inquiries", use_container_width=True):
             if st.session_state.authenticated:
                 st.session_state.page = 'inquiries'
@@ -2018,15 +2434,7 @@ def landing_page(lang):
                 st.session_state.show_login = True
                 st.session_state.pending_page = 'inquiries'
                 st.rerun()
-    with col2:
-        if st.button(tx['btn_cmp'], key="cta_complaints", use_container_width=True):
-            if st.session_state.authenticated:
-                st.session_state.page = 'complaints'
-                st.rerun()
-            else:
-                st.session_state.show_login = True
-                st.session_state.pending_page = 'complaints'
-                st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Footer ──
     st.markdown(f"""
@@ -2041,8 +2449,10 @@ def landing_page(lang):
 
 
 # ── Inquiries Page ─────────────────────────────────────────────────────────────
+
 def inquiries_page(lang):
     tx = T[lang]
+    DIR = 'rtl' if lang == 'ar' else 'ltr'
 
     st.markdown(f"""
     <div class="page-header">
@@ -2078,11 +2488,9 @@ def inquiries_page(lang):
             st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
-            # Store files in session state (preserve across reruns)
             st.session_state.uploaded_file = uploaded_files
             print(f"[Upload-INQ] Stored {len(uploaded_files)} file(s) in session state")
 
-        # Use files from session state if available (handles post-rerun case)
         files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
 
         if files_to_display:
@@ -2113,7 +2521,6 @@ def inquiries_page(lang):
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button(tx['btn_start_inq'], use_container_width=True, type="primary", key="inq_start"):
-                        print(f"[Button] Inquiries button clicked, validating {len(files_to_display)} files")
                         all_valid = True
                         error_msg = ""
                         for uploaded_file in files_to_display:
@@ -2122,18 +2529,14 @@ def inquiries_page(lang):
                                 all_valid = False
                                 error_msg = msg
                                 break
-                        print(f"[Button] Validation complete: valid={all_valid}, error={error_msg}")
                         if all_valid:
-                            print(f"[Button] Setting processing=True and calling st.rerun()")
                             st.session_state.processing = True
                             st.rerun()
                         else:
-                            print(f"[Button] Validation failed: {error_msg}")
                             st.markdown(f'<div class="error-panel">❌ {error_msg}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.processing:
-            print(f"[Flow] Processing flag is True, starting analysis")
             st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
             st.markdown(f"""
             <div class="stage-panel">
@@ -2144,9 +2547,7 @@ def inquiries_page(lang):
             """, unsafe_allow_html=True)
 
             try:
-                # Use session state files (from previous upload)
                 files_to_process = st.session_state.get('uploaded_file', [])
-                print(f"[Flow] Got {len(files_to_process) if files_to_process else 0} files from session state")
                 if not files_to_process:
                     st.error("❌ No files to process. Please upload files first.")
                     st.session_state.processing = False
@@ -2171,7 +2572,6 @@ def inquiries_page(lang):
             st.rerun()
 
     else:
-        # Check if there was an error during analysis
         if st.session_state.get('analysis_error'):
             st.markdown(f"""
             <div class="error-panel">
@@ -2196,7 +2596,6 @@ def inquiries_page(lang):
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         else:
-            # Display success message and report
             st.markdown(f"""
             <div class="success-panel">
                 <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
@@ -2205,25 +2604,21 @@ def inquiries_page(lang):
             </div>
             """, unsafe_allow_html=True)
 
-            # Display report outputs in tabs
             st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
             display_report_tabs(lang, flow_type='inquiries')
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # For real flow, check if report was generated; for demo, check static files
         has_report = (
             'report_data' in st.session_state and st.session_state.report_data
         ) or Path("inquiries-output/تقرير تحليل استفسارات المتعاملين .docx").exists()
 
         if has_report:
-            # Check artifact generation status for real flow
             output_files = st.session_state.get('output_files', {})
             artifacts_complete = output_files.get('excel_ready', False) and output_files.get('word_ready', False)
 
             st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
 
             if not artifacts_complete and 'report_data' in st.session_state:
-                # Show status while artifacts are generating
                 st.info("📄 " + tx['artifacts_generating'])
 
             zip_data = create_download_zip(flow_type='inquiries')
@@ -2264,232 +2659,6 @@ def inquiries_page(lang):
     """, unsafe_allow_html=True)
 
 
-# ── Complaints Page ────────────────────────────────────────────────────────────
-def complaints_page(lang):
-    tx = T[lang]
-
-    st.markdown(f"""
-    <div class="page-header-complaints page-header">
-        <div class="page-header-tag">{tx['cmp_header_tag']}</div>
-        <h1 class="page-header-title">{tx['cmp_header_title']}</h1>
-        <p class="page-header-sub">{tx['cmp_header_sub']}</p>
-        <div class="page-header-bar"></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div style="padding: 2rem 2rem 0;">', unsafe_allow_html=True)
-
-    if not st.session_state.completed:
-
-        st.markdown(f"""
-        <div class="panel-blue panel">
-            <div class="panel-title">{tx['cmp_panel_title']}</div>
-            <div class="panel-subtitle">{tx['cmp_panel_sub']}</div>
-            <div class="panel-divider"></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        with st.container():
-            st.markdown('<div class="blue-uploader" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
-            uploaded_files = st.file_uploader(
-                tx['uploader_label'],
-                type=['xlsx', 'xls', 'pdf'],
-                help=tx['uploader_help'],
-                label_visibility="collapsed",
-                key="cmp_uploader",
-                accept_multiple_files=True,
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        if uploaded_files:
-            # Store files in session state (preserve across reruns)
-            st.session_state.uploaded_file = uploaded_files
-            print(f"[Upload-CMP] Stored {len(uploaded_files)} file(s) in session state")
-
-        # Use files from session state if available (handles post-rerun case)
-        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
-
-        if files_to_display:
-            for uploaded_file in files_to_display:
-                file_size = uploaded_file.size / 1024
-                size_str  = (f"{file_size:.1f} {tx['size_kb']}" if file_size < 1024
-                             else f"{file_size/1024:.2f} {tx['size_mb']}")
-
-                st.markdown(f"""
-                <div class="file-meta-blue" style="max-width:820px;margin:0.8rem auto;">
-                    <div class="file-meta-row">
-                        <span class="file-meta-key-blue">{tx['file_key']}</span>
-                        <span class="file-meta-val">{uploaded_file.name}</span>
-                    </div>
-                    <div class="file-meta-row">
-                        <span class="file-meta-key-blue">{tx['size_key']}</span>
-                        <span class="file-meta-val">{size_str}</span>
-                    </div>
-                    <div class="file-meta-row">
-                        <span class="file-meta-key-blue">{tx['type_key']}</span>
-                        <span class="file-meta-val">{uploaded_file.type}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            if not st.session_state.processing:
-                st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
-                    if st.button(tx['btn_start_cmp'], use_container_width=True, key="cmp_start"):
-                        print(f"[Button-CMP] Complaints button clicked, validating {len(files_to_display)} files")
-                        all_valid = True
-                        error_msg = ""
-                        for uploaded_file in files_to_display:
-                            ok, msg = validate_file(uploaded_file, lang)
-                            if not ok:
-                                all_valid = False
-                                error_msg = msg
-                                break
-                        print(f"[Button-CMP] Validation complete: valid={all_valid}, error={error_msg}")
-                        if all_valid:
-                            print(f"[Button-CMP] Setting processing=True and calling st.rerun()")
-                            st.session_state.processing = True
-                            st.rerun()
-                        else:
-                            print(f"[Button-CMP] Validation failed: {error_msg}")
-                            st.markdown(f'<div class="error-panel">❌ {error_msg}</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        if st.session_state.processing:
-            st.markdown('<div class="blue-progress" style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
-            st.markdown(f"""
-            <div class="stage-panel-blue">
-                <div class="stage-badge-blue">{tx['stage_badge_cmp']}</div>
-                <div class="stage-title">{tx['stage_title']}</div>
-                <div class="stage-desc">{tx['stage_desc_cmp']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            try:
-                # Use session state files (from previous upload)
-                files_to_process = st.session_state.get('uploaded_file', [])
-                if not files_to_process:
-                    st.error("❌ No files to process. Please upload files first.")
-                    st.session_state.processing = False
-                    st.rerun()
-
-                report = process_with_analyzer(files_to_process, lang)
-                st.session_state.processing = False
-                st.session_state.completed = True
-                if report:
-                    st.session_state.report_data = report
-                    st.session_state.analysis_error = None
-                else:
-                    st.session_state.analysis_error = "Analysis returned no data"
-            except Exception as e:
-                st.session_state.processing = False
-                st.session_state.completed = False
-                st.session_state.analysis_error = f"Analysis failed: {str(e)}"
-                import traceback
-                st.session_state.error_traceback = traceback.format_exc()
-
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.rerun()
-
-    else:
-        # Check if there was an error during analysis
-        if st.session_state.get('analysis_error'):
-            st.markdown(f"""
-            <div class="error-panel">
-                <div style="font-size:1.8rem;margin-bottom:0.4rem;">❌</div>
-                <div style="font-weight:bold;font-size:1.1rem;">Analysis Failed</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.error(f"**Error:** {st.session_state.analysis_error}")
-            if st.session_state.get('error_traceback'):
-                with st.expander("📋 Technical Details"):
-                    st.code(st.session_state.error_traceback, language='python')
-
-            st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset_error"):
-                    st.session_state.uploaded_file = None
-                    st.session_state.processing = False
-                    st.session_state.completed = False
-                    st.session_state.analysis_error = None
-                    st.session_state.error_traceback = None
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            # Display success message and report
-            st.markdown(f"""
-            <div class="success-panel">
-                <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
-                <div class="success-title">{tx['success_title_cmp']}</div>
-                <div class="success-sub">{tx['success_sub_cmp']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Display report outputs in tabs
-            st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
-            display_report_tabs(lang, flow_type='complaints')
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # For real flow, check if report was generated; for demo, check static files
-        has_report = (
-            'report_data' in st.session_state and st.session_state.report_data
-        ) or Path("complaints-output/تقرير تحليل شكاوى المتعاملين.docx").exists()
-
-        if has_report:
-            # Check artifact generation status for real flow
-            output_files = st.session_state.get('output_files', {})
-            artifacts_complete = output_files.get('excel_ready', False) and output_files.get('word_ready', False)
-
-            st.markdown('<div class="blue-download" style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
-
-            if not artifacts_complete and 'report_data' in st.session_state:
-                # Show status while artifacts are generating
-                st.info("📄 " + tx['artifacts_generating'])
-
-            zip_data = create_download_zip(flow_type='complaints')
-            if zip_data:
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    st.download_button(
-                        label=tx['btn_download_cmp'],
-                        data=zip_data,
-                        file_name="تقرير_تحليل_شكاوى_المتعاملين.zip",
-                        mime="application/zip",
-                        use_container_width=True,
-                        key="cmp_download",
-                    )
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
-            if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset"):
-                st.session_state.uploaded_file = None
-                st.session_state.processing    = False
-                st.session_state.completed     = False
-                st.session_state.progress      = 0
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="footer">
-        <p class="footer-text" style="font-weight:600;color:{TEXT_MUTED};">
-            {tx['footer_copy']}
-        </p>
-        <div class="footer-divider"></div>
-        <p class="footer-text">{tx['footer_sub']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     init_session_state()
@@ -2506,7 +2675,7 @@ def main():
             st.image(str(left_logo_path), width=160)
 
     with col_c:
-        if st.session_state.page in ('inquiries', 'complaints'):
+        if st.session_state.page in ('inquiries',):
             st.markdown('<div class="nav-back-wrap">', unsafe_allow_html=True)
             if st.button(T[lang]['nav_back'], key="nav_back"):
                 st.session_state.page          = 'landing'
@@ -2517,7 +2686,6 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
 
     with col_r:
-        # Language Toggle - wrapped in container to control direction
         st.markdown(
             """
             <div style='
@@ -2534,10 +2702,8 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Wrap toggle in a div to force LTR
         st.markdown('<div style="direction: ltr; display: flex; justify-content: center;">', unsafe_allow_html=True)
 
-        # Toggle switch for language
         is_arabic = st.toggle(
             "عربي" if lang == "ar" else "Arabic",
             value=st.session_state.get("language", "en") == "ar",
@@ -2547,7 +2713,6 @@ def main():
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Display user's center name if authenticated
         if st.session_state.authenticated and st.session_state.current_user_center:
             st.markdown(
                 f"""
@@ -2567,23 +2732,19 @@ def main():
             st.session_state.language = new_lang_code
             st.rerun()
 
-    # Gold separator line under nav
     st.markdown(f"""
     <div style="height:1px;background:linear-gradient(90deg,transparent,{BORDER_G2},transparent);
                 margin-bottom:0;"></div>
     """, unsafe_allow_html=True)
 
-    # Show login modal if needed (blocks other content)
     if st.session_state.show_login:
         show_login_modal(lang)
         st.stop()
-    
+
     if st.session_state.page == 'landing':
         landing_page(lang)
     elif st.session_state.page == 'inquiries':
         inquiries_page(lang)
-    else:
-        complaints_page(lang)
 
 
 if __name__ == "__main__":

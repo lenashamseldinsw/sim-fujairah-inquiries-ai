@@ -63,15 +63,35 @@ def _compute_sla_stats(state: PipelineState) -> tuple[int, float]:
     return sla_closed, round(sla_closed / total * 100, 1)
 
 
-def _compute_digital_channel_pct(state: PipelineState) -> tuple[float, str]:
+def _compute_submission_channel_pct(state: PipelineState) -> tuple[float, str]:
     """
-    Compute digital-channel percentage using journey_map inference.
+    Compute the submission channel percentage from case_channel data.
 
-    This matches the calculation in generate_digital_gaps_section._digital_channel_pct().
+    This is the real, always-available channel figure — how many cases came via
+    "تطبيق" (app) or "موقع" (website). This percentage is never zero for this dataset.
+
+    Returns (percentage, formatted string like "75.2%").
+    """
+    cases = state.all_classified or []
+    total = len(cases) or 1
+
+    digital_submissions = sum(
+        1 for c in cases
+        if c.case_channel and ("تطبيق" in str(c.case_channel) or "موقع" in str(c.case_channel))
+    )
+    pct = round(digital_submissions / total * 100, 1)
+    return pct, f"{pct}%"
+
+
+def _compute_friction_digital_context_pct(state: PipelineState) -> tuple[float, str]:
+    """
+    Compute digital-context percentage using journey_map inference.
+
+    This matches the calculation in generate_digital_gaps_section._friction_digital_context_pct().
     The metric is SERVICE CONTEXT (whether the problem occurred in a digital channel —
     app error, online renewal, digital payment) — NOT the CRM submission channel.
 
-    Returns empty string if journey_map is empty (LLM will not cite a percentage).
+    Returns empty string if the percentage is zero (LLM will not cite it).
     """
     if not state.journey_map:
         return 0.0, ""
@@ -301,7 +321,8 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     reclass_rate      = state.reclassification_rate
 
     sla_closed, sla_rate        = _compute_sla_stats(state)
-    digital_pct_val, digital_pct_str = _compute_digital_channel_pct(state)
+    submission_channel_pct_val, submission_channel_pct_str = _compute_submission_channel_pct(state)
+    friction_digital_context_pct_val, friction_digital_context_str = _compute_friction_digital_context_pct(state)
     proactive_cancellable       = _count_proactive_cancellable(state)
     critical_gap_count          = _count_critical_gaps(state)
     inquiry_count, inquiry_pct  = _inquiry_pct(state)
@@ -331,30 +352,33 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     pivot_json  = json.dumps(pivot_rows, ensure_ascii=False, indent=2)
     kpi_json    = json.dumps(kpi_impact, ensure_ascii=False, indent=2)
 
-    # ── Build Sentence 1 instruction conditionally based on digital_pct_str availability ────
-    # BUG 3 FIX: Don't mention digital infrastructure as a concept when channel data is absent.
-    # "Digital infrastructure" triggers the LLM to invent channel percentages even when prohibited.
-    # Remove the concept entirely from the prompt when data is missing — no hallucination trigger.
-    if digital_pct_str:
-        sentence1_instruction = (
-            '   Sentence 1 — "الرسالة النهائية:" prefix + digital performance:\n'
-            '     • MUST open with "الرسالة النهائية:"\n'
-            f'     • State that {digital_pct_str} of cases came through digital channels '
-            f'(تطبيق الهاتف / موقع إلكتروني), combined with SLA rate {sla_rate:.1f}%.\n'
-            '     • This proves the digital infrastructure is working — the gap is functional, not structural.\n'
-        )
-    else:
-        sentence1_instruction = (
-            '   Sentence 1 — "الرسالة النهائية:" prefix + operational performance only:\n'
-            '     • MUST open with "الرسالة النهائية:"\n'
-            f'     • Cite ONLY the SLA rate ({sla_rate:.1f}%) as the evidence of operational excellence.\n'
-            '     • Do NOT mention digital channels, app, website, or any channel percentage.\n'
-            '     • Channel data is not available for this period — omit entirely.\n'
+    # ── Build Sentence 1 instruction — always cite submission channel (never zero) ────
+    # Submission channel percentage is always available and non-zero.
+    # Friction-digital-context percentage is only cited if non-zero.
+    sentence1_instruction = (
+        '   Sentence 1 — "الرسالة النهائية:" prefix + submission channel performance:\n'
+        '     • MUST open with "الرسالة النهائية:"\n'
+        f'     • State that {submission_channel_pct_str} of cases came through digital submission channels '
+        f'(التطبيق / الموقع الإلكتروني) combined with SLA rate {sla_rate:.1f}%.\n'
+        '     • This proves operational excellence in the submission channel.\n'
+    )
+
+    # If friction-digital-context exists (problem occurred in digital channel), cite it separately
+    if friction_digital_context_str:
+        sentence1_instruction += (
+            f'     • SEPARATELY: Additionally, {friction_digital_context_str} of problem-related cases '
+            '(friction points) occurred in a digital service context (app error, online renewal, digital payment).\n'
+            '       This shows the gap is not in customer access but in service functionality.\n'
         )
 
     # ── Prompt ────────────────────────────────────────────────────────────────
-    # Build INPUTS section with conditional digital_channel_pct (only if data exists)
-    digital_input_line = f'digital_channel_pct:      "{digital_pct_str}"\n' if digital_pct_str else ""
+    # Build INPUTS section with both submission channel (always present) and
+    # friction-digital-context (only if non-zero)
+    friction_digital_context_input_line = (
+        f'friction_digital_context_pct: "{friction_digital_context_str}"  (% of friction cases rooted in digital service context)\n'
+        if friction_digital_context_str else
+        'friction_digital_context_pct:  [not available — only cite if non-zero]\n'
+    )
 
     prompt = (
         'You are writing Section 9 (the final section) of a formal Arabic government report\n'
@@ -370,6 +394,8 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         f'reclassification_rate:    "{reclass_rate:.1f}%"\n'
         f'sla_closed:               {sla_closed}\n'
         f'sla_rate:                 "{sla_rate:.1f}%"\n'
+        f'submission_channel_digital_pct: "{submission_channel_pct_str}"  (% of cases submitted via app/website)\n'
+        + friction_digital_context_input_line +
         f'inquiry_count:            {inquiry_count}   (استفسار cases after reclassification)\n'
         f'inquiry_pct:              "{inquiry_pct:.1f}%"\n'
         f'proactive_cancellable:    {proactive_cancellable}+  (cases eliminable by proactive notification)\n'
@@ -378,7 +404,6 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         f'top_friction_count:       {top_friction_count}\n'
         f'top_gap_label:            "{top_gap_label}"\n'
         f'immediate_count:          {immediate_count}  (immediate-horizon roadmap items)\n'
-        + digital_input_line +
         '\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         'LOCKED TABLES — copy these VERBATIM into pivot_table and kpi_impact.\n'
@@ -434,8 +459,9 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     print(
         f"[Conclusion] Calling API — total_cases={total_cases}, "
         f"reclass={reclass_count} ({reclass_rate:.1f}%), "
-        f"sla={sla_rate:.1f}%, proactive_cancellable={proactive_cancellable}, "
-        f"critical_gaps={critical_gap_count}"
+        f"sla={sla_rate:.1f}%, submission_channel={submission_channel_pct_str}, "
+        f"friction_digital_context={friction_digital_context_str}, "
+        f"proactive_cancellable={proactive_cancellable}, critical_gaps={critical_gap_count}"
     )
 
     message = client.messages.create(

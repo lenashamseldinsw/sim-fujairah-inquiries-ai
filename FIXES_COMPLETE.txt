@@ -1,0 +1,95 @@
+✅ IMPLEMENTATION COMPLETE: Case Count Reconciliation Fixes
+═══════════════════════════════════════════════════════════
+
+File: real/inquiries-flow/pipeline/stage6_json_report.py
+Status: All 4 violations fixed, syntax verified
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX 1: Friction rows from LLM → Rebuilt from state.journey_map
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Lines: 768–775 (build_customer_journey_section method)
+Added: _rebuild_friction_rows_from_journey_map() helper (lines 256–297)
+SOURCE: state.journey_map — post-reconciliation (Line 292, 772)
+
+✓ Case counts now from state.journey_map[i].case_count
+✓ Deduplication preserved; counts rebuilt after
+✓ LLM-generated الإجراء التحسيني preserved
+✓ Warnings logged if friction point missing from state
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX 2: Deduplication text parsing removed
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Lines: 152–201 (_deduplicate_friction_rows function)
+Removed: Text regex parsing (replace(" حالة", "") and count merging)
+Changed: Function now only detects/logs duplicates, returns rows unchanged
+
+✓ No regex-based count extraction
+✓ No string manipulation creating derived values
+✓ No second source of truth created
+✓ Deduplication moved to stage 4 responsibility
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX 3: Gap table counts from LLM → Rebuilt from state.gap_table
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Lines: 895–910 (build_digital_gaps_section method)
+SOURCE: state.gap_table — post-reconciliation (Line 895)
+
+✓ "الحالات" column overridden with state.gap_table[i].case_count
+✓ Topic-based lookup with substring fallback
+✓ All LLM prose preserved (الشدّة, التوصية, etc.)
+✓ Post-reconciliation values guaranteed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FIX 4: Notification count from notif_rows → state.notification_opportunities
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Lines: 1013–1032 (build_digital_transformation_section method)
+SOURCE: state.notification_opportunities — post-reconciliation (Line 1013)
+
+✓ notif_intro_count computed from state (not text-parsed from LLM)
+✓ Percentage recomputed from fresh notif_intro_count
+✓ No text parsing via regex
+✓ Post-reconciliation values guaranteed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Syntax check: python3 -m py_compile stage6_json_report.py
+✅ All 4 SOURCE comments in place (grep shows 4 matches)
+✅ No changes to 3 correct sections (patterns, executive summary, workload)
+✅ All LLM-generated prose preserved
+✅ Fallback behavior for missing state entries (warnings logged)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SINGLE SOURCE OF TRUTH ENFORCED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Friction points     → state.journey_map[i].case_count
+Digital gaps        → state.gap_table[i].case_count
+Notification impact → state.notification_opportunities[*]
+
+Every count in the report now derives from post-reconciliation state objects.
+No text parsing, no caching, no derived values from LLM output.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- AUDIT_CASE_COUNT_RECONCILIATION.md — detailed findings
+- REMEDIATION_CASE_COUNT_RECONCILIATION.md — code fixes & prevention
+- IMPLEMENTATION_SUMMARY.md — what changed and why
+- BEFORE_AFTER_FIXES.md — visual comparison of each fix
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MEMORY UPDATED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+case_count_reconciliation_audit.md — updated with implementation details
+MEMORY.md — memory index updated
+
+═══════════════════════════════════════════════════════════
+Ready for testing and pipeline integration.

@@ -1,0 +1,12 @@
+[theme]
+primaryColor = "#B68A35"
+backgroundColor = "#08080F"
+secondaryBackgroundColor = "#0D0D1A"
+textColor = "#E4E4F0"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+
+[logger]
+level = "info"

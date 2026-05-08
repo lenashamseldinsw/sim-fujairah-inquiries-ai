@@ -13,7 +13,7 @@ from typing import Optional, Tuple, Dict, Any
 import pandas as pd
 import anthropic
 
-from .state import PipelineState, save_state_to_json, load_state_from_json, extract_month_year_range
+from .state import PipelineState, CaseRow, save_state_to_json, load_state_from_json, extract_month_year_range
 from .stage1_validator import run_stage1
 from .stage2_rules import run_stage2
 from .stage3_llm import run_stage3
@@ -140,6 +140,7 @@ class PipelineOrchestrator:
             # No low-confidence cases
             self.state.all_classified = self.state.rule_classified
             self.state.human_review_count = 0  # Preserve count: no cases sent to human review
+            self.state.human_review_queue = []  # No human review cases
             self.state.month_year = extract_month_year_range(
                 [c.model_dump() for c in self.state.all_classified]
             )
@@ -149,10 +150,11 @@ class PipelineOrchestrator:
         try:
             self.state = run_stage3(self.state, self.api_key, progress_callback=progress_callback)
 
-            # Merge classifications
-            self.state.all_classified = self.state.rule_classified + self.state.llm_classified
+            # Merge classifications (include human_review_queue so all input cases appear in Excel output)
+            human_review_cases = [CaseRow(**item) for item in self.state.human_review_queue]
+            self.state.all_classified = self.state.rule_classified + self.state.llm_classified + human_review_cases
 
-            # Preserve human review count before queue is cleared
+            # Preserve human review count
             self.state.human_review_count = len(self.state.human_review_queue)
 
             # Extract month_year range from date_opened fields

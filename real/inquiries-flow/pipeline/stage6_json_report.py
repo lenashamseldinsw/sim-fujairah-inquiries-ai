@@ -32,6 +32,7 @@ from .generate_digital_transformation_section import (
 from .generate_ai_use_cases_section import _build_ai_tool_rows
 from .generate_improvement_roadmap_section import _build_display_roadmap_rows
 from .generate_conclusion_section import build_conclusion_section_for_json
+from .utils import calculate_similarity
 
 
 # ==============================================================================
@@ -151,22 +152,28 @@ def _build_rich_distribution_rows(
 
 def _deduplicate_friction_rows(friction_rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """
-    ISSUE 3 FIX: Merge near-duplicate friction points.
+    Detect and flag near-duplicate friction points.
 
-    Detects rows with similar friction point descriptions (e.g., weapon licence
-    notifications appearing twice) and merges them by:
-    - Combining case counts
-    - Keeping the more descriptive friction point
-    - Merging root causes and corrective actions
+    CRITICAL: This function no longer modifies case counts.
+    Case counts must ALWAYS come from state.journey_map (post-reconciliation),
+    never from text parsing or deduplication logic.
+
+    This function now:
+    - Identifies similar friction points (for logging/debugging)
+    - Preserves the LLM row structure unchanged
+    - Caller (build_customer_journey_section) must rebuild all case counts from state.journey_map
+
+    Rationale:
+    - Text parsing of "الحالات" creates a second source of truth
+    - Merging counts without state validation diverges from authoritative data
+    - Deduplication should happen in stage 4 when journey_map is built, not stage 6
     """
     if not friction_rows or len(friction_rows) < 2:
         return friction_rows
 
     def extract_key_terms(text: str) -> set:
         """Extract significant Arabic words for similarity comparison."""
-        # Simple tokenization of Arabic text
         words = text.split()
-        # Filter out short words and articles
         return {w for w in words if len(w) > 2 and w not in ['من', 'في', 'على', 'عن']}
 
     def is_similar(point1: str, point2: str, threshold: float = 0.5) -> bool:
@@ -179,57 +186,21 @@ def _deduplicate_friction_rows(friction_rows: List[Dict[str, str]]) -> List[Dict
         similarity = overlap / max(len(terms1), len(terms2))
         return similarity >= threshold
 
-    deduped = []
-    used_indices = set()
-
+    # Log potential duplicates for awareness, but do NOT merge case counts
     for i, row in enumerate(friction_rows):
-        if i in used_indices:
-            continue
-
-        current = dict(row)
-        current_point = current.get("نقطة الاحتكاك", "")
-
-        # Find similar rows to merge
-        to_merge = []
+        current_point = row.get("نقطة الاحتكاك", "")
         for j in range(i + 1, len(friction_rows)):
-            if j in used_indices:
-                continue
             other_row = friction_rows[j]
             other_point = other_row.get("نقطة الاحتكاك", "")
-
             if is_similar(current_point, other_point):
-                to_merge.append((j, other_row))
+                print(
+                    f"[Friction Dedup] INFO: Similar friction points detected "
+                    f"(rows {i} & {j}): '{current_point[:50]}...' vs '{other_point[:50]}...'. "
+                    f"Real deduplication happens in stage4_analysis, not stage 6."
+                )
 
-        # Merge if found duplicates
-        if to_merge:
-            try:
-                # Combine case counts
-                current_cases = int(current.get("الحالات", "0").replace(" cases", "").replace(" حالة", "").split()[0])
-                for _, other_row in to_merge:
-                    other_cases = int(other_row.get("الحالات", "0").replace(" cases", "").replace(" حالة", "").split()[0])
-                    current_cases += other_cases
-                current["الحالات"] = str(current_cases)
-
-                # Merge causes (concatenate unique items)
-                current_cause = current.get("السبب الجذري", "")
-                merged_causes = {current_cause}
-                for _, other_row in to_merge:
-                    other_cause = other_row.get("السبب الجذري", "")
-                    if other_cause and other_cause != current_cause:
-                        merged_causes.add(other_cause)
-                if len(merged_causes) > 1:
-                    current["السبب الجذري"] = " + ".join(filter(None, merged_causes))
-
-                # Mark merged indices as used
-                for idx, _ in to_merge:
-                    used_indices.add(idx)
-            except (ValueError, AttributeError):
-                # If merging fails, keep original
-                pass
-
-        deduped.append(current)
-
-    return deduped
+    # Return rows unchanged — case counts will be rebuilt from state.journey_map by caller
+    return friction_rows
 
 
 def _build_reclassification_samples(state: PipelineState, max_samples: int = 5) -> List[Dict[str, str]]:
@@ -277,6 +248,84 @@ class JSONReportBuilder:
         idx = self.table_counter
         self.table_counter += 1
         return idx
+
+    def _rebuild_friction_rows_from_journey_map(self, friction_rows_with_actions: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Rebuild friction rows from state.journey_map to enforce single source of truth.
+
+        Takes rows with الإجراء التحسيني (from LLM) and rebuilds case counts from state.journey_map.
+        This ensures all "الحالات" values are post-reconciliation, not from text parsing.
+
+        Uses similarity-based matching to handle LLM-generated friction point names that may
+        differ from state.journey_map names.
+
+        Args:
+            friction_rows_with_actions: Rows from LLM with الإجراء التحسيني column
+
+        Returns:
+            Rows with case counts sourced from state.journey_map[i].case_count
+        """
+        if not self.state.journey_map:
+            return friction_rows_with_actions
+
+        # Create lookup: friction point name → LLM row with action
+        lookup = {}
+        for llm_row in friction_rows_with_actions:
+            point_ar = llm_row.get("نقطة الاحتكاك", "").strip()
+            if point_ar:
+                lookup[point_ar] = llm_row
+
+        # Rebuild from state.journey_map to enforce single source of truth
+        rebuilt = []
+        for friction in sorted(self.state.journey_map, key=lambda f: f.case_count, reverse=True):
+            point = friction.friction_point_ar or friction.friction_point or friction.cluster_ar or friction.cluster
+
+            # Get LLM-supplied action and text from the matching row
+            action = ""
+            root_cause = ""
+
+            if point in lookup:
+                # Exact match found
+                action = lookup[point].get("الإجراء التحسيني", "")
+                root_cause = lookup[point].get("السبب الجذري", "")
+            else:
+                # Fallback: use similarity-based matching
+                best_match = None
+                best_score = 0.0
+
+                for llm_point, llm_row in lookup.items():
+                    if llm_point:  # Skip empty keys
+                        score = calculate_similarity(point, llm_point)
+                        if score > best_score:
+                            best_score = score
+                            best_match = llm_row
+
+                # Apply similarity match only if score exceeds threshold
+                if best_score >= 0.5 and best_match:
+                    action = best_match.get("الإجراء التحسيني", "")
+                    root_cause = best_match.get("السبب الجذري", "")
+                    print(
+                        f"[JSONReportBuilder] INFO: Friction point '{point[:50]}...' "
+                        f"matched via similarity ({best_score:.2f}) to LLM output. "
+                        f"الإجراء التحسيني and السبب الجذري updated."
+                    )
+                else:
+                    # No match above threshold; use empty text and warn
+                    print(
+                        f"[JSONReportBuilder] WARNING: Friction point '{point}' "
+                        f"not found in LLM output (best similarity={best_score:.2f}, threshold=0.5). "
+                        f"Using state.journey_map values directly without LLM text. "
+                        f"This may indicate a mismatch between LLM and state friction definitions."
+                    )
+
+            rebuilt.append({
+                "نقطة الاحتكاك": point,
+                "الحالات": str(friction.case_count),  # SOURCE: state.journey_map — post-reconciliation
+                "السبب الجذري": root_cause,
+                "الإجراء التحسيني": action,
+            })
+
+        return rebuilt
 
     def build_metadata(self) -> Dict[str, Any]:
         """Build document metadata."""
@@ -748,9 +797,30 @@ class JSONReportBuilder:
 
         # ── Build table dict ──────────────────────────────────────────────────────
         friction_rows  = cj_raw["friction_table"]
-        # ISSUE 3 FIX: Deduplicate near-duplicate friction points
+        # Deduplicate near-duplicate friction points (detection only, no count changes)
         friction_rows  = _deduplicate_friction_rows(friction_rows)
+
+        # SOURCE: state.journey_map — post-reconciliation
+        # Rebuild all case counts from state.journey_map to enforce single source of truth.
+        # The LLM output may have pre-reconciliation counts; we replace them here.
+        friction_rows = self._rebuild_friction_rows_from_journey_map(friction_rows)
         section_body   = cj_raw["section_body"]
+
+        # Guard assertion: verify reconciled counts don't exceed actual sub_classification counts
+        from collections import defaultdict
+        actual_sub_counts = defaultdict(int)
+        for case in (self.state.all_classified or []):
+            actual_sub_counts[case.sub_classification] += 1
+
+        for friction in self.state.journey_map or []:
+            actual_count = actual_sub_counts.get(friction.sub_classification, 0)
+            if friction.case_count > actual_count:
+                print(
+                    f"[JSONReportBuilder] WARNING: friction '{friction.friction_point_ar}' "
+                    f"case_count={friction.case_count} exceeds actual count={actual_count} "
+                    f"for sub_classification='{friction.sub_classification}'. "
+                    f"Reconciliation may not have completed successfully."
+                )
 
         friction_table_dict = {
             "columns": ["نقطة الاحتكاك", "الحالات", "السبب الجذري", "الإجراء التحسيني"],
@@ -852,6 +922,48 @@ class JSONReportBuilder:
 
         # ── Build table dicts ────────────────────────────────────────────────────
         gap_table_rows = dg_raw["gap_table"]
+
+        # SOURCE: state.gap_table — post-reconciliation
+        # Override case counts from LLM with authoritative values from state.gap_table.
+        # The LLM was called with pre-reconciliation counts; we sync them here.
+        if self.state.gap_table:
+            gap_lookup = {(g.topic_ar or g.topic or "").strip(): g for g in self.state.gap_table}
+            for row in gap_table_rows:
+                topic = (row.get("الموضوع", "") or "").strip()
+                if topic in gap_lookup:
+                    # Exact match found
+                    gap = gap_lookup[topic]
+                    row["الحالات"] = str(gap.case_count)
+                else:
+                    # Fallback: use similarity-based matching
+                    # Find the gap_lookup entry with highest similarity score
+                    best_match = None
+                    best_score = 0.0
+
+                    for gap_key, gap in gap_lookup.items():
+                        if gap_key:  # Skip empty keys
+                            score = calculate_similarity(topic, gap_key)
+                            if score > best_score:
+                                best_score = score
+                                best_match = gap
+
+                    # Apply similarity match only if score exceeds threshold
+                    if best_score >= 0.5 and best_match:
+                        row["الحالات"] = str(best_match.case_count)
+                        print(
+                            f"[JSONReportBuilder] INFO: Gap topic '{topic[:50]}...' "
+                            f"matched via similarity ({best_score:.2f}) to state.gap_table. "
+                            f"Case count updated."
+                        )
+                    else:
+                        # No match above threshold; keep LLM-supplied count and warn
+                        print(
+                            f"[JSONReportBuilder] WARNING: Gap topic '{topic}' "
+                            f"not found in state.gap_table (best similarity={best_score:.2f}, threshold=0.5). "
+                            f"Using LLM-supplied case count. "
+                            f"This may indicate a mismatch between LLM and state gap definitions."
+                        )
+
         root_cause_table_rows = dg_raw["root_cause_table"]
         section_body = dg_raw["section_body"]
 
@@ -952,14 +1064,22 @@ class JSONReportBuilder:
             )
         else:
             faq_intro = faq_table_intro
+
+        # SOURCE: state.notification_opportunities — post-reconciliation
+        # Compute notification impact count directly from state, not from LLM rows.
+        # The LLM rows may have pre-reconciliation data; we replace with authoritative values.
         notif_intro_count = sum(
-            int("".join(filter(str.isdigit, r.get("الحالات المُلغاة", "0"))) or "0")
-            for r in notif_rows
-            if r.get("الحالات المُلغاة", "متعدد") != "متعدد"
+            n.get('cases_eliminated', n.get('case_count', 0))
+            for n in (self.state.notification_opportunities or [])
         )
+
+        # Recompute percentage from reconciled total_cases
+        total_for_notif_pct = len(self.state.all_classified) or self.state.total_cases or 1
+        notif_pct = round(notif_intro_count / total_for_notif_pct * 100, 0) if notif_intro_count > 0 else 0
+
         notif_intro = (
             f"تحليل البيانات يكشف أن {notif_intro_count}+ حالة تواصل "
-            f"({round(notif_intro_count / (len(self.state.all_classified) or self.state.total_cases or 1) * 100, 0):.0f}% "
+            f"({notif_pct:.0f}% "
             "من الإجمالي) كان يمكن إلغاؤها كلياً بمنظومة إشعارات بسيطة — "
             "دون أي تغيير هيكلي في الأنظمة أو الإجراءات:"
             if notif_intro_count > 0

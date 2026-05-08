@@ -122,6 +122,7 @@ class PipelineState(BaseModel):
     faq_candidates: List[FAQCandidate] = Field(default_factory=list)
     self_service_tags: List[Dict] = Field(default_factory=list)
     notification_opportunities: List[Dict] = Field(default_factory=list)
+    proactive_notification_case_count: int = 0  # Authoritative count from LLM analysis
 
     # --- STAGE 4 (validated FAQs from Stage 5) ---
     validated_faqs: List[FAQCandidate] = Field(default_factory=list)

@@ -101,9 +101,19 @@ ANALYSIS_TOOL = {
                         "content_summary": {"type": "string"}
                     }
                 }
+            },
+            "proactive_notification_case_count": {
+                "type": "integer",
+                "description": (
+                    "Count of cases across ALL sub-classifications where a proactive "
+                    "SMS or email notification sent at the time of service (e.g., fine image, "
+                    "delivery tracking link, or status update) would have prevented the customer "
+                    "from contacting support at all. Count each case exactly once. "
+                    "This is the authoritative upper bound for notification_opportunities."
+                )
             }
         },
-        "required": ["patterns", "journey_map", "faq_candidates", "notification_opportunities", "self_service_tags"]
+        "required": ["patterns", "journey_map", "faq_candidates", "notification_opportunities", "self_service_tags", "proactive_notification_case_count"]
     }
 }
 
@@ -146,6 +156,14 @@ ANALYSIS INSTRUCTIONS:
    - Information gaps: send helpful tips before customer asks
    - Annual processes: send calendar reminders
 
+   For proactive_notification_case_count: go through each case individually and count
+   those where the customer's contact could have been fully prevented by a single
+   proactive notification at the moment of service action (e.g., attaching the fine
+   vehicle photo to the fine notification, sending a delivery tracking link when a
+   document is dispatched, sending a status update when a case is processed). Do NOT
+   count cases that require a human decision, system correction, policy review, or
+   any back-and-forth interaction — those cannot be eliminated by notification alone.
+
 CRITICAL: All output must be in Arabic only. This includes:
   - Table cell content (topics, descriptions, recommendations)
   - FAQ questions and answers
@@ -154,6 +172,100 @@ CRITICAL: All output must be in Arabic only. This includes:
 Only exceptions: Proper nouns such as 'MOI', 'SMS', 'OTP', 'UAE PASS' which remain in Latin script as universal brand names.
 Be specific with example case IDs and counts.
 """
+
+
+def _reconcile_counts(
+    journey_map: list,
+    patterns: list,
+    all_classified: list,
+    notification_opportunities: list,
+    proactive_case_count: int,
+) -> tuple[list, list, list]:
+    """
+    Reconcile LLM-supplied case_counts with authoritative counts from all_classified.
+
+    For patterns: replace each case_count with the actual count of cases with that sub_classification.
+
+    For journey_map: Cap LLM-supplied case_count at the remaining sub_classification budget
+    to prevent double-counting across multiple friction points in the same group.
+    Reconciled count never exceeds the actual sub_classification count.
+
+    For notification_opportunities: cap cases_eliminated against the authoritative count
+    from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
+
+    Args:
+        journey_map: List of JourneyFriction objects from LLM
+        patterns: List of PatternCluster objects from LLM
+        all_classified: List of CaseRow objects (ground truth)
+        notification_opportunities: List of notification opportunity dicts from LLM
+        proactive_case_count: Authoritative count of cases that can be eliminated by proactive notification
+
+    Returns:
+        Tuple of (reconciled_journey_map, reconciled_patterns, reconciled_notification_opportunities)
+    """
+    # Build lookup: sub_classification → count (ground truth)
+    actual_counts = defaultdict(int)
+    for case in all_classified:
+        actual_counts[case.sub_classification] += 1
+
+    # Reconcile patterns: rebuild with updated case_count
+    reconciled_patterns = []
+    for pattern in patterns:
+        actual_count = actual_counts.get(pattern.sub_classification, pattern.case_count)
+        # Use model_copy to create a new instance with reconciled count (Pydantic immutability)
+        reconciled_pattern = pattern.model_copy(update={"case_count": actual_count})
+        reconciled_patterns.append(reconciled_pattern)
+
+    # Reconcile journey_map: track how much of each sub_classification's budget has been allocated
+    sub_classification_budget = dict(actual_counts)  # mutable copy
+
+    reconciled_journey_map = []
+    for friction in journey_map:
+        remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
+
+        # Use the LLM's supplied count, capped at remaining budget
+        # This prevents two friction points from each claiming the full group total
+        reconciled_count = min(friction.case_count, remaining_budget)
+
+        # Deduct from the budget so the next friction point in this sub_classification
+        # cannot double-count the same cases
+        sub_classification_budget[friction.sub_classification] = max(
+            0, remaining_budget - reconciled_count
+        )
+
+        reconciled_friction = friction.model_copy(update={"case_count": reconciled_count})
+        reconciled_journey_map.append(reconciled_friction)
+
+    # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
+    # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
+    # Distribute the capped budget proportionally across all notification opportunities.
+    max_proactive_cases = proactive_case_count
+
+    # Sum what the LLM claimed across all notification opportunities
+    llm_total = sum(
+        n.get("cases_eliminated", 0) for n in notification_opportunities
+        if isinstance(n.get("cases_eliminated"), int)
+    )
+
+    reconciled_notifications = []
+    for n in notification_opportunities:
+        llm_count = n.get("cases_eliminated", 0)
+        if not isinstance(llm_count, int) or llm_total == 0:
+            reconciled_notifications.append(n)
+            continue
+
+        # Scale proportionally, then round to int, minimum 1 if original > 0
+        scaled = round(llm_count / llm_total * max_proactive_cases)
+        scaled = max(1, scaled) if llm_count > 0 else 0
+        reconciled_notifications.append({**n, "cases_eliminated": scaled})
+
+    print(
+        f"[Stage4] Reconciled notification_opportunities: "
+        f"LLM total={llm_total} → capped to {max_proactive_cases} "
+        f"(authoritative per-case count from LLM)"
+    )
+
+    return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
 
 
 def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
@@ -257,6 +369,21 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             # Parse notification opportunities
             if 'notification_opportunities' in analysis:
                 state.notification_opportunities = analysis.get('notification_opportunities', [])
+
+            # Parse authoritative proactive notification case count
+            if 'proactive_notification_case_count' in analysis:
+                state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
+
+            # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
+            print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
+            state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
+                state.journey_map,
+                state.patterns,
+                state.all_classified,
+                state.notification_opportunities,
+                state.proactive_notification_case_count,
+            )
+            print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
 
             break
     else:

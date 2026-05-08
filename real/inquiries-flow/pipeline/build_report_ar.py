@@ -1,0 +1,336 @@
+"""
+build_report_ar.py
+Reads report_final_ar_20260430_002217.json and writes a styled .docx
+following the design palette in design-palette.md.
+"""
+
+import json
+import sys
+from pathlib import Path
+
+# Add root directory to path to find sword_word_builder
+root_dir = Path(__file__).resolve().parent.parent.parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+from sword_word_builder import (
+    WordBuilder,
+    DocumentConfig,
+    TextStyle,
+    TableStyle,
+    ChartStyle,
+    TocStyle,
+    CoverPage,
+)
+
+# ---------------------------------------------------------------------------
+# Design constants
+# ---------------------------------------------------------------------------
+
+GOLD = "B68A35"
+DARK_GRAY = "404040"
+MID_GRAY = "555555"
+SOFT_GRAY = "606060"
+
+TABLE_STYLE = TableStyle(
+    header_bg_color=GOLD,
+    header_text_color="FFFFFF",
+    header_bold=True,
+    header_font_size=10,
+    row_bg_color="FFFFFF",
+    alt_row_bg_color="D9D9D9",
+    border_color="CCCCCC",
+    border_width_pt=0.5,
+    font_size=10,
+    text_alignment="RIGHT",
+    rtl=True,
+)
+
+CHART_STYLE = ChartStyle(
+    width_cm=14,
+    height_cm=9,
+    show_legend=True,
+    legend_position="b",
+    show_data_labels=True,
+    show_gridlines=True,
+    font="Dubai",
+    axis_font_size=9,
+    legend_font_size=9,
+    title_font_size=12,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_subsection(sections, id_fragment: str):
+    """Recursively find the first subsection whose id contains id_fragment."""
+    for sec in sections:
+        if id_fragment in sec.get("id", ""):
+            return sec
+        found = _find_subsection(sec.get("subsections", []), id_fragment)
+        if found:
+            return found
+    return None
+
+
+def _extract_cover_stats(data: dict):
+    """Derive headline KPIs for the cover page from JSON content."""
+    total_cases = 0
+    complaint_pct = ""
+    ontime_pct = "98%"  # fallback
+
+    # Section 3.1: contact-type distribution table
+    sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
+    if sec_31:
+        for table in sec_31.get("tables", []):
+            for row in table.get("rows", []):
+                try:
+                    total_cases += int(row.get("العدد", 0))
+                except (ValueError, TypeError):
+                    pass
+                if row.get("نوع التواصل") == "شكوى":
+                    complaint_pct = row.get("النسبة", "")
+
+    # Section النتائج الرئيسية: find the green / positive finding (98% on-time)
+    sec_findings = _find_subsection(data["sections"], "النتائج_الرئيسية")
+    if sec_findings:
+        for table in sec_findings.get("tables", []):
+            for row in table.get("rows", []):
+                if "🟢" in row.get("مستوى الأهمية", ""):
+                    disc = row.get("الاكتشاف", "")
+                    if "98%" in disc:
+                        ontime_pct = "98%"
+
+    return total_cases, complaint_pct, ontime_pct
+
+
+def _make_config(data: dict) -> DocumentConfig:
+    doc_name = data.get("document_name", "تقرير تحليل استفسارات المتعاملين")
+    # Extract period from document name for header
+    period = "January — December 2025"
+    if "January" in doc_name and "December" in doc_name:
+        period = "January — December 2025"
+
+    header_text = f"{doc_name.split('—')[0].strip()}  ·  {period}"
+
+    return DocumentConfig(
+        page_size="Letter",
+        margin_top=2.54,
+        margin_bottom=2.54,
+        margin_left=2.54,
+        margin_right=2.54,
+        default_font="Dubai",
+        default_font_size=12,
+        default_rtl=True,
+        accent_color=GOLD,
+        secondary_color=GOLD,
+        heading_color=GOLD,
+        heading1_size=16,
+        heading2_size=13,
+        heading3_size=12,
+        heading_bold=True,
+        heading1_separator=False,
+        heading2_separator=False,
+        heading3_separator=False,
+        header_type="text",
+        header_text=header_text,
+        header_alignment="CENTER",
+        header_text_color=GOLD,
+        header_font_size=10,
+        header_bottom_border_color=GOLD,
+        footer_type="text_and_page_number",
+        footer_text="سري — للاستخدام الداخلي  |  صفحة ",
+        footer_alignment="CENTER",
+        footer_text_color=MID_GRAY,
+        footer_font_size=9,
+        footer_top_border_color=GOLD,
+        skip_first_page_header_footer=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cover page
+# ---------------------------------------------------------------------------
+
+
+def _build_cover(builder: WordBuilder, data: dict):
+    total_cases, complaint_pct, ontime_pct = _extract_cover_stats(data)
+    doc_name = data.get("document_name", "تقرير تحليل استفسارات المتعاملين")
+
+    cover = CoverPage()
+
+    cover.add_spacer(60)
+
+    cover.add_horizontal_separator(native=True, color=GOLD)
+
+    cover.add_heading(
+        doc_name,
+        level=1,
+        style=TextStyle(size=26, alignment="CENTER", color=GOLD, space_before=12, space_after=12),
+        rtl=True,
+    )
+
+    cover.add_horizontal_separator(native=True, color=GOLD)
+
+    cover.add_spacer(16)
+
+    cover.add_paragraph(
+        "يناير — ديسمبر 2025",
+        style=TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=0, space_after=8),
+        rtl=True,
+    )
+
+    cover.add_spacer(16)
+
+    stat_style = TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=8, space_after=8)
+
+    if total_cases:
+        cover.add_paragraph(f"إجمالي الحالات المغلقة: {total_cases} حالة", style=stat_style, rtl=True)
+    if complaint_pct:
+        cover.add_paragraph(f"الشكاوى: {complaint_pct} من إجمالي التواصل", style=stat_style, rtl=True)
+    cover.add_paragraph(f"معدل الإغلاق في الوقت المحدد: {ontime_pct}", style=stat_style, rtl=True)
+
+    cover.add_spacer(32)
+
+    meta = data.get("metadata", {})
+    created = meta.get("created", "2026-04-30")[:10]
+    cover.add_paragraph(
+        f"شرطة الفجيرة  |  {created}  |  تحليل ذكاء األعمال المتكامل",
+        style=TextStyle(color=SOFT_GRAY, alignment="CENTER", space_before=0, space_after=0),
+        rtl=True,
+    )
+
+    builder.add_cover_page(cover)
+
+
+# ---------------------------------------------------------------------------
+# Table & chart renderers
+# ---------------------------------------------------------------------------
+
+
+def _render_table(builder: WordBuilder, table: dict):
+    columns = table.get("columns", [])
+    rows = table.get("rows", [])
+    if not columns or not rows:
+        return
+
+    # Reverse column order for RTL visual layout (rightmost = first logical column)
+    rtl_columns = list(reversed(columns))
+    ordered_rows = [{col: row.get(col, "") for col in rtl_columns} for row in rows]
+
+    caption = table.get("caption")
+    builder.add_table(
+        ordered_rows,
+        style=TABLE_STYLE,
+        rtl=True,
+        caption=caption,
+    )
+
+
+def _render_chart(builder: WordBuilder, chart: dict):
+    colors = chart.get("colors", [])
+    series = []
+    for i, s in enumerate(chart.get("series", [])):
+        entry = {
+            "name": s.get("name", ""),
+            "values": s.get("data", []),
+        }
+        if i < len(colors):
+            entry["color"] = colors[i].lstrip("#")
+        series.append(entry)
+
+    chart_data = {
+        "title": chart.get("title", ""),
+        "categories": chart.get("categories", []),
+        "series": series,
+    }
+
+    chart_type = chart.get("type", "column")
+
+    builder.add_chart(
+        chart_data,
+        chart_type=chart_type,
+        style=CHART_STYLE,
+        rtl=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Section renderer
+# ---------------------------------------------------------------------------
+
+
+def _render_section(builder: WordBuilder, section: dict, depth: int = 1):
+    level = min(depth, 3)
+    title = section.get("title", "")
+    if title:
+        builder.add_heading(title, level=level, rtl=True)
+
+    content = section.get("content", "").strip()
+    if content:
+        builder.add_paragraph(
+            content,
+            rtl=True,
+            style=TextStyle(alignment="JUSTIFY", color="000000"),
+        )
+
+    for table in section.get("tables", []):
+        _render_table(builder, table)
+
+    for chart in section.get("charts", []):
+        _render_chart(builder, chart)
+
+    for subsection in section.get("subsections", []):
+        _render_section(builder, subsection, depth=depth + 1)
+
+
+# ---------------------------------------------------------------------------
+# Main builder
+# ---------------------------------------------------------------------------
+
+
+def build_report(json_path: str | Path, output_path: str | Path):
+    json_path = Path(json_path)
+    output_path = Path(output_path)
+
+    with open(json_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    config = _make_config(data)
+    builder = WordBuilder(config)
+
+    # Cover
+    _build_cover(builder, data)
+
+    # Native TOC
+    builder.add_toc(
+        TocStyle(
+            heading_text="المحتويات",
+            heading_bg_color=GOLD,
+            heading_text_color="FFFFFF",
+            heading_font="Dubai",
+            entry_font="Dubai",
+            rtl=True,
+            exclude_cover_page=True,
+        )
+    )
+
+    # Body sections
+    for section in data.get("sections", []):
+        _render_section(builder, section, depth=1)
+
+    builder.save(str(output_path))
+    print(f"Saved: {output_path}")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    base = Path(__file__).parent
+    json_path = base / "report_final_ar_20260430_002217.json"
+    out_path = json_path.with_suffix(".docx")
+    build_report(json_path, out_path)

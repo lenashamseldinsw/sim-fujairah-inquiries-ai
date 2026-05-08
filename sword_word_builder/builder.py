@@ -64,7 +64,8 @@ class WordBuilder:
         self._pending_charts: list[_PendingChart] = []
         self._doc_pr_counter = 1   # unique IDs for drawings (images + charts)
         self._markdown_renderer = MarkdownRenderer(self._config)
-        self._toc_headings: list[tuple[str, int, str]] = []  # (text, level, anchor_id)
+        self._toc_headings: list[tuple[str, int, str, bool]] = []  # (text, level, anchor_id, from_cover)
+        self._in_cover_page: bool = False
         self._toc_style: TocStyle | None = None
         self._heading_counter = 0
         self._bookmark_counter = 0
@@ -162,7 +163,9 @@ class WordBuilder:
                 CoverPage.preset("Title", subtitle="Sub", metadata={"Author": "Me"})
             )
         """
+        self._in_cover_page = True
         cover._render(self)
+        self._in_cover_page = False
 
         # Page break
         last_para = self._doc.add_paragraph()
@@ -242,7 +245,7 @@ class WordBuilder:
         bm_end.set(qn("w:id"), str(self._bookmark_counter))
         para._p.append(bm_start)
         para._p.append(bm_end)
-        self._toc_headings.append((text, level, anchor_id))
+        self._toc_headings.append((text, level, anchor_id, self._in_cover_page))
 
         return self
 
@@ -768,7 +771,14 @@ class WordBuilder:
         text_width_twips = page_w_twips - left_twips - right_twips
 
         inject_toc_styles(self._doc, self._toc_style, text_width_twips)
-        sdt = build_toc_sdt(self._toc_headings, self._toc_style)
+        style = self._toc_style
+        filtered = [
+            (text, level, anchor_id)
+            for text, level, anchor_id, from_cover in self._toc_headings
+            if level in style.levels
+            and not (style.exclude_cover_page and from_cover)
+        ]
+        sdt = build_toc_sdt(filtered, style)
         body.replace(sentinel, sdt)
 
         # Page break after the TOC so content starts on a new page

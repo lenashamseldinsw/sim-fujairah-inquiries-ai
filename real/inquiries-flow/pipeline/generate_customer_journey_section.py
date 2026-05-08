@@ -298,6 +298,8 @@ def generate_customer_journey_section(
             f'  - Highlight the top friction: "النقطة الأكثر حدة هي {top_friction_point} التي تؤثر على {top_friction_count} حالة ({top_friction_pct}% من الإجمالي)."\n'
             '  - If quick_win is not null, add a sentence about the quick_win impact.\n'
             '  - End the paragraph with a colon (":") — the friction table follows immediately.\n'
+            '  - CRITICAL: Use the EXACT injected values for top_friction_point, top_friction_count, and top_friction_pct.\n'
+            '    Do NOT extract these from friction_context array or recalculate from data.\n'
             '\n'
             'B. الإجراء التحسيني column for EVERY row in pre_computed_friction_table\n'
             '  For each friction row, use friction_context[i].guidebook_recommendation as the\n'
@@ -305,6 +307,17 @@ def generate_customer_journey_section(
             '  (max 30 words). If no guidebook_recommendation is present for that row, derive\n'
             '  the action from the root_cause_label. Never invent numbers.\n'
             '  Do NOT change نقطة الاحتكاك, الحالات, or السبب الجذري.\n'
+            '\n'
+            '─────────────────────────────────────────────\n'
+            'CRITICAL: INJECTED NUMBERS ARE FIXED FACTS\n'
+            '─────────────────────────────────────────────\n'
+            'The section_body MUST include these exact injected values:\n'
+            f'  top_friction_point: "{top_friction_point}"\n'
+            f'  top_friction_count: {top_friction_count}\n'
+            f'  top_friction_pct: {top_friction_pct}%\n'
+            '\n'
+            'DO NOT derive these from friction_context or recalculate from case data.\n'
+            'Copy them directly into the generated section_body string.\n'
             '\n'
             '─────────────────────────────────────────────\n'
             'OUTPUT — single JSON object, no markdown, no extra keys\n'
@@ -379,6 +392,22 @@ def generate_customer_journey_section(
             })
 
         result["friction_table"] = merged_friction_table
+
+        # Guard assertion: verify reconciled counts don't exceed actual sub_classification counts
+        from collections import defaultdict
+        actual_sub_counts = defaultdict(int)
+        for case in (state.all_classified or []):
+            actual_sub_counts[case.sub_classification] += 1
+
+        for friction in state.journey_map or []:
+            actual_count = actual_sub_counts.get(friction.sub_classification, 0)
+            if friction.case_count > actual_count:
+                print(
+                    f"[CustomerJourney] WARNING: friction '{friction.friction_point_ar}' "
+                    f"case_count={friction.case_count} exceeds actual count={actual_count} "
+                    f"for sub_classification='{friction.sub_classification}'. "
+                    f"Reconciliation may not have completed successfully."
+                )
 
         print(
             f"[CustomerJourney] OK — "

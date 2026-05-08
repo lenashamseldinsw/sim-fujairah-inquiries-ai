@@ -91,7 +91,25 @@ _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 # Also paste into stage6_json_report.py for the JSON builder.
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _digital_channel_pct(state: PipelineState) -> float:
+def _compute_submission_channel_pct(state: PipelineState) -> float:
+    """
+    % of cases submitted via digital channels (app or website).
+
+    This is the submission channel metric — how many customers submitted their case
+    through "تطبيق" (app) or "موقع" (website) rather than phone/in-person.
+    This percentage is never zero for this dataset.
+    """
+    cases = state.all_classified or []
+    total = len(cases) or 1
+
+    digital_submissions = sum(
+        1 for c in cases
+        if c.case_channel and ("تطبيق" in str(c.case_channel) or "موقع" in str(c.case_channel))
+    )
+    return round(digital_submissions / total * 100, 1)
+
+
+def _friction_digital_context_pct(state: PipelineState) -> float:
     """
     % of friction cases rooted in a digital/self-service context.
 
@@ -338,7 +356,8 @@ def generate_digital_gaps_section(
 
     # ── Pre-compute all values from state ─────────────────────────────────────
     date_range         = convert_month_year_to_arabic(state.month_year)
-    digital_pct        = _digital_channel_pct(state)
+    submission_channel_pct     = _compute_submission_channel_pct(state)
+    friction_digital_context_pct = _friction_digital_context_pct(state)
     gap_rows           = _build_gap_rows(state)
     root_cause_rows    = _build_root_cause_rows(state)
     gap_context        = _build_gap_prompt_context(state)
@@ -376,16 +395,17 @@ def generate_digital_gaps_section(
         '"خامساً: التحليل الثالث — تحليل الفجوات الرقمية"\n'
         '\n'
         'INPUTS — use ONLY these numbers, never invent figures\n'
-        f'total_cases:           {total_cases}\n'
-        f'date_range:            "{date_range}"\n'
-        + (f'digital_channel_pct:   {digital_pct}%\n' if digital_pct > 0 else
-           'digital_channel_pct:   [not available — use gap count to anchor the finding instead]\n')
-        + f'critical_gap_count:    {critical_count}\n'
-        f'medium_gap_count:      {medium_count}\n'
-        f'top_gap_topic:         "{top_gap_name}"\n'
-        f'top_gap_case_count:    {top_gap_count}\n'
-        f'proactive_case_count:  {proactive_case_count}\n'
-        f'proactive_pct:         {proactive_pct}%\n'
+        f'total_cases:                        {total_cases}\n'
+        f'date_range:                         "{date_range}"\n'
+        f'submission_channel_digital_pct:     {submission_channel_pct}%  (% of cases submitted via app/website)\n'
+        + (f'friction_digital_context_pct:      {friction_digital_context_pct}%  (% of friction cases rooted in digital service context)\n' if friction_digital_context_pct > 0 else
+           'friction_digital_context_pct:      [not available — use gap count to anchor the finding instead]\n')
+        + f'critical_gap_count:                {critical_count}\n'
+        f'medium_gap_count:                  {medium_count}\n'
+        f'top_gap_topic:                     "{top_gap_name}"\n'
+        f'top_gap_case_count:                {top_gap_count}\n'
+        f'proactive_case_count:              {proactive_case_count}\n'
+        f'proactive_pct:                     {proactive_pct}%\n'
         '\n'
         'gap_context (Stage 5 gap_table enriched with guidebook intelligence):\n'
         '  - "recommendation_from_stage5" → primary source for التوصية column\n'
@@ -411,18 +431,17 @@ def generate_digital_gaps_section(
         '\n'
         'A. section_body — 2 sentences, formal Arabic\n'
         '   - Open with: "لماذا تستمر المشكلات رغم توفر التطبيق والموقع الإلكتروني؟"\n'
-        f'   - State the core finding using digital_channel_pct ({digital_pct}%) and date_range.\n'
-        '     The finding is: the problem is not the absence of digital channels —\n'
+        f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (تطبيق/موقع),\n'
+        '     yet problems persist. The problem is not the absence of digital channels —\n'
         '     it is the absence of the right functions inside those channels.\n'
         + (
-            f'     IMPORTANT: digital_channel_pct ({digital_pct}%) represents the % of friction cases\n'
-            '     ROOTED IN A DIGITAL SERVICE CONTEXT (app error, online renewal, digital payment) —\n'
-            '     NOT the % of customers who called us.\n'
-            f'     Frame as: "{digital_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع)"\n'
-            if digital_pct > 0 else
-            '     Since digital_channel_pct is 0, do NOT cite a percentage.\n'
-            '     Instead state the finding as: "المشكلة ليست في غياب القنوات الرقمية بل في غياب الوظائف\n'
-            '     الصحيحة داخلها" — without a specific %. Use gap count instead to anchor the claim.\n'
+            f'     OPTIONAL: Additionally, {friction_digital_context_pct}% of friction cases are ROOTED IN A DIGITAL SERVICE CONTEXT\n'
+            '     (app error, online renewal, digital payment) — cite this if it strengthens the finding.\n'
+            f'     Frame as: "{friction_digital_context_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع)"\n'
+            if friction_digital_context_pct > 0 else
+            '     Focus on submission channel percentage — friction_digital_context is not available.\n'
+            '     Use gap count to anchor the claim: "المشكلة ليست في غياب القنوات الرقمية بل في غياب الوظائف\n'
+            '     الصحيحة داخلها" with {critical_count} critical gaps identified.\n'
         )
         + f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
         + f'     citing "{top_gap_name}" as the largest ({top_gap_count} cases).\n'
@@ -486,7 +505,8 @@ def generate_digital_gaps_section(
         f"[DigitalGaps] Calling API — total_cases={total_cases}, "
         f"gap_count={len(state.gap_table)}, "
         f"root_cause_count={len(root_cause_rows)}, "
-        f"critical={critical_count}, digital_pct={digital_pct}%"
+        f"critical={critical_count}, submission_channel={submission_channel_pct}%, "
+        f"friction_digital_context={friction_digital_context_pct}%"
     )
 
     message = client.messages.create(
