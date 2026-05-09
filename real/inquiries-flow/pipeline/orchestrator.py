@@ -197,9 +197,21 @@ class PipelineOrchestrator:
         """
         try:
             self.state = run_stage4(self.state, self.api_key)
+
+            # journey_map is required by Stage 6's customer_journey section generator.
+            # If the LLM returned an empty list (or omitted the key entirely) Stage 4
+            # is effectively incomplete — treat this as a failure so the pipeline stops
+            # before Stage 6 attempts to use the empty list.
+            if not self.state.journey_map:
+                return False, (
+                    "Stage 4 error: journey_map is empty after analysis — the LLM did not "
+                    "return any friction points. Check that all_classified is non-empty and "
+                    "retry."
+                )
+
             self.save_state()
 
-            msg = f"Analyzed patterns: {len(self.state.patterns)} clusters, {len(self.state.faq_candidates)} FAQ candidates"
+            msg = f"Analyzed patterns: {len(self.state.patterns)} clusters, {len(self.state.faq_candidates)} FAQ candidates, {len(self.state.journey_map)} friction points"
             return True, msg
         except anthropic.APIError as e:
             return False, f"API error: {str(e)}"
@@ -324,6 +336,7 @@ class PipelineOrchestrator:
         results['stages']['stage2'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
+            return results
 
         # Stage 3
         if progress_callback:
@@ -332,14 +345,16 @@ class PipelineOrchestrator:
         results['stages']['stage3'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
+            return results
 
-        # Stage 4
+        # Stage 4 — populates journey_map required by Stage 6 report generation
         if progress_callback:
             progress_callback(0.55, "تحليل الأنماط والفجوات", "Stage 4: Pattern Analysis")
         success, msg = self.run_stage4_analysis()
         results['stages']['stage4'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
+            return results
 
         # Stage 5
         if progress_callback:
@@ -348,6 +363,7 @@ class PipelineOrchestrator:
         results['stages']['stage5'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
+            return results
 
         # Stage 6
         if progress_callback:

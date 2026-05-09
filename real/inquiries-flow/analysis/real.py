@@ -10,8 +10,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import os
-import anthropic  # ADD THIS
-import pandas as pd
+from datetime import datetime
+import anthropic
 from .base import Analyzer
 
 # Import pipeline (located in parent inquiries-flow folder)
@@ -95,8 +95,13 @@ class RealAnalyzer:
             else:
                 raise ValueError("PDF processing not yet implemented")
 
-            # Create session ID for state tracking
-            session_id = uploaded_file.name.replace('.', '_').replace(' ', '_')
+            # Use a unique session ID per run so stale state from a previous (possibly
+            # failed) run is never loaded.  A fixed filename-based ID would cause
+            # initialize_state() to reload the old state.json — including an empty
+            # journey_map from a prior Stage 4 failure — and then carry it into Stage 6.
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            base = uploaded_file.name.replace('.', '_').replace(' ', '_')
+            session_id = f"{base}_{timestamp}"
 
             # Initialize orchestrator
             orchestrator = PipelineOrchestrator(self.api_key, temp_dir=str(self.output_dir))
