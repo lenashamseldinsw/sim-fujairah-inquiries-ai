@@ -416,11 +416,19 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         'executive_summary': (generate_executive_summary_section, 'أولاً: الملخص التنفيذي — التحليلات الرئيسية'),
         'methodology': (generate_methodology_section, 'ثانياً: المنهجية وطبيعة المصادر'),
         'workload_map': (generate_workload_map_section, 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات'),
-        'customer_journey': (generate_customer_journey_section, 'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل'),
         'digital_gaps': (generate_digital_gaps_section, 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية'),
         'digital_transformation': (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي'),
         'ai_use_cases': (generate_ai_use_cases_section, 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي'),
     }
+
+    # customer_journey requires journey_map from Stage 4; skip gracefully if unavailable
+    if state.journey_map:
+        wave1_tasks['customer_journey'] = (
+            generate_customer_journey_section,
+            'رابعاً: التحليل الثاني — التحديات في رحلة المتعامل',
+        )
+    else:
+        print("[GenSections] WARNING: state.journey_map is empty — skipping customer_journey section")
 
     wave1_results = {}  # Local dict — no shared state touched inside threads
 

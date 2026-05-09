@@ -364,98 +364,125 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             cases_text += f"  Description: {case.description[:150]}\n"
             cases_text += f"  Resolution: {case.resolution_response[:150]}\n"
 
-    # Call Claude with tool-use
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=8000,
-        system=build_analysis_system_prompt(),
-        tools=[ANALYSIS_TOOL],
-        tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
-        messages=[
-            {
-                "role": "user",
-                "content": f"Analyze these customer service cases grouped by two-level classification:\n{cases_text}"
-            }
-        ]
-    )
+    base_user_content = f"Analyze these customer service cases grouped by two-level classification:\n{cases_text}"
 
-    # Extract tool use result
-    for block in message.content:
-        if block.type == "tool_use":
-            analysis = block.input
-
-            # Parse patterns
-            if 'patterns' in analysis:
-                state.patterns = [
-                    PatternCluster(
-                        cluster=p.get('cluster', ''),
-                        cluster_ar=p.get('cluster_ar', ''),
-                        sub_theme=p.get('sub_theme', ''),
-                        sub_theme_ar=p.get('sub_theme_ar', ''),
-                        case_count=p.get('case_count', 0),
-                        example_case_ids=p.get('example_case_ids', []),
-                        top_level=p.get('top_level', ''),
-                        sub_classification=p.get('sub_classification', '')
-                    )
-                    for p in analysis.get('patterns', [])
-                ]
-
-            # Parse journey map
-            if 'journey_map' in analysis:
-                state.journey_map = [
-                    JourneyFriction(
-                        cluster=j.get('cluster', ''),
-                        cluster_ar=j.get('cluster_ar', ''),
-                        friction_point=j.get('friction_point', ''),
-                        friction_point_ar=j.get('friction_point_ar', ''),
-                        root_cause_category=j.get('root_cause_category', ''),
-                        case_count=j.get('case_count', 0),
-                        top_level=j.get('top_level', ''),
-                        sub_classification=j.get('sub_classification', '')
-                    )
-                    for j in analysis.get('journey_map', [])
-                ]
-
-            # Parse FAQ candidates
-            if 'faq_candidates' in analysis:
-                state.faq_candidates = [
-                    FAQCandidate(
-                        question=f.get('question', ''),
-                        question_ar=f.get('question_ar', ''),
-                        answer=f.get('answer', ''),
-                        answer_ar=f.get('answer_ar', ''),
-                        frequency=f.get('frequency', 0),
-                        validation_status='PENDING'
-                    )
-                    for f in analysis.get('faq_candidates', [])
-                ]
-
-            # Parse self-service tags
-            if 'self_service_tags' in analysis:
-                state.self_service_tags = analysis.get('self_service_tags', [])
-
-            # Parse notification opportunities
-            if 'notification_opportunities' in analysis:
-                state.notification_opportunities = analysis.get('notification_opportunities', [])
-
-            # Parse authoritative proactive notification case count
-            if 'proactive_notification_case_count' in analysis:
-                state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
-
-            # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
-            print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
-            state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
-                state.journey_map,
-                state.patterns,
-                state.all_classified,
-                state.notification_opportunities,
-                state.proactive_notification_case_count,
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        # On retries, append an explicit nudge to return friction points
+        if attempt == 1:
+            user_content = base_user_content
+        else:
+            user_content = (
+                base_user_content
+                + "\n\nIMPORTANT: Your previous response returned an empty journey_map. "
+                "Every real customer service dataset has friction points — reasons customers "
+                "had to contact support that could have been prevented. Look carefully at the "
+                "case descriptions and identify at least one friction point per sub-classification "
+                "group. Do NOT return an empty journey_map array."
             )
-            print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
 
+        print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=8000,
+            system=build_analysis_system_prompt(),
+            tools=[ANALYSIS_TOOL],
+            tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
+            messages=[{"role": "user", "content": user_content}],
+        )
+
+        # Extract tool use result
+        analysis = None
+        for block in message.content:
+            if block.type == "tool_use":
+                analysis = block.input
+                break
+        else:
+            print(f"[Stage4] WARNING: No tool call in LLM response on attempt {attempt}")
+            if attempt < max_attempts:
+                continue
+
+        if analysis is None:
             break
-    else:
-        # No tool call found — log warning
-        print("[Stage4] WARNING: No tool call in LLM response — patterns, journey_map, etc. may be empty")
+
+        # Parse patterns
+        if 'patterns' in analysis:
+            state.patterns = [
+                PatternCluster(
+                    cluster=p.get('cluster', ''),
+                    cluster_ar=p.get('cluster_ar', ''),
+                    sub_theme=p.get('sub_theme', ''),
+                    sub_theme_ar=p.get('sub_theme_ar', ''),
+                    case_count=p.get('case_count', 0),
+                    example_case_ids=p.get('example_case_ids', []),
+                    top_level=p.get('top_level', ''),
+                    sub_classification=p.get('sub_classification', '')
+                )
+                for p in analysis.get('patterns', [])
+            ]
+
+        # Parse journey map
+        if 'journey_map' in analysis:
+            state.journey_map = [
+                JourneyFriction(
+                    cluster=j.get('cluster', ''),
+                    cluster_ar=j.get('cluster_ar', ''),
+                    friction_point=j.get('friction_point', ''),
+                    friction_point_ar=j.get('friction_point_ar', ''),
+                    root_cause_category=j.get('root_cause_category', ''),
+                    case_count=j.get('case_count', 0),
+                    top_level=j.get('top_level', ''),
+                    sub_classification=j.get('sub_classification', '')
+                )
+                for j in analysis.get('journey_map', [])
+            ]
+
+        # Parse FAQ candidates
+        if 'faq_candidates' in analysis:
+            state.faq_candidates = [
+                FAQCandidate(
+                    question=f.get('question', ''),
+                    question_ar=f.get('question_ar', ''),
+                    answer=f.get('answer', ''),
+                    answer_ar=f.get('answer_ar', ''),
+                    frequency=f.get('frequency', 0),
+                    validation_status='PENDING'
+                )
+                for f in analysis.get('faq_candidates', [])
+            ]
+
+        # Parse self-service tags
+        if 'self_service_tags' in analysis:
+            state.self_service_tags = analysis.get('self_service_tags', [])
+
+        # Parse notification opportunities
+        if 'notification_opportunities' in analysis:
+            state.notification_opportunities = analysis.get('notification_opportunities', [])
+
+        # Parse authoritative proactive notification case count
+        if 'proactive_notification_case_count' in analysis:
+            state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
+
+        # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
+        print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
+        state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
+            state.journey_map,
+            state.patterns,
+            state.all_classified,
+            state.notification_opportunities,
+            state.proactive_notification_case_count,
+        )
+        print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
+
+        if state.journey_map:
+            break  # Success — stop retrying
+
+        if attempt < max_attempts:
+            print(f"[Stage4] journey_map still empty after attempt {attempt} — retrying with explicit nudge...")
+        else:
+            print(
+                f"[Stage4] WARNING: journey_map is empty after {max_attempts} attempts. "
+                "The customer_journey report section will be skipped."
+            )
 
     return state

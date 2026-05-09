@@ -198,20 +198,16 @@ class PipelineOrchestrator:
         try:
             self.state = run_stage4(self.state, self.api_key)
 
-            # journey_map is required by Stage 6's customer_journey section generator.
-            # If the LLM returned an empty list (or omitted the key entirely) Stage 4
-            # is effectively incomplete — treat this as a failure so the pipeline stops
-            # before Stage 6 attempts to use the empty list.
-            if not self.state.journey_map:
-                return False, (
-                    "Stage 4 error: journey_map is empty after analysis — the LLM did not "
-                    "return any friction points. Check that all_classified is non-empty and "
-                    "retry."
-                )
-
             self.save_state()
 
-            msg = f"Analyzed patterns: {len(self.state.patterns)} clusters, {len(self.state.faq_candidates)} FAQ candidates, {len(self.state.journey_map)} friction points"
+            if not self.state.journey_map:
+                print("[Stage4] WARNING: journey_map is empty — customer_journey section will be skipped in Stage 6")
+
+            msg = (
+                f"Analyzed patterns: {len(self.state.patterns)} clusters, "
+                f"{len(self.state.faq_candidates)} FAQ candidates, "
+                f"{len(self.state.journey_map)} friction points"
+            )
             return True, msg
         except anthropic.APIError as e:
             return False, f"API error: {str(e)}"
