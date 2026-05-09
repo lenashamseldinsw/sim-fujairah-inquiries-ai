@@ -425,11 +425,22 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     wave1_results = {}  # Local dict — no shared state touched inside threads
 
     def run_section(key: str, fn, state: PipelineState, api_key: str) -> tuple[str, Dict[str, Any]]:
-        """Run a section generator and return (key, result_dict)."""
-        print(f"[GenSections] Starting {key}...")
-        result = fn(state, api_key)  # Pure: reads state, returns dict
-        print(f"[GenSections] ✓ {key} complete")
-        return key, result
+        """Run a section generator with up to 3 retries on failure."""
+        max_attempts = 3
+        last_error: Exception = RuntimeError(f"[GenSections] {key}: no attempts made")
+        for attempt in range(1, max_attempts + 1):
+            try:
+                if attempt > 1:
+                    print(f"[GenSections] Retrying {key} (attempt {attempt}/{max_attempts})...")
+                else:
+                    print(f"[GenSections] Starting {key}...")
+                result = fn(state, api_key)  # Pure: reads state, returns dict
+                print(f"[GenSections] ✓ {key} complete (attempt {attempt})")
+                return key, result
+            except Exception as e:
+                last_error = e
+                print(f"[GenSections] ✗ {key} failed on attempt {attempt}: {e}")
+        raise last_error
 
     with ThreadPoolExecutor(max_workers=7) as executor:
         futures = {
@@ -1707,12 +1718,12 @@ Rules:
         classification_method_hardcoded = (
             "يعتمد التحليل على شجرة قرار من أربعة مستويات، حيث طبيعة المطلوب وليس الصياغة هي المعيار الفاصل. يُطرح على كل حالة اختباران متتاليان: "
             "(1) الاختبار الأول: هل يُعبّر النص عن استياء، أو إبلاغ عن إخفاق، أو رغبة في تقديم بلاغ رسمي أو اعتراض؟ "
-            "(2) الاختبار الثاني: هل يطلب النص تنفيذ إجراء محدد كتقديم خدمة أو متابعة طلب أو تعديل بيانات، وليس مجرد الحصول على معلومة؟ "
-            "قواعد التصنيف: "
-            "إن كان الجواب نعم على الأول → شكوى (حتى لو تضمّن النص طلباً لاتخاذ إجراء)؛ "
-            "إن كان الجواب نعم على الثاني فقط → طلب (دون أن يكون الغرض إبلاغاً عن مشكلة)؛ "
-            "إن كان الغرض سؤالاً أو استعلاماً عن معلومة → استفسار؛ "
-            "إن كان التعبير عن رضا وثناء → شكر وثناء."
+            "(2) الاختبار الثاني: هل يطلب النص تنفيذ إجراء محدد كتقديم خدمة أو متابعة طلب أو تعديل بيانات، وليس مجرد الحصول على معلومة؟\n"
+            "قواعد التصنيف:\n"
+            "→ إن كان الجواب نعم على الأول: شكوى (حتى لو تضمّن النص طلباً لاتخاذ إجراء)؛\n"
+            "→ إن كان الجواب نعم على الثاني فقط: طلب (دون أن يكون الغرض إبلاغاً عن مشكلة)؛\n"
+            "→ إن كان الغرض سؤالاً أو استعلاماً عن معلومة: استفسار؛\n"
+            "→ إن كان التعبير عن رضا وثناء: شكر وثناء."
         )
 
         # Build sources table using closed_cases_count (where تاريخ_إغلاق_الطلب is not empty)

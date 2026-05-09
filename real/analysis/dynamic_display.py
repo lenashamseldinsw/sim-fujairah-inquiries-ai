@@ -671,9 +671,9 @@ document.addEventListener('DOMContentLoaded', function() {{
             is_bullet   = False
             bullet_text = stripped
 
-            if stripped.startswith(('←', '-', '•', '▪')):
+            if stripped.startswith(('←', '→', '-', '•', '▪')):
                 is_bullet   = True
-                bullet_text = stripped.lstrip('←-•▪').strip()
+                bullet_text = stripped.lstrip('←→-•▪').strip()
             elif (stripped.startswith('الشكوى ') and '—' in stripped
                   and re.search(r'خلال\s+\d+\s+(ساعة|ساعات|يوم|أيام)', stripped)):
                 is_bullet = True

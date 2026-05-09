@@ -16,34 +16,72 @@ def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[
     """
     Robustly extract a JSON object from LLM response text.
 
-    Tries three strategies in order:
-      1. Extract from markdown code block (```json ... ```)
-      2. Find first '{' and match balanced braces
-      3. If mismatched braces, try fixing trailing commas before '}' / ']'
+    Tries multiple strategies in order:
+      1. Direct parse (LLM returned raw JSON with no fences)
+      2. Extract from markdown code block (handles various fence formats)
+      3. Find first '{' and match balanced braces
+      4. If mismatched braces, try fixing truncated response
 
     Args:
         response_text: Raw LLM response (may contain markdown, prose, etc.)
         tag: Debug tag for logging (identifies calling context)
 
     Returns:
-        Parsed JSON dict, or None if parsing failed
+        Parsed JSON dict, or None if all strategies failed
     """
-    # Strategy 1: Try markdown code block first
-    match = re.search(r'```\s*(?:json)?\s*\n(.*?)(?:\n```|$)', response_text, re.DOTALL)
-    if match:
+
+    def _try_loads(text: str) -> Optional[Dict[str, Any]]:
+        """Try json.loads; on failure, attempt trailing-comma repair."""
+        # Direct parse
         try:
-            return json.loads(match.group(1).strip())
+            return json.loads(text)
         except json.JSONDecodeError:
             pass
+        # Fix trailing commas before } or ]
+        fixed = re.sub(r',\s*([}\]])', r'\1', text)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            return None
 
-    # Strategy 2: Find first '{' and match balanced braces
+    stripped = response_text.strip()
+
+    # Strategy 0: Direct parse — LLM returned clean JSON without fences
+    if stripped.startswith('{'):
+        result = _try_loads(stripped)
+        if result is not None:
+            return result
+
+    # Strategy 1: Extract from markdown code block.
+    # The LLM sometimes wraps JSON in ```json ... ``` despite being asked not to.
+    # We try several fence patterns to handle edge cases:
+    #   - closing ``` on its own line (standard)
+    #   - closing ``` immediately after the last char (no preceding newline)
+    #   - missing closing ``` (response ends mid-fence)
+    if '```' in response_text:
+        fence_patterns = [
+            r'```(?:json)?\s*\n([\s\S]*?)\n\s*```',  # standard: \n before closing
+            r'```(?:json)?\s*\n([\s\S]*?)```',         # no \n before closing ```
+            r'```(?:json)?\s*([\s\S]*?)```',            # no \n after opening either
+        ]
+        for pattern in fence_patterns:
+            match = re.search(pattern, response_text)
+            if match:
+                extracted = match.group(1).strip()
+                # Guard: if extracted is huge (whole response) the fence match failed
+                if extracted and len(extracted) < len(response_text):
+                    result = _try_loads(extracted)
+                    if result is not None:
+                        return result
+                    print(f"[{tag}] Fence extracted {len(extracted)} chars but parse failed; trying next pattern")
+
+    # Strategy 2: Find first '{' and walk balanced braces
     first = response_text.find('{')
     if first == -1:
-        print(f"[{tag}] No JSON object found in response")
+        print(f"[{tag}] No JSON object found in response (length: {len(response_text)})")
         return None
 
     depth, in_str, escape = 0, False, False
-    last_closing_pos = -1
 
     for i in range(first, len(response_text)):
         ch = response_text[i]
@@ -63,44 +101,27 @@ def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[
         elif ch == '}':
             depth -= 1
             if depth == 0:
-                last_closing_pos = i
                 candidate = response_text[first:i + 1]
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError:
-                    # Strategy 3: Try fixing trailing commas
-                    fixed = re.sub(r',(\s*[}\]])', r'\1', candidate)
-                    try:
-                        return json.loads(fixed)
-                    except json.JSONDecodeError as e:
-                        print(f"[{tag}] JSON parse failed: {e}")
-                        print(f"[{tag}] First 500 chars: {candidate[:500]}")
-                        return None
-
-    # If we reach here and still have unclosed braces, the response is truncated
-    # Try to fix by closing the JSON structure
-    if depth > 0:
-        print(f"[{tag}] Response appears truncated (unclosed braces: depth={depth})")
-        # Extract from first brace to end, removing trailing junk
-        extracted = response_text[first:].rstrip()
-
-        # Remove incomplete trailing elements (trailing comma, quote, bracket)
-        extracted = extracted.rstrip(',"\']')
-
-        # Try to close all unclosed structures
-        candidate = extracted + ('}' * depth)
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            # Try with trailing comma fix
-            fixed = re.sub(r',(\s*[}\]])', r'\1', candidate)
-            try:
-                return json.loads(fixed)
-            except json.JSONDecodeError as e:
-                print(f"[{tag}] Could not recover truncated JSON: {e}")
-                print(f"[{tag}] Attempted: extracted {len(extracted)} chars, closed {depth} braces")
-                print(f"[{tag}] Last 500 chars: ...{response_text[-500:]}")
+                result = _try_loads(candidate)
+                if result is not None:
+                    return result
+                # Found balanced braces but still can't parse — log and give up
+                print(f"[{tag}] Balanced braces found but parse failed. First 300 chars: {candidate[:300]}")
                 return None
 
-    print(f"[{tag}] No complete JSON found in response")
+    # Strategy 3: Response is truncated (unclosed braces)
+    if depth > 0:
+        print(f"[{tag}] Response appears truncated (unclosed braces: depth={depth})")
+        extracted = response_text[first:].rstrip()
+        # Remove trailing incomplete element (comma, dangling quote/bracket)
+        extracted = re.sub(r',\s*$', '', extracted.rstrip(',"\']'))
+        candidate = extracted + ('}' * depth)
+        result = _try_loads(candidate)
+        if result is not None:
+            print(f"[{tag}] Recovered truncated JSON by closing {depth} open brace(s)")
+            return result
+        print(f"[{tag}] Could not recover truncated JSON. Last 300 chars: ...{response_text[-300:]}")
+        return None
+
+    print(f"[{tag}] No parseable JSON found in response (length: {len(response_text)})")
     return None

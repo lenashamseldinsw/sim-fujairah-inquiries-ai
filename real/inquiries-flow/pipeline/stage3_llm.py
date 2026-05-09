@@ -10,6 +10,8 @@ Uses Haiku for speed and cost efficiency on this high-volume task.
 
 import json
 import anthropic
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List
 from .state import PipelineState, CaseRow
 from .stage2_rules import SUB_CLASSIFICATIONS
@@ -186,114 +188,152 @@ RULES:
 - ALL OUTPUT MUST BE IN ARABIC ONLY. Provide reasons (explanations) entirely in Arabic."""
 
 
+def _process_batch(client: anthropic.Anthropic, batch: List[Dict], batch_num: int, total_batches: int) -> List[Dict]:
+    """
+    Process a single batch of cases against the Haiku classifier.
+
+    Designed to be called from a thread pool — no shared mutable state is read or
+    written; all inputs are passed by value and the return value is a plain list.
+
+    Args:
+        client: Anthropic API client (thread-safe for concurrent requests)
+        batch: Slice of case dicts for this batch
+        batch_num: 1-based batch index (for logging only)
+        total_batches: Total number of batches (for logging only)
+
+    Returns:
+        List of classification dicts for every case in the batch
+    """
+    print(f"[Stage3] Batch {batch_num}/{total_batches} ({len(batch)} cases)...")
+
+    cases_text = "\n\n".join([
+        f"Case Number: {case.get('case_number', 'N/A')}\n"
+        f"Description: {case.get('description', '').strip()}\n"
+        f"Resolution: {case.get('resolution_response', '').strip()}\n"
+        f"Service: {case.get('service_name', '')}\n"
+        f"Channel: {case.get('case_channel', '')}\n"
+        f"Stage 2 hint: {case.get('top_level', 'N/A')} > {case.get('sub_classification', 'N/A')}"
+        for case in batch
+    ])
+
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",  # Haiku for speed/cost on bulk classification
+            max_tokens=8000,  # Need room for 25 case classifications (each ~150 tokens)
+            system=build_system_prompt(),
+            tools=[CLASSIFIER_TOOL],
+            tool_choice={"type": "any"},  # Force tool use — no free-text fallback
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Classify these {len(batch)} cases using the two-level taxonomy. "
+                    f"Return exactly one entry per case in the classifications array.\n\n"
+                    f"{cases_text}"
+                )
+            }]
+        )
+
+        tool_calls = [b for b in message.content if b.type == "tool_use"]
+
+        if message.stop_reason == "max_tokens":
+            print(f"[Stage3] ERROR: Batch {batch_num} response was truncated (hit max_tokens limit)")
+            print(f"[Stage3] Current max_tokens: 8000. Consider increasing further or reducing batch_size.")
+
+        if tool_calls:
+            classifications = tool_calls[0].input.get("classifications", [])
+
+            if len(classifications) < len(batch):
+                print(f"[Stage3] WARNING: Batch {batch_num} incomplete — got {len(classifications)}/{len(batch)} classifications")
+                print(f"[Stage3] stop_reason: {message.stop_reason}")
+
+            batch_results = list(classifications)
+
+            # Fallback for any case the LLM missed
+            classified_numbers = {c["case_number"] for c in classifications}
+            for case in batch:
+                cn = case.get("case_number", "")
+                if cn not in classified_numbers:
+                    print(f"[Stage3] WARNING: Case {cn} missing from batch {batch_num} response")
+                    batch_results.append({
+                        "case_number": cn,
+                        "top_level": case.get("top_level", "استفسار"),
+                        "sub_classification": case.get("sub_classification", "استفسار عام"),
+                        "confidence": 0.4,
+                        "reason": "لم يتم إرجاع الحالة في رد الدفعة"
+                    })
+
+            return batch_results
+
+        else:
+            print(f"[Stage3] WARNING: No tool call in batch {batch_num}")
+            return [
+                {
+                    "case_number": case.get("case_number", ""),
+                    "top_level": case.get("top_level", "استفسار"),
+                    "sub_classification": case.get("sub_classification", "استفسار عام"),
+                    "confidence": 0.3,
+                    "reason": "لم يتم استدعاء أداة تصنيف في هذه الدفعة"
+                }
+                for case in batch
+            ]
+
+    except Exception as e:
+        print(f"[Stage3] Error in batch {batch_num}: {e}")
+        return [
+            {
+                "case_number": case.get("case_number", ""),
+                "top_level": case.get("top_level", "استفسار"),
+                "sub_classification": case.get("sub_classification", "استفسار عام"),
+                "confidence": 0.4,
+                "reason": f"خطأ في معالجة الدفعة: {str(e)}"
+            }
+            for case in batch
+        ]
+
+
 def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_callback=None) -> List[Dict]:
     """
     Classify cases using Claude Haiku with array tool-use for proper batch handling.
 
+    Batches run concurrently (max 5 threads) for a ~5x speedup on large datasets.
+    Each batch is a fully independent API call — no cross-batch dependencies — so
+    threading has zero effect on classification quality.
+
     Args:
         client: Anthropic API client
         cases: List of case dicts
-        progress_callback: Optional function(batch_num, total_batches)
+        progress_callback: Optional function(pct, msg_ar, msg_en) for UI updates
 
     Returns:
         List of classification results {case_number, top_level, sub_classification, confidence, reason}
     """
+    batch_size = 25  # Balances efficiency with response completeness (each ~150 tokens = 2250 total, safe margin under 8000 max)
+    batches = [cases[i:i + batch_size] for i in range(0, len(cases), batch_size)]
+    total_batches = len(batches)
+    print(f"[Stage3] Processing {len(cases)} cases in {total_batches} batches of {batch_size} (max_workers=5)")
+
     results = []
-    batch_size = 25  # Reduced from 30 — balances efficiency with response completeness (each ~150 tokens = 2250 total, safe margin under 8000 max)
+    completed_lock = threading.Lock()
+    completed_count = 0
 
-    total_batches = (len(cases) + batch_size - 1) // batch_size
-    print(f"[Stage3] Processing {len(cases)} cases in {total_batches} batches of {batch_size}")
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_batch = {
+            executor.submit(_process_batch, client, batch, batch_num, total_batches): batch_num
+            for batch_num, batch in enumerate(batches, 1)
+        }
 
-    for batch_num, batch_idx in enumerate(range(0, len(cases), batch_size), 1):
-        batch = cases[batch_idx:batch_idx + batch_size]
-
-        if progress_callback:
-            pct = 0.30 + ((batch_num / total_batches) * 0.10)  # Progress spans 30% to 40%
-            progress_callback(pct, f"معالجة الدفعة {batch_num}/{total_batches}", f"Processing batch {batch_num}/{total_batches}")
-
-        print(f"[Stage3] Batch {batch_num}/{total_batches} ({len(batch)} cases)...")
-
-        # Build case list with Stage 2 hints
-        cases_text = "\n\n".join([
-            f"Case Number: {case.get('case_number', 'N/A')}\n"
-            f"Description: {case.get('description', '').strip()}\n"
-            f"Resolution: {case.get('resolution_response', '').strip()}\n"
-            f"Service: {case.get('service_name', '')}\n"
-            f"Channel: {case.get('case_channel', '')}\n"
-            f"Stage 2 hint: {case.get('top_level', 'N/A')} > {case.get('sub_classification', 'N/A')}"
-            for case in batch
-        ])
-
-        try:
-            message = client.messages.create(
-                model="claude-haiku-4-5-20251001",  # Haiku for speed/cost on bulk classification
-                max_tokens=8000,  # Increased from 4000 — need room for 30 case classifications (each ~150 tokens)
-                system=build_system_prompt(),
-                tools=[CLASSIFIER_TOOL],
-                tool_choice={"type": "any"},  # Force tool use — no free-text fallback
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Classify these {len(batch)} cases using the two-level taxonomy. "
-                        f"Return exactly one entry per case in the classifications array.\n\n"
-                        f"{cases_text}"
+        for future in as_completed(future_to_batch):
+            batch_results = future.result()
+            with completed_lock:
+                results.extend(batch_results)
+                completed_count += 1
+                if progress_callback:
+                    pct = 0.30 + (completed_count / total_batches * 0.10)  # Progress spans 30% to 40%
+                    progress_callback(
+                        pct,
+                        f"معالجة الدفعات {completed_count}/{total_batches}",
+                        f"Processing batches {completed_count}/{total_batches}"
                     )
-                }]
-            )
-
-            # Extract tool call — should contain all classifications in one array
-            tool_calls = [b for b in message.content if b.type == "tool_use"]
-
-            # Check for truncation
-            if message.stop_reason == "max_tokens":
-                print(f"[Stage3] ERROR: Batch {batch_num} response was truncated (hit max_tokens limit)")
-                print(f"[Stage3] Current max_tokens: 8000. Consider increasing further or reducing batch_size.")
-
-            if tool_calls:
-                classifications = tool_calls[0].input.get("classifications", [])
-
-                # Check if we got all expected classifications
-                if len(classifications) < len(batch):
-                    print(f"[Stage3] WARNING: Batch {batch_num} incomplete — got {len(classifications)}/{len(batch)} classifications")
-                    print(f"[Stage3] stop_reason: {message.stop_reason}")
-
-                results.extend(classifications)
-
-                # Fallback for any case the LLM missed (shouldn't happen but defensive)
-                classified_numbers = {c["case_number"] for c in classifications}
-                for case in batch:
-                    cn = case.get("case_number", "")
-                    if cn not in classified_numbers:
-                        print(f"[Stage3] WARNING: Case {cn} missing from batch response")
-                        results.append({
-                            "case_number": cn,
-                            "top_level": case.get("top_level", "استفسار"),
-                            "sub_classification": case.get("sub_classification", "استفسار عام"),
-                            "confidence": 0.4,  # Below threshold → human review
-                            "reason": "لم يتم إرجاع الحالة في رد الدفعة"
-                        })
-            else:
-                # No tool call — flag all cases in batch for human review
-                print(f"[Stage3] WARNING: No tool call in batch {batch_num}")
-                for case in batch:
-                    results.append({
-                        "case_number": case.get("case_number", ""),
-                        "top_level": case.get("top_level", "استفسار"),
-                        "sub_classification": case.get("sub_classification", "استفسار عام"),
-                        "confidence": 0.3,
-                        "reason": "لم يتم استدعاء أداة تصنيف في هذه الدفعة"
-                    })
-
-        except Exception as e:
-            print(f"[Stage3] Error in batch {batch_num}: {e}")
-            for case in batch:
-                results.append({
-                    "case_number": case.get("case_number", ""),
-                    "top_level": case.get("top_level", "استفسار"),
-                    "sub_classification": case.get("sub_classification", "استفسار عام"),
-                    "confidence": 0.4,
-                    "reason": f"خطأ في معالجة الدفعة: {str(e)}"
-                })
 
     return results
 
