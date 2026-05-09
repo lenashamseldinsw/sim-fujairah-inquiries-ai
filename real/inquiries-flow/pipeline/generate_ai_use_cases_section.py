@@ -630,6 +630,8 @@ def generate_ai_use_cases_section(
         '- Every number in section_body and closing_note must match a pre-computed INPUTS value above.\n'
         '- Arabic only. Proper nouns in Latin script only: MOI, SMS, OTP, UAE PASS, RTA, OCR, NER, CRM.\n'
         '- No markdown, no extra keys, no extra nesting.\n'
+        '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+        'Use angle brackets « » instead of double quotes when citing names.\n'
         '- Rows must appear in the SAME ORDER as locked_impact_rows (violation → agency → document → geo).\n'
     )
 

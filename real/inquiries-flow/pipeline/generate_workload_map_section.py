@@ -308,6 +308,8 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '- All prose keys must be Arabic only.\n'
             '- Every number in prose must match a pre-computed input above.\n'
             '- No markdown, no extra keys, no extra nesting.\n'
+            '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+            'Use angle brackets « » instead of double quotes when citing names.\n'
         )
 
         client = anthropic.Anthropic(api_key=api_key)

@@ -341,6 +341,8 @@ def generate_customer_journey_section(
             '- section_body: Arabic only. Every number must match a pre-computed input above.\n'
             '- No markdown, no extra keys, no extra nesting.\n'
             '- All prose must be in Arabic only.\n'
+            '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+            'Use angle brackets « » instead of double quotes when citing topic names.\n'
         )
 
         # ── API call ──────────────────────────────────────────────────────────

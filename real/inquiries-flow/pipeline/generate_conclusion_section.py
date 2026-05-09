@@ -451,6 +451,8 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         '  - section_body: Arabic only.\n'
         '  - Every number in prose must match a pre-computed input above.\n'
         '  - No markdown, no extra keys, no extra nesting.\n'
+        '  - CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+        'Use angle brackets « » instead of double quotes when citing names.\n'
         '  - Do not invent figures not present in INPUTS.\n'
     )
 

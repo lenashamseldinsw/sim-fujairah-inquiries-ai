@@ -970,6 +970,7 @@ RULES:
 - framing_paragraph: Arabic only, 2–3 sentences, cite date_range and both data sources.
 - core_message: Arabic only, 3 sentences max, begin with "الرسالة الجوهرية:".
 - No markdown, no extra keys, no extra nesting.
+- CRITICAL: Do NOT use double-quote characters (") inside any string value. Use « » for citations.
 """
 
         client = anthropic.Anthropic(api_key=api_key)
@@ -1712,6 +1713,7 @@ Rules:
 - analyzed_fields: single Arabic prose paragraph covering structured fields (list) then unstructured fields (تفاصيل_الطلب and الحل with avg chars and language distribution)
 - No markdown, no extra keys, no nesting beyond what is shown above
 - All content must be in Arabic only
+- CRITICAL: Do NOT use double-quote characters (") inside any string value. Use « » for citations.
 - Section 2.2 (classification methodology) is omitted — it will be hardcoded separately"""
 
         # HARDCODED SECTION 2.2: منهجية التصنيف

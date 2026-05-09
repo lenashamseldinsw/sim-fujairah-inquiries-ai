@@ -524,6 +524,8 @@ def generate_digital_transformation_section(
         '- Arabic only. Proper nouns in Latin script only: MOI, SMS, OTP, UAE PASS.\n'
         '- محتوى الإشعار examples must use «» Arabic quotation marks.\n'
         '- No markdown, no extra keys, no extra nesting.\n'
+        '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+        'Use angle brackets « » instead of double quotes when citing names.\n'
     )
 
     # ── API call ─────────────────────────────────────────────────────────────

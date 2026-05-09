@@ -673,7 +673,8 @@ def generate_improvement_roadmap_section(
             "Write clear, concise, data-grounded Arabic. "
             "Never invent numbers — use only the figures provided. "
             "Always copy LOCKED columns verbatim. "
-            "Return ONLY valid JSON with no markdown fences, no preamble, no postamble."
+            "Return ONLY valid JSON with no markdown fences, no preamble, no postamble. "
+            "CRITICAL: never use double-quote characters inside string values; use « » for citations."
         ),
         messages=[{"role": "user", "content": prompt}],
     )

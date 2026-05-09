@@ -444,7 +444,7 @@ def generate_digital_gaps_section(
             '     الصحيحة داخلها" with {critical_count} critical gaps identified.\n'
         )
         + f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
-        + f'     citing "{top_gap_name}" as the largest ({top_gap_count} cases).\n'
+        + f'     citing «{top_gap_name}» as the largest ({top_gap_count} cases). Use « » (angle brackets), never double quotes, around topic names.\n'
         + proactive_instruction +
         '\n'
         'B. "وضع التطبيق / الموقع الحالي" for EVERY row in pre_computed_gap_table\n'
@@ -497,6 +497,8 @@ def generate_digital_gaps_section(
         '- Every number in section_body must match a pre-computed input above.\n'
         '- Arabic only. Proper nouns only in Latin script: MOI, SMS, UAE PASS.\n'
         '- No markdown, no extra keys, no extra nesting.\n'
+        '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+        'To cite a topic name in section_body, use angle brackets « » instead of double quotes.\n'
     )
 
     # ── API call ──────────────────────────────────────────────────────────────
