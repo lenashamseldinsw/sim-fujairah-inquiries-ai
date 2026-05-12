@@ -1,7 +1,7 @@
 """
-build_report_ar.py
-Reads report_final_ar_20260430_002217.json and writes a styled .docx
-following the design palette in design-palette.md.
+build_report_en.py
+Reads the English-translated report JSON (e.g. inquiries_report_*_data_en.json)
+and writes a styled LTR .docx following the design palette in design-palette.md.
 """
 
 import json
@@ -44,8 +44,8 @@ TABLE_STYLE = TableStyle(
     border_color="CCCCCC",
     border_width_pt=0.5,
     font_size=10,
-    text_alignment="RIGHT",
-    rtl=True,
+    text_alignment="LEFT",
+    rtl=False,
 )
 
 CHART_STYLE = ChartStyle(
@@ -55,7 +55,7 @@ CHART_STYLE = ChartStyle(
     legend_position="b",
     show_data_labels=True,
     show_gridlines=True,
-    font="Dubai",
+    font="Calibri",
     axis_font_size=9,
     legend_font_size=9,
     title_font_size=12,
@@ -81,40 +81,40 @@ def _extract_cover_stats(data: dict):
     """Derive headline KPIs for the cover page from JSON content."""
     total_cases = 0
     complaint_pct = ""
-    ontime_pct = "98%"  # fallback
+    ontime_pct = "100%"  # fallback
 
-    # Section 3.1: contact-type distribution table
+    # Section 3.1: contact-type distribution table (id still contains Arabic)
     sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
     if sec_31:
         for table in sec_31.get("tables", []):
             for row in table.get("rows", []):
                 try:
-                    total_cases += int(row.get("العدد", 0))
+                    total_cases += int(row.get("Count", 0))
                 except (ValueError, TypeError):
                     pass
-                if row.get("نوع التواصل") == "شكوى":
-                    complaint_pct = row.get("النسبة", "")
+                if row.get("Contact Type") == "Complaint":
+                    complaint_pct = row.get("Percentage", "")
 
-    # Section النتائج الرئيسية: find the green / positive finding (98% on-time)
+    # Section key findings: find the green / positive finding (on-time closure)
     sec_findings = _find_subsection(data["sections"], "النتائج_الرئيسية")
     if sec_findings:
         for table in sec_findings.get("tables", []):
             for row in table.get("rows", []):
-                if "🟢" in row.get("مستوى الأهمية", ""):
-                    disc = row.get("الاكتشاف", "")
-                    if "98%" in disc:
-                        ontime_pct = "98%"
+                if "🟢" in row.get("Importance Level", ""):
+                    disc = row.get("Finding", "")
+                    if "100%" in disc:
+                        ontime_pct = "100%"
 
     return total_cases, complaint_pct, ontime_pct
 
 
 def _make_config(data: dict) -> DocumentConfig:
-    doc_name = data.get("document_name", "تقرير تحليل استفسارات المتعاملين")
-    # Extract period from document name (format: "تقرير تحليل استفسارات المتعاملين — يناير 2025")
-    parts = doc_name.split('—')
-    period = parts[1].strip() if len(parts) > 1 else "Q1 2026"
+    doc_name = data.get("document_name", "Customer Inquiry Analysis Report")
+    # Extract period from document name (format: "Report Name — Period")
+    parts = doc_name.split("—")
+    period = parts[1].strip() if len(parts) > 1 else ""
 
-    header_text = f"{parts[0].strip()}  ·  {period}"
+    header_text = f"{parts[0].strip()}  ·  {period}" if period else parts[0].strip()
 
     return DocumentConfig(
         page_size="Letter",
@@ -122,9 +122,9 @@ def _make_config(data: dict) -> DocumentConfig:
         margin_bottom=2.54,
         margin_left=2.54,
         margin_right=2.54,
-        default_font="Dubai",
+        default_font="Calibri",
         default_font_size=12,
-        default_rtl=True,
+        default_rtl=False,
         accent_color=GOLD,
         secondary_color=GOLD,
         heading_color=GOLD,
@@ -142,7 +142,7 @@ def _make_config(data: dict) -> DocumentConfig:
         header_font_size=10,
         header_bottom_border_color=GOLD,
         footer_type="text_and_page_number",
-        footer_text="سري — للاستخدام الداخلي  |  صفحة ",
+        footer_text="Confidential — Internal Use Only  |  Page ",
         footer_alignment="CENTER",
         footer_text_color=MID_GRAY,
         footer_font_size=9,
@@ -158,7 +158,7 @@ def _make_config(data: dict) -> DocumentConfig:
 
 def _build_cover(builder: WordBuilder, data: dict):
     total_cases, complaint_pct, ontime_pct = _extract_cover_stats(data)
-    doc_name = data.get("document_name", "تقرير تحليل استفسارات المتعاملين")
+    doc_name = data.get("document_name", "Customer Inquiry Analysis Report")
     parts = doc_name.split("—")
     period = parts[1].strip() if len(parts) > 1 else ""
 
@@ -173,8 +173,8 @@ def _build_cover(builder: WordBuilder, data: dict):
     cover.add_heading(
         doc_name,
         level=1,
-        style=TextStyle(size=26, alignment="CENTER", color=GOLD, space_before=12, space_after=12),
-        rtl=True,
+        style=TextStyle(size=16, alignment="CENTER", color=GOLD, space_before=12, space_after=12),
+        rtl=False,
     )
 
     cover.add_horizontal_separator(native=True, color=GOLD)
@@ -185,7 +185,7 @@ def _build_cover(builder: WordBuilder, data: dict):
         cover.add_paragraph(
             period,
             style=TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=0, space_after=8),
-            rtl=True,
+            rtl=False,
         )
 
     cover.add_spacer(16)
@@ -193,19 +193,19 @@ def _build_cover(builder: WordBuilder, data: dict):
     stat_style = TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=8, space_after=8)
 
     if total_cases:
-        cover.add_paragraph(f"إجمالي الحالات المغلقة: {total_cases} حالة", style=stat_style, rtl=True)
+        cover.add_paragraph(f"Total Closed Cases: {total_cases}", style=stat_style, rtl=False)
     if complaint_pct:
-        cover.add_paragraph(f"الشكاوى: {complaint_pct} من إجمالي التواصل", style=stat_style, rtl=True)
-    cover.add_paragraph(f"معدل الإغلاق في الوقت المحدد: {ontime_pct}", style=stat_style, rtl=True)
+        cover.add_paragraph(f"Complaints: {complaint_pct} of Total Contact", style=stat_style, rtl=False)
+    cover.add_paragraph(f"On-Time Closure Rate: {ontime_pct}", style=stat_style, rtl=False)
 
     cover.add_spacer(32)
 
     meta = data.get("metadata", {})
     created = meta.get("created", "2026-04-30")[:10]
     cover.add_paragraph(
-        f"شرطة الفجيرة  |  {created}  |  تحليل ذكاء األعمال المتكامل",
+        f"Fujairah Police  |  {created}  |  Integrated Business Intelligence Analysis",
         style=TextStyle(color=SOFT_GRAY, alignment="CENTER", space_before=0, space_after=0),
-        rtl=True,
+        rtl=False,
     )
 
     builder.add_cover_page(cover)
@@ -222,15 +222,14 @@ def _render_table(builder: WordBuilder, table: dict):
     if not columns or not rows:
         return
 
-    # Reverse column order for RTL visual layout (rightmost = first logical column)
-    rtl_columns = list(reversed(columns))
-    ordered_rows = [{col: row.get(col, "") for col in rtl_columns} for row in rows]
+    # LTR: preserve natural column order
+    ordered_rows = [{col: row.get(col, "") for col in columns} for row in rows]
 
     caption = table.get("caption")
     builder.add_table(
         ordered_rows,
         style=TABLE_STYLE,
-        rtl=True,
+        rtl=False,
         caption=caption,
     )
 
@@ -259,7 +258,7 @@ def _render_chart(builder: WordBuilder, chart: dict):
         chart_data,
         chart_type=chart_type,
         style=CHART_STYLE,
-        rtl=True,
+        rtl=False,
     )
 
 
@@ -272,7 +271,7 @@ def _render_section(builder: WordBuilder, section: dict, depth: int = 1):
     level = min(depth, 3)
     title = section.get("title", "")
     if title:
-        builder.add_heading(title, level=level, rtl=True)
+        builder.add_heading(title, level=level, rtl=False)
 
     content = section.get("content", "").strip()
     if content:
@@ -281,7 +280,7 @@ def _render_section(builder: WordBuilder, section: dict, depth: int = 1):
             if para:
                 builder.add_paragraph(
                     para,
-                    rtl=True,
+                    rtl=False,
                     style=TextStyle(alignment="JUSTIFY", color="000000"),
                 )
 
@@ -316,12 +315,12 @@ def build_report(json_path: str | Path, output_path: str | Path):
     # Native TOC
     builder.add_toc(
         TocStyle(
-            heading_text="المحتويات",
+            heading_text="Table of Contents",
             heading_bg_color=GOLD,
             heading_text_color="FFFFFF",
-            heading_font="Dubai",
-            entry_font="Dubai",
-            rtl=True,
+            heading_font="Calibri",
+            entry_font="Calibri",
+            rtl=False,
             exclude_cover_page=True,
         )
     )
@@ -340,6 +339,14 @@ def build_report(json_path: str | Path, output_path: str | Path):
 
 if __name__ == "__main__":
     base = Path(__file__).parent
-    json_path = base / "report_final_ar_20260430_002217.json"
+
+    # Try to find the most recent English JSON in the same directory,
+    # falling back to a fixed name if none is found.
+    en_files = sorted(base.glob("*_en.json"), reverse=True)
+    if en_files:
+        json_path = en_files[0]
+    else:
+        json_path = base / "report_final_en.json"
+
     out_path = json_path.with_suffix(".docx")
     build_report(json_path, out_path)

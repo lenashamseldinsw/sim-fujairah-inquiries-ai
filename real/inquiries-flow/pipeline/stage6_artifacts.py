@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage6_json_report import generate_json_report
+from .translate_report_en import translate_report_to_english
 from .generate_workload_map_section import generate_workload_map_section
 from .generate_customer_journey_section import generate_customer_journey_section
 from .generate_digital_gaps_section import generate_digital_gaps_section
@@ -32,12 +33,19 @@ from .generate_ai_use_cases_section import generate_ai_use_cases_section
 from .generate_improvement_roadmap_section import generate_improvement_roadmap_section
 from .generate_conclusion_section import generate_conclusion_section
 
-# Import build_report_ar to generate Word document from JSON
+# Import build_report_ar to generate Arabic Word document from JSON
 try:
     from .build_report_ar import build_report
 except ImportError:
     build_report = None
     print("[Warning] Could not import build_report_ar")
+
+# Import build_report_en to generate English Word document from JSON
+try:
+    from .build_report_en import build_report as build_report_en
+except ImportError:
+    build_report_en = None
+    print("[Warning] Could not import build_report_en")
 
 
 # Excel formatting
@@ -348,23 +356,22 @@ def generate_word_report(
     api_key: str = ""
 ) -> None:
     """
-    Generate Word report using build_report_ar.py.
+    Generate Arabic and English Word reports from the pipeline state.
 
-    Generates JSON report, saves it to disk, then uses build_report_ar.build_report()
-    to create the styled Word document. Note: build_report_ar only supports Arabic.
+    Generates the JSON report, saves it to disk, then:
+    - Uses build_report_ar to produce a styled Arabic RTL .docx
+    - Uses build_report_en to produce a styled English LTR .docx (when the
+      English translation is available in state.report_json_en)
 
     Args:
         state: Pipeline state with report_sections
-        output_path: Path to save .docx
-        language: Kept for backward compatibility (build_report_ar is Arabic-only)
-        api_key: Anthropic API key for LLM report generation
+        output_path: Base path for .docx output (Arabic). English docx is saved
+                     alongside it with an ``_en`` suffix before the extension.
+        language: Kept for backward compatibility.
+        api_key: Anthropic API key for LLM report generation.
     """
-    if build_report is None:
-        print(f"⚠️  Skipping Word report generation (build_report_ar not available)")
-        return
-
     if output_path is None:
-        print(f"⚠️  Skipping Word report generation (no output_path provided)")
+        print("⚠️  Skipping Word report generation (no output_path provided)")
         return
 
     # Generate JSON report from state
@@ -374,14 +381,35 @@ def generate_word_report(
     output_path = Path(output_path)
     json_path = output_path.with_stem(output_path.stem + "_data").with_suffix(".json")
 
-    # Save JSON to disk
+    # Save Arabic JSON to disk
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"[Stage6] Saved report JSON: {json_path}")
 
-    # Build Word document from JSON
-    build_report(json_path, output_path)
-    print(f"[Stage6] Generated Word report: {output_path}")
+    # Save English JSON alongside Arabic if translation succeeded
+    en_json_path = None
+    if getattr(state, 'report_json_en', None):
+        en_json_path = output_path.with_stem(output_path.stem + "_data_en").with_suffix(".json")
+        with open(en_json_path, 'w', encoding='utf-8') as f:
+            json.dump(state.report_json_en, f, ensure_ascii=False, indent=2)
+        print(f"[Stage6] Saved English report JSON: {en_json_path}")
+
+    # Build Arabic Word document from JSON
+    if build_report is not None:
+        build_report(json_path, output_path)
+        print(f"[Stage6] Generated Arabic Word report: {output_path}")
+    else:
+        print("⚠️  Skipping Arabic Word report generation (build_report_ar not available)")
+
+    # Build English Word document from English JSON
+    if build_report_en is not None and en_json_path is not None:
+        en_docx_path = output_path.with_stem(output_path.stem + "_en")
+        build_report_en(en_json_path, en_docx_path)
+        print(f"[Stage6] Generated English Word report: {en_docx_path}")
+    elif build_report_en is None:
+        print("⚠️  Skipping English Word report generation (build_report_en not available)")
+    else:
+        print("⚠️  Skipping English Word report generation (English JSON translation unavailable)")
 
 
 def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
@@ -1913,6 +1941,13 @@ def run_stage6(
     # Generate report dictionary first so state.report_json is always populated
     # (generate_word_report may be skipped when word_path is None)
     state.report_json = generate_json_report(state)
+
+    # Translate Arabic JSON to English using the same LLM as the rest of the pipeline
+    state.report_json_en = translate_report_to_english(state.report_json, api_key)
+    if state.report_json_en:
+        print("[Stage6] English translation of report JSON complete.")
+    else:
+        print("[Stage6] WARNING: English translation failed or was skipped.")
 
     # Generate Word report (skipped gracefully when word_path is None)
     generate_word_report(state, word_path, language, api_key)

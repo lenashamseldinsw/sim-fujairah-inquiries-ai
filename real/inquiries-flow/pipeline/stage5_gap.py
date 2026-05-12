@@ -84,7 +84,7 @@ def extract_guidebook_topics(guidebook_path: str) -> List[str]:
         FileNotFoundError: If guidebook file doesn't exist
         KeyError: If guidebook structure doesn't have 'sections'
     """
-    with open(guidebook_path) as f:
+    with open(guidebook_path, encoding="utf-8") as f:
         g = json.load(f)
 
     sections = g.get('sections', [])
@@ -114,7 +114,7 @@ def extract_guidebook_metadata(guidebook_path: str) -> Dict[str, Any]:
         FileNotFoundError: If guidebook file doesn't exist
         KeyError: If guidebook structure doesn't have required fields
     """
-    with open(guidebook_path) as f:
+    with open(guidebook_path, encoding="utf-8") as f:
         g = json.load(f)
 
     # Extract pages from document metadata
@@ -154,7 +154,7 @@ def load_guidebook_for_stage5(guidebook_path: str, friction_clusters: List[str])
     Returns:
         Dict with filtered services, faq, and fees_schedules
     """
-    with open(guidebook_path) as f:
+    with open(guidebook_path, encoding="utf-8") as f:
         g = json.load(f)
 
     # Fields Stage 5 needs per service

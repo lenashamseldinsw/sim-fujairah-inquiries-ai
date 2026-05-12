@@ -2009,7 +2009,11 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
                 cache_dir = str(Path(__file__).parent / "inquiries-output" / "cache")
 
             display = DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
-            display.display_from_json(report_data)
+            # Use the English JSON when the UI is set to English and translation exists
+            if lang == 'en' and report_data.get('report_json_en'):
+                display.display_from_json(report_data['report_json_en'])
+            else:
+                display.display_from_json(report_data)
             return
 
         # Fallback: look for existing report files (for legacy compatibility)
@@ -2066,7 +2070,7 @@ def display_report_tabs(lang: str = 'ar', flow_type: str = 'inquiries', period: 
 
 
 # ── Handle Generated Output Files ────────────────────────────────────────────
-def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar'):
+def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar', word_path_en: str = None):
     """
     Handle generated output files from RealAnalyzer.
 
@@ -2074,8 +2078,9 @@ def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar')
 
     Args:
         excel_path: Path to generated Excel file
-        word_path: Path to generated Word document
+        word_path: Path to generated Arabic Word document
         lang: Language preference
+        word_path_en: Path to generated English Word document (optional)
     """
     output_dir = Path(__file__).parent / "inquiries-output"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2100,7 +2105,7 @@ def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar')
         print(f"[Output] ✗ Excel file not found at {excel_path}")
         st.session_state.output_files['excel_ready'] = False
 
-    # Copy Word document
+    # Copy Arabic Word document
     print(f"[Output] Checking Word: path={word_path}, exists={Path(word_path).exists() if word_path else False}")
     if word_path and Path(word_path).exists():
         try:
@@ -2115,6 +2120,22 @@ def _handle_generated_outputs(excel_path: str, word_path: str, lang: str = 'ar')
     else:
         print(f"[Output] ✗ Word document not found at {word_path}")
         st.session_state.output_files['word_ready'] = False
+
+    # Copy English Word document (generated alongside the Arabic one with _en suffix)
+    print(f"[Output] Checking English Word: path={word_path_en}, exists={Path(word_path_en).exists() if word_path_en else False}")
+    if word_path_en and Path(word_path_en).exists():
+        try:
+            dest_word_en = output_dir / "Inquiries Analysis Report.docx"
+            shutil.copy2(word_path_en, dest_word_en)
+            st.session_state.output_files['word_en_ready'] = True
+            st.session_state.output_files['word_en_path'] = str(dest_word_en)
+            print(f"[Output] ✓ English Word document copied to {dest_word_en}")
+        except Exception as e:
+            print(f"[Output] ✗ Error copying English Word: {e}")
+            st.session_state.output_files['word_en_ready'] = False
+    else:
+        print(f"[Output] ✗ English Word document not found at {word_path_en}")
+        st.session_state.output_files['word_en_ready'] = False
 
 
 # ── Create ZIP with multiple files ────────────────────────────────────────────
@@ -2156,6 +2177,12 @@ def create_download_zip(flow_type: str = 'inquiries', period: str = None, lang: 
             if word_path and Path(word_path).exists():
                 word_file = Path(word_path)
                 zip_file.write(word_file, word_file.name)
+
+            # Include English Word report when available
+            word_en_path = output_files.get('word_en_path')
+            if word_en_path and Path(word_en_path).exists():
+                word_en_file = Path(word_en_path)
+                zip_file.write(word_en_file, word_en_file.name)
 
             if excel_path and Path(excel_path).exists():
                 excel_file = Path(excel_path)
@@ -2690,9 +2717,9 @@ def inquiries_page(lang):
                         st.session_state.analysis_error = None
 
                     # Handle generated output files (from RealAnalyzer)
-                    print(f"[Main] Report: success={report.get('success')}, excel={report.get('excel_path')}, word={report.get('word_path')}")
+                    print(f"[Main] Report: success={report.get('success')}, excel={report.get('excel_path')}, word={report.get('word_path')}, word_en={report.get('word_path_en')}")
                     if report.get('success') and report.get('excel_path') and report.get('word_path'):
-                        _handle_generated_outputs(report.get('excel_path'), report.get('word_path'), lang)
+                        _handle_generated_outputs(report.get('excel_path'), report.get('word_path'), lang, word_path_en=report.get('word_path_en'))
                 else:
                     st.session_state.analysis_error = "Analysis returned no data"
             except Exception as e:

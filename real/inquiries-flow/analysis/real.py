@@ -110,6 +110,8 @@ class RealAnalyzer:
             # Run full pipeline
             excel_path = str(self.output_dir / f"{session_id}_inquiries.xlsx")
             word_path = str(self.output_dir / f"{session_id}_inquiries.docx")
+            # English Word is saved alongside Arabic with _en suffix by generate_word_report
+            word_path_en = str(Path(word_path).with_stem(Path(word_path).stem + "_en"))
 
             results = orchestrator.run_full_pipeline(
                 df=df,
@@ -127,7 +129,8 @@ class RealAnalyzer:
                 progress_callback(1.0, "✅ اكتمل التحليل", "✅ Analysis Complete")
 
             # Return result with file paths and report JSON for display
-            report_json = orchestrator.state.report_json if orchestrator.state else {}
+            report_json    = orchestrator.state.report_json    if orchestrator.state else {}
+            report_json_en = orchestrator.state.report_json_en if orchestrator.state else {}
 
             # Build response - merge report structure with metadata
             response = {
@@ -135,12 +138,16 @@ class RealAnalyzer:
                 'message': 'Analysis completed successfully',
                 'excel_path': excel_path,
                 'word_path': word_path,
+                'word_path_en': word_path_en,
                 'summary': orchestrator.get_state_summary(),
                 'results': results,
             }
-            # Add report structure (sections, metadata, etc) from report_json
+            # Merge Arabic report structure (sections, metadata, charts, etc.) at top level
             if report_json:
                 response.update(report_json)
+            # Store English report separately so display_report_tabs() can use it when lang='en'
+            if report_json_en:
+                response['report_json_en'] = report_json_en
 
             return response
 

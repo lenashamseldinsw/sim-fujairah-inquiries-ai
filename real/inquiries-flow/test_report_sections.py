@@ -29,7 +29,7 @@ def main():
     print("=" * 80)
 
     # Input file
-    input_file = Path("/Users/lena/Documents/Sword/Fujairah_Inquiries_Docs/Fujairah police Project Inputs/Inputs/Inquiries 2025.xlsx")
+    input_file =  Path(__file__).parent / "sample-input" / "Inquiries 2025.xlsx"
 
     if not input_file.exists():
         print(f"❌ Input file not found: {input_file}")

@@ -136,7 +136,8 @@ class PipelineState(BaseModel):
     report_sections_en: Dict[str, Any] = Field(default_factory=dict)  # English sections, keyed by section slug
 
     # --- STAGE 6 (REPORT DICTIONARY) ---
-    report_json: Optional[Dict[str, Any]] = None  # Demo-compatible report dict (in-memory)
+    report_json:    Optional[Dict[str, Any]] = None  # Demo-compatible report dict (in-memory)
+    report_json_en: Optional[Dict[str, Any]] = None  # English-translated copy of report_json
 
     # --- PRIOR RUN (for monthly diff) ---
     prior_run_state: Optional[Dict[str, Any]] = None  # Loaded from uploaded JSON
