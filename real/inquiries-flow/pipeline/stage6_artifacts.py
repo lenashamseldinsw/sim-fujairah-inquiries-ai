@@ -475,8 +475,13 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         'workload_map': (generate_workload_map_section, 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات'),
         'digital_gaps': (generate_digital_gaps_section, 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية'),
         'digital_transformation': (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي'),
-        'ai_use_cases': (generate_ai_use_cases_section, 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي'),
     }
+
+    # ai_use_cases requires gap_table from Stage 5; skip gracefully if unavailable
+    if state.gap_table:
+        wave1_tasks['ai_use_cases'] = (generate_ai_use_cases_section, 'سابعاً: حالات الاستخدام المدعومة بالذكاء الاصطناعي')
+    else:
+        print("[GenSections] WARNING: state.gap_table is empty — skipping ai_use_cases section")
 
     # customer_journey requires journey_map from Stage 4; skip gracefully if unavailable
     if state.journey_map:

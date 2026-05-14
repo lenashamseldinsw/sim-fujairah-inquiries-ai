@@ -222,17 +222,32 @@ class PipelineOrchestrator:
             (success, message)
         """
         try:
+            # journey_map is required for Stage 5 — if empty, Stage 4 did not complete correctly
+            if not self.state.journey_map:
+                return False, (
+                    "Stage 5 skipped: state.journey_map is empty — "
+                    "Stage 4 (stage4_analysis) must complete successfully before gap analysis can run."
+                )
+
             # Find and load guidebook
             if not self.find_guidebook_json():
                 return False, "Could not find guidebook JSON"
 
             # Extract friction clusters from journey map for filtering
-            friction_clusters = [j.cluster for j in self.state.journey_map] if self.state.journey_map else []
+            friction_clusters = [j.cluster for j in self.state.journey_map]
 
             # Load filtered guidebook data
             guidebook_data = load_guidebook_for_stage5(self.guidebook_path, friction_clusters)
 
             self.state = run_stage5(self.state, self.api_key, guidebook_data)
+
+            # gap_table must be populated — if empty after retries, the LLM failed all attempts
+            if not self.state.gap_table:
+                return False, (
+                    "Stage 5 gap analysis produced no gaps after 3 LLM attempts — "
+                    "check [Stage5] logs for details. The guidebook may have insufficient "
+                    "coverage for the detected friction clusters, or the tool call failed repeatedly."
+                )
 
             # Preserve metadata for methodology section
             self.state.validated_faqs_count = len(self.state.validated_faqs)

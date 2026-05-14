@@ -317,175 +317,187 @@ def run_stage5(
         locked_case_counts
     )
 
-    # Call Claude with tool-use
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=8000,  # Increased to accommodate full gap_table analysis
-        system="You are an expert analyst of government customer service. Provide gap analysis based on the guidebook and customer interaction patterns. Return detailed, bilingual recommendations.",
-        tools=[GAP_ANALYSIS_TOOL],
-        tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+    # Call Claude with tool-use — retry up to 3 times if gap_table comes back empty
+    MAX_ATTEMPTS = 3
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        if attempt > 1:
+            print(f"[Stage5] Retrying LLM call (attempt {attempt}/{MAX_ATTEMPTS}) — gap_table was empty on previous attempt")
 
-    # Extract tool use result
-    print(f"[Stage5] Message has {len(message.content)} blocks")
-    for i, block in enumerate(message.content):
-        print(f"[Stage5] Block {i}: type={block.type}")
-        if block.type == "text":
-            print(f"[Stage5]   Text: {block.text[:200]}")
-        if block.type == "tool_use":
-            print(f"[Stage5] Tool call received: {block.name}")
-            print(f"[Stage5] Input type: {type(block.input)}")
-            print(f"[Stage5] Input value: {block.input}")
-            print(f"[Stage5] Keys in response: {list(block.input.keys()) if isinstance(block.input, dict) else 'N/A'}")
-            print(f"[Stage5] gap_table length: {len(block.input.get('gap_table', []))}")
-            print(f"[Stage5] faq_validations length: {len(block.input.get('faq_validations', []))}")
-            # Print first gap_table item if any exist
-            if block.input.get('gap_table'):
-                print(f"[Stage5] First gap: {block.input['gap_table'][0]}")
-            else:
-                print(f"[Stage5] gap_table raw value: {block.input.get('gap_table')}")
-
-            analysis = block.input
-
-            # Parse gap table with enhanced guidebook intelligence
-            if 'gap_table' in analysis:
-                # Build journey_map lookup by topic and cluster for case_count matching
-                journey_map_by_topic = {}
-                cluster_to_case_count = {}
-                for friction in (state.journey_map or []):
-                    friction_topic = friction.friction_point or friction.friction_point_ar or ""
-                    cluster_topic = friction.cluster or friction.cluster_ar or ""
-                    if friction_topic:
-                        journey_map_by_topic[friction_topic.lower()[:50]] = friction.case_count
-                    if cluster_topic:
-                        cluster_key = cluster_topic.lower()[:50]
-                        journey_map_by_topic[cluster_key] = friction.case_count
-                        cluster_to_case_count[cluster_topic] = friction.case_count  # Exact match for reinject
-
-                gap_rows = []
-                for g in analysis.get('gap_table', []):
-                    case_count = g.get('case_count', 0)
-                    gap_topic = g.get('topic_ar') or g.get('topic') or ""
-
-                    # PRIMARY: Reinject from locked case counts (journey_map source of truth)
-                    # Try exact match on gap topic against journey_map
-                    gap_topic_lower = gap_topic.lower()[:50]
-                    matched_count = journey_map_by_topic.get(gap_topic_lower)
-
-                    # Try partial match if exact fails
-                    if not matched_count:
-                        for jm_key, count in journey_map_by_topic.items():
-                            if jm_key in gap_topic_lower or gap_topic_lower in jm_key:
-                                matched_count = count
-                                break
-
-                    # If matched, reinject locked count (overrides LLM output)
-                    if matched_count and matched_count > 0:
-                        case_count = matched_count
-                        if case_count != g.get('case_count', 0):
-                            print(f"[Stage5] REINJECT: case_count={case_count} for gap '{gap_topic[:50]}' (was {g.get('case_count', '?')})")
-
-                    gap_rows.append(GapRow(
-                        topic=g.get('topic', ''),
-                        topic_ar=g.get('topic_ar', ''),
-                        case_count=case_count,
-                        guidebook_status=g.get('guidebook_status', ''),
-                        gap_type=g.get('gap_type', ''),
-                        gap_type_ar=g.get('gap_type_ar', ''),
-                        severity=g.get('severity', 'Medium'),
-                        recommendation=g.get('recommendation', ''),
-                        recommendation_ar=g.get('recommendation_ar', ''),
-                        # Enhanced guidebook intelligence
-                        guidebook_excerpt=g.get('guidebook_excerpt', None),
-                        guidebook_excerpt_ar=g.get('guidebook_excerpt_ar', None),
-                        coverage_percentage=float(g.get('coverage_percentage', 0)) if g.get('coverage_percentage') else None,
-                        clarity_assessment=g.get('clarity_assessment', None),
-                        format_assessment=g.get('format_assessment', None),
-                        has_visual_guidance=g.get('has_visual_guidance', None),
-                        guidebook_match_confidence=float(g.get('guidebook_match_confidence', 0)) if g.get('guidebook_match_confidence') else None,
-                        proactive_notification_opportunity=g.get('proactive_notification_opportunity', None)
-                    ))
-
-                state.gap_table = gap_rows
-
-            # Reconcile gap_table case counts against all_classified (Root Cause 1 fix)
-            # Ground truth: sub_classification → actual case count
-            actual_sub_counts = defaultdict(int)
-            for case in state.all_classified:
-                actual_sub_counts[case.sub_classification] += 1
-
-            # Bridge: journey_map cluster text → set of sub_classifications it covers.
-            # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
-            cluster_to_subs: dict = defaultdict(set)
-            for friction in state.journey_map:
-                if not friction.sub_classification:
-                    continue
-                # Index by every available text field so gap topic matching has maximum coverage
-                for text_field in [
-                    friction.cluster_ar,
-                    friction.cluster,
-                    friction.friction_point_ar,
-                    friction.friction_point,
-                ]:
-                    key = (text_field or "").strip().lower()
-                    if key:
-                        cluster_to_subs[key].add(friction.sub_classification)
-
-            # Re-derive each gap row's case_count by summing actual counts of all
-            # sub_classifications whose journey_map cluster overlaps with the gap topic.
-            for gap in state.gap_table:
-                topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
-                matched_subs: set = set()
-
-                for cluster_key, subs in cluster_to_subs.items():
-                    if cluster_key in topic_lower or topic_lower in cluster_key:
-                        matched_subs.update(subs)
-
-                if matched_subs:
-                    reconciled = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
-                    if reconciled > 0 and reconciled != gap.case_count:
-                        print(
-                            f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
-                            f"{gap.case_count} → {reconciled} "
-                            f"(subs: {matched_subs})"
-                        )
-                        gap.case_count = reconciled
-
-            print(f"[Stage5] ✓ gap_table case_counts reconciled against all_classified")
-
-            # Validate FAQ candidates
-            if 'faq_validations' in analysis:
-                faq_validations = {
-                    v['question']: v['validation_status']
-                    for v in analysis.get('faq_validations', [])
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=8000,  # Increased to accommodate full gap_table analysis
+            system="You are an expert analyst of government customer service. Provide gap analysis based on the guidebook and customer interaction patterns. Return detailed, bilingual recommendations.",
+            tools=[GAP_ANALYSIS_TOOL],
+            tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
                 }
+            ]
+        )
 
-                validated = []
-                for faq in state.faq_candidates:
-                    status = faq_validations.get(faq.question, 'OK')
-                    faq.validation_status = status
-                    if status == 'OK':
-                        validated.append(faq)
+        # Extract tool use result
+        print(f"[Stage5] Attempt {attempt}: message has {len(message.content)} blocks")
+        for i, block in enumerate(message.content):
+            print(f"[Stage5] Block {i}: type={block.type}")
+            if block.type == "text":
+                print(f"[Stage5]   Text: {block.text[:200]}")
+            if block.type == "tool_use":
+                print(f"[Stage5] Tool call received: {block.name}")
+                print(f"[Stage5] Input type: {type(block.input)}")
+                print(f"[Stage5] Input value: {block.input}")
+                print(f"[Stage5] Keys in response: {list(block.input.keys()) if isinstance(block.input, dict) else 'N/A'}")
+                print(f"[Stage5] gap_table length: {len(block.input.get('gap_table', []))}")
+                print(f"[Stage5] faq_validations length: {len(block.input.get('faq_validations', []))}")
+                # Print first gap_table item if any exist
+                if block.input.get('gap_table'):
+                    print(f"[Stage5] First gap: {block.input['gap_table'][0]}")
+                else:
+                    print(f"[Stage5] gap_table raw value: {block.input.get('gap_table')}")
 
-                state.validated_faqs = validated
-            else:
-                # If no validations provided, assume all OK
-                for faq in state.faq_candidates:
-                    faq.validation_status = 'OK'
-                state.validated_faqs = state.faq_candidates
+                analysis = block.input
 
+                # Parse gap table with enhanced guidebook intelligence
+                if 'gap_table' in analysis:
+                    # Build journey_map lookup by topic and cluster for case_count matching
+                    journey_map_by_topic = {}
+                    cluster_to_case_count = {}
+                    for friction in (state.journey_map or []):
+                        friction_topic = friction.friction_point or friction.friction_point_ar or ""
+                        cluster_topic = friction.cluster or friction.cluster_ar or ""
+                        if friction_topic:
+                            journey_map_by_topic[friction_topic.lower()[:50]] = friction.case_count
+                        if cluster_topic:
+                            cluster_key = cluster_topic.lower()[:50]
+                            journey_map_by_topic[cluster_key] = friction.case_count
+                            cluster_to_case_count[cluster_topic] = friction.case_count  # Exact match for reinject
+
+                    gap_rows = []
+                    for g in analysis.get('gap_table', []):
+                        case_count = g.get('case_count', 0)
+                        gap_topic = g.get('topic_ar') or g.get('topic') or ""
+
+                        # PRIMARY: Reinject from locked case counts (journey_map source of truth)
+                        # Try exact match on gap topic against journey_map
+                        gap_topic_lower = gap_topic.lower()[:50]
+                        matched_count = journey_map_by_topic.get(gap_topic_lower)
+
+                        # Try partial match if exact fails
+                        if not matched_count:
+                            for jm_key, count in journey_map_by_topic.items():
+                                if jm_key in gap_topic_lower or gap_topic_lower in jm_key:
+                                    matched_count = count
+                                    break
+
+                        # If matched, reinject locked count (overrides LLM output)
+                        if matched_count and matched_count > 0:
+                            case_count = matched_count
+                            if case_count != g.get('case_count', 0):
+                                print(f"[Stage5] REINJECT: case_count={case_count} for gap '{gap_topic[:50]}' (was {g.get('case_count', '?')})")
+
+                        gap_rows.append(GapRow(
+                            topic=g.get('topic', ''),
+                            topic_ar=g.get('topic_ar', ''),
+                            case_count=case_count,
+                            guidebook_status=g.get('guidebook_status', ''),
+                            gap_type=g.get('gap_type', ''),
+                            gap_type_ar=g.get('gap_type_ar', ''),
+                            severity=g.get('severity', 'Medium'),
+                            recommendation=g.get('recommendation', ''),
+                            recommendation_ar=g.get('recommendation_ar', ''),
+                            # Enhanced guidebook intelligence
+                            guidebook_excerpt=g.get('guidebook_excerpt', None),
+                            guidebook_excerpt_ar=g.get('guidebook_excerpt_ar', None),
+                            coverage_percentage=float(g.get('coverage_percentage', 0)) if g.get('coverage_percentage') else None,
+                            clarity_assessment=g.get('clarity_assessment', None),
+                            format_assessment=g.get('format_assessment', None),
+                            has_visual_guidance=g.get('has_visual_guidance', None),
+                            guidebook_match_confidence=float(g.get('guidebook_match_confidence', 0)) if g.get('guidebook_match_confidence') else None,
+                            proactive_notification_opportunity=g.get('proactive_notification_opportunity', None)
+                        ))
+
+                    state.gap_table = gap_rows
+
+                # Reconcile gap_table case counts against all_classified (Root Cause 1 fix)
+                # Ground truth: sub_classification → actual case count
+                actual_sub_counts = defaultdict(int)
+                for case in state.all_classified:
+                    actual_sub_counts[case.sub_classification] += 1
+
+                # Bridge: journey_map cluster text → set of sub_classifications it covers.
+                # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
+                cluster_to_subs: dict = defaultdict(set)
+                for friction in state.journey_map:
+                    if not friction.sub_classification:
+                        continue
+                    # Index by every available text field so gap topic matching has maximum coverage
+                    for text_field in [
+                        friction.cluster_ar,
+                        friction.cluster,
+                        friction.friction_point_ar,
+                        friction.friction_point,
+                    ]:
+                        key = (text_field or "").strip().lower()
+                        if key:
+                            cluster_to_subs[key].add(friction.sub_classification)
+
+                # Re-derive each gap row's case_count by summing actual counts of all
+                # sub_classifications whose journey_map cluster overlaps with the gap topic.
+                for gap in state.gap_table:
+                    topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
+                    matched_subs: set = set()
+
+                    for cluster_key, subs in cluster_to_subs.items():
+                        if cluster_key in topic_lower or topic_lower in cluster_key:
+                            matched_subs.update(subs)
+
+                    if matched_subs:
+                        reconciled = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
+                        if reconciled > 0 and reconciled != gap.case_count:
+                            print(
+                                f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                f"{gap.case_count} → {reconciled} "
+                                f"(subs: {matched_subs})"
+                            )
+                            gap.case_count = reconciled
+
+                print(f"[Stage5] ✓ gap_table case_counts reconciled against all_classified")
+
+                # Validate FAQ candidates
+                if 'faq_validations' in analysis:
+                    faq_validations = {
+                        v['question']: v['validation_status']
+                        for v in analysis.get('faq_validations', [])
+                    }
+
+                    validated = []
+                    for faq in state.faq_candidates:
+                        status = faq_validations.get(faq.question, 'OK')
+                        faq.validation_status = status
+                        if status == 'OK':
+                            validated.append(faq)
+
+                    state.validated_faqs = validated
+                else:
+                    # If no validations provided, assume all OK
+                    for faq in state.faq_candidates:
+                        faq.validation_status = 'OK'
+                    state.validated_faqs = state.faq_candidates
+
+                break
+        else:
+            # No tool_use block found in this attempt
+            print(f"[Stage5] WARNING: No tool call in LLM response on attempt {attempt}")
+
+        if state.gap_table:
+            print(f"[Stage5] ✓ gap_table populated with {len(state.gap_table)} rows on attempt {attempt}")
             break
-    else:
-        # No tool call found — log warning
-        print("[Stage5] WARNING: No tool call in LLM response — gap_table may be empty")
+
+        if attempt < MAX_ATTEMPTS:
+            print(f"[Stage5] WARNING: gap_table empty after attempt {attempt} — retrying...")
 
     if not state.gap_table:
-        print("[Stage5] WARNING: gap_table is empty after LLM call — tool call may have failed or guidebook content unavailable")
+        print(f"[Stage5] WARNING: gap_table is empty after all {MAX_ATTEMPTS} LLM attempts — tool call may have failed or guidebook content unavailable")
 
     return state
