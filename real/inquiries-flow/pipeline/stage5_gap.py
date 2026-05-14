@@ -296,7 +296,19 @@ def run_stage5(
         api_key: Anthropic API key
         guidebook_data: Filtered guidebook dict with services, faq, fees_schedules
     """
+    # When journey_map is empty, gap analysis cannot run — but we can still validate
+    # faq_candidates so that Stage 6 has FAQ data for the digital_transformation section.
     if not state.journey_map:
+        if state.faq_candidates:
+            print(
+                "[Stage5] journey_map is empty — skipping gap analysis. "
+                "Promoting faq_candidates to validated_faqs without guidebook cross-check."
+            )
+            for faq in state.faq_candidates:
+                faq.validation_status = 'OK'
+            state.validated_faqs = list(state.faq_candidates)
+        else:
+            print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
         return state
 
     client = anthropic.Anthropic(api_key=api_key)

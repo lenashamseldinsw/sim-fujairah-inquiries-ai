@@ -20,6 +20,39 @@ from collections import defaultdict
 from .state import PipelineState, PatternCluster, JourneyFriction, FAQCandidate
 
 
+JOURNEY_MAP_ONLY_TOOL = {
+    "name": "extract_journey_map",
+    "description": "Extract friction points in the customer journey grouped by sub-classification",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "journey_map": {
+                "type": "array",
+                "description": "Friction points that caused customers to contact Fujairah Police",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "top_level": {"type": "string"},
+                        "sub_classification": {"type": "string"},
+                        "cluster": {"type": "string"},
+                        "cluster_ar": {"type": "string"},
+                        "friction_point": {"type": "string"},
+                        "friction_point_ar": {"type": "string"},
+                        "root_cause_category": {
+                            "type": "string",
+                            "enum": ["missing_info", "inaccessible_info", "no_proactive_notification", "platform_bug", "policy_complexity"]
+                        },
+                        "case_count": {"type": "integer"}
+                    },
+                    "required": ["top_level", "sub_classification", "cluster_ar", "friction_point_ar", "root_cause_category", "case_count"]
+                }
+            }
+        },
+        "required": ["journey_map"]
+    }
+}
+
+
 ANALYSIS_TOOL = {
     "name": "analyze_cases",
     "description": "Analyze customer cases to extract patterns, friction points, FAQs, and opportunities",
@@ -342,6 +375,105 @@ def _reconcile_counts(
     return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
 
 
+def _retry_journey_map_only(
+    state: PipelineState,
+    client: anthropic.Anthropic,
+    cases_text: str,
+) -> PipelineState:
+    """
+    Focused fallback retry for journey_map when all main Stage 4 attempts produced an empty result.
+
+    Uses a minimal tool schema (journey_map only) and a shorter, laser-focused prompt to
+    reduce cognitive load on the model and maximise the chance of getting friction points.
+    Runs up to 2 additional attempts.
+    """
+    system_prompt = (
+        "You are an expert business analyst for government customer service. "
+        "Your ONLY task is to identify the friction points that caused customers to contact "
+        "Fujairah Police — i.e., the reasons behind each enquiry group. "
+        "For every sub-classification group provided, return at least one friction point. "
+        "All text (cluster_ar, friction_point_ar) MUST be in Arabic. "
+        "root_cause_category must be one of: missing_info, inaccessible_info, "
+        "no_proactive_notification, platform_bug, policy_complexity. "
+        "case_count must not exceed the group size shown in the input."
+    )
+
+    base_user_content = (
+        "Identify the customer journey friction points for these case groups.\n"
+        "Return at least one friction point per sub-classification group.\n\n"
+        + cases_text
+    )
+
+    for attempt in range(1, 3):
+        nudge = (
+            ""
+            if attempt == 1
+            else (
+                "\n\nYour previous response returned an empty journey_map. "
+                "Every group listed above has a reason customers contacted support — "
+                "identify it. Return at least one friction point per group."
+            )
+        )
+        print(f"[Stage4] journey_map-only focused retry (attempt {attempt}/2)...")
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4000,
+                system=system_prompt,
+                tools=[JOURNEY_MAP_ONLY_TOOL],
+                tool_choice={"type": "any"},
+                messages=[{"role": "user", "content": base_user_content + nudge}],
+            )
+        except Exception as e:
+            print(f"[Stage4] journey_map-only retry attempt {attempt} API error: {e}")
+            continue
+
+        analysis = None
+        for block in message.content:
+            if block.type == "tool_use":
+                analysis = block.input
+                break
+
+        if not analysis:
+            print(f"[Stage4] journey_map-only retry attempt {attempt}: no tool call in response")
+            continue
+
+        raw_items = analysis.get("journey_map", [])
+        if not raw_items:
+            print(f"[Stage4] journey_map-only retry attempt {attempt}: LLM returned empty journey_map")
+            continue
+
+        state.journey_map = [
+            JourneyFriction(
+                cluster=j.get("cluster", ""),
+                cluster_ar=j.get("cluster_ar", ""),
+                friction_point=j.get("friction_point", ""),
+                friction_point_ar=j.get("friction_point_ar", ""),
+                root_cause_category=j.get("root_cause_category", ""),
+                case_count=j.get("case_count", 0),
+                top_level=j.get("top_level", ""),
+                sub_classification=j.get("sub_classification", ""),
+            )
+            for j in raw_items
+        ]
+
+        # Reconcile counts against ground truth
+        state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
+            state.journey_map,
+            state.patterns,
+            state.all_classified,
+            state.notification_opportunities,
+            state.proactive_notification_case_count,
+        )
+
+        if state.journey_map:
+            print(f"[Stage4] ✓ journey_map-only retry succeeded: {len(state.journey_map)} friction points")
+            return state
+
+    print("[Stage4] WARNING: journey_map-only focused retry also failed — journey_map remains empty.")
+    return state
+
+
 def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
     """
     Stage 4: Analysis with two-level taxonomy grouping.
@@ -499,7 +631,16 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         else:
             print(
                 f"[Stage4] WARNING: journey_map is empty after {max_attempts} attempts. "
-                "The customer_journey report section will be skipped."
+                "Attempting focused journey_map-only retry..."
             )
+
+    if not state.journey_map:
+        state = _retry_journey_map_only(state, client, cases_text)
+
+    if not state.journey_map:
+        print(
+            "[Stage4] WARNING: journey_map is empty after all attempts. "
+            "The customer_journey report section will be skipped."
+        )
 
     return state

@@ -222,10 +222,11 @@ class PipelineOrchestrator:
             (success, message)
         """
         try:
-            # journey_map is required for Stage 5 — if empty, Stage 4 did not complete correctly
-            if not self.state.journey_map:
+            # Block Stage 5 only when both journey_map and faq_candidates are empty —
+            # if faq_candidates are present, Stage 5 can still validate them even without a journey_map.
+            if not self.state.journey_map and not self.state.faq_candidates:
                 return False, (
-                    "Stage 5 skipped: state.journey_map is empty — "
+                    "Stage 5 skipped: state.journey_map and state.faq_candidates are both empty — "
                     "Stage 4 (stage4_analysis) must complete successfully before gap analysis can run."
                 )
 

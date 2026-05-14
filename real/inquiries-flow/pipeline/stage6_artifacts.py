@@ -473,9 +473,19 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
         'executive_summary': (generate_executive_summary_section, 'أولاً: الملخص التنفيذي — التحليلات الرئيسية'),
         'methodology': (generate_methodology_section, 'ثانياً: المنهجية وطبيعة المصادر'),
         'workload_map': (generate_workload_map_section, 'ثالثاً: التحليل الأول — خريطة تصنيف الطلبات'),
-        'digital_gaps': (generate_digital_gaps_section, 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية'),
-        'digital_transformation': (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي'),
     }
+
+    # digital_gaps requires gap_table from Stage 5; skip gracefully if unavailable
+    if state.gap_table:
+        wave1_tasks['digital_gaps'] = (generate_digital_gaps_section, 'خامساً: التحليل الثالث — تحليل الفجوات الرقمية')
+    else:
+        print("[GenSections] WARNING: state.gap_table is empty — skipping digital_gaps section")
+
+    # digital_transformation requires FAQ data from Stages 4/5; skip gracefully if unavailable
+    if state.validated_faqs or state.faq_candidates:
+        wave1_tasks['digital_transformation'] = (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي')
+    else:
+        print("[GenSections] WARNING: state.validated_faqs and state.faq_candidates are empty — skipping digital_transformation section")
 
     # ai_use_cases requires gap_table from Stage 5; skip gracefully if unavailable
     if state.gap_table:
