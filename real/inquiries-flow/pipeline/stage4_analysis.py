@@ -375,6 +375,118 @@ def _reconcile_counts(
     return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
 
 
+FAQ_ONLY_TOOL = {
+    "name": "extract_faqs",
+    "description": "Extract FAQ candidates from customer service case resolution responses.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "faq_candidates": {
+                "type": "array",
+                "description": "FAQ candidates extracted from resolution responses. Return at least one per sub-classification group.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string", "description": "Question in English"},
+                        "question_ar": {"type": "string", "description": "Question in Arabic"},
+                        "answer": {"type": "string", "description": "Answer in English"},
+                        "answer_ar": {"type": "string", "description": "Answer in Arabic"},
+                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"}
+                    },
+                    "required": ["question", "question_ar", "answer", "answer_ar", "frequency"]
+                }
+            }
+        },
+        "required": ["faq_candidates"]
+    }
+}
+
+
+def _retry_faq_only(
+    state: PipelineState,
+    client: anthropic.Anthropic,
+    cases_text: str,
+) -> PipelineState:
+    """
+    Focused fallback retry for faq_candidates when all main Stage 4 attempts produced an empty result.
+
+    Uses a minimal tool schema (faq_candidates only) and a shorter, laser-focused prompt to
+    reduce cognitive load on the model. Runs up to 2 additional attempts.
+    """
+    system_prompt = (
+        "You are an expert business analyst for government customer service. "
+        "Your ONLY task is to identify the most common questions customers asked and the answers "
+        "they received, based on the case descriptions and resolutions provided. "
+        "For every sub-classification group provided, return at least one FAQ. "
+        "All text (question_ar, answer_ar) MUST be in Arabic. "
+        "frequency must not exceed the group size shown in the input."
+    )
+
+    base_user_content = (
+        "Extract FAQ candidates from these customer service cases.\n"
+        "Return at least one FAQ per sub-classification group.\n\n"
+        + cases_text
+    )
+
+    for attempt in range(1, 3):
+        nudge = (
+            ""
+            if attempt == 1
+            else (
+                "\n\nYour previous response returned an empty faq_candidates list. "
+                "Every group listed above has a common question customers asked — identify it. "
+                "Return at least one FAQ per group."
+            )
+        )
+        print(f"[Stage4] faq-only focused retry (attempt {attempt}/2)...")
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=8000,
+                system=system_prompt,
+                tools=[FAQ_ONLY_TOOL],
+                tool_choice={"type": "any"},
+                messages=[{"role": "user", "content": base_user_content + nudge}],
+            )
+        except Exception as e:
+            print(f"[Stage4] faq-only retry attempt {attempt} API error: {e}")
+            continue
+
+        analysis = None
+        for block in message.content:
+            if block.type == "tool_use":
+                analysis = block.input
+                break
+
+        if not analysis:
+            print(f"[Stage4] faq-only retry attempt {attempt}: no tool call in response")
+            continue
+
+        raw_items = analysis.get("faq_candidates", [])
+        if not raw_items:
+            print(f"[Stage4] faq-only retry attempt {attempt}: LLM returned empty faq_candidates")
+            continue
+
+        state.faq_candidates = [
+            FAQCandidate(
+                question=f.get("question", ""),
+                question_ar=f.get("question_ar", ""),
+                answer=f.get("answer", ""),
+                answer_ar=f.get("answer_ar", ""),
+                frequency=f.get("frequency", 0),
+                validation_status="PENDING",
+            )
+            for f in raw_items
+        ]
+
+        if state.faq_candidates:
+            print(f"[Stage4] ✓ faq-only retry succeeded: {len(state.faq_candidates)} FAQ candidates")
+            return state
+
+    print("[Stage4] WARNING: faq-only focused retry also failed — faq_candidates remains empty.")
+    return state
+
+
 def _retry_journey_map_only(
     state: PipelineState,
     client: anthropic.Anthropic,
@@ -533,7 +645,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=8000,
+            max_tokens=64000,
             system=build_analysis_system_prompt(),
             tools=[ANALYSIS_TOOL],
             tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
@@ -586,9 +698,11 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                 for j in analysis.get('journey_map', [])
             ]
 
-        # Parse FAQ candidates
+        # Parse FAQ candidates — only overwrite if the new result is non-empty,
+        # or if state is currently empty. This preserves FAQs captured on an earlier
+        # retry attempt that happened to return journey_map=[] but non-empty FAQs.
         if 'faq_candidates' in analysis:
-            state.faq_candidates = [
+            new_faqs = [
                 FAQCandidate(
                     question=f.get('question', ''),
                     question_ar=f.get('question_ar', ''),
@@ -599,6 +713,8 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                 )
                 for f in analysis.get('faq_candidates', [])
             ]
+            if new_faqs or not state.faq_candidates:
+                state.faq_candidates = new_faqs
 
         # Parse self-service tags
         if 'self_service_tags' in analysis:
@@ -641,6 +757,16 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         print(
             "[Stage4] WARNING: journey_map is empty after all attempts. "
             "The customer_journey report section will be skipped."
+        )
+
+    if not state.faq_candidates and state.all_classified:
+        print("[Stage4] faq_candidates is empty after all main attempts — running focused faq-only retry...")
+        state = _retry_faq_only(state, client, cases_text)
+
+    if not state.faq_candidates:
+        print(
+            "[Stage4] WARNING: faq_candidates is empty after all attempts. "
+            "The digital_transformation report section will be skipped."
         )
 
     return state

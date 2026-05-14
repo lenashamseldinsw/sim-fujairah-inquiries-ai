@@ -410,11 +410,12 @@ def generate_digital_transformation_section(
     # ── Guard: required upstream outputs ─────────────────────────────────────
     faqs_available = bool(state.validated_faqs or state.faq_candidates)
     if not faqs_available:
-        raise RuntimeError(
-            "[DigitalTransform] Both state.validated_faqs and state.faq_candidates are empty — "
+        print(
+            "[DigitalTransform] WARNING: Both state.validated_faqs and state.faq_candidates are empty — "
             "Stage 4 (stage4_analysis) and Stage 5 (stage5_gap) must complete successfully "
-            "before this section can be generated."
+            "before this section can be generated. Returning empty section."
         )
+        return {}
     if not state.journey_map and not state.notification_opportunities:
         raise RuntimeError(
             "[DigitalTransform] state.journey_map and state.notification_opportunities are both "
