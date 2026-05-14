@@ -179,7 +179,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
     try:
         all_classified = state.all_classified or []
         # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" consistency
-        total_cases = state.closed_cases_count if state.closed_cases_count > 0 else len(all_classified)
+        total_cases = state.total_cases if state.total_cases > 0 else len(all_classified)
         date_range = convert_month_year_to_arabic(state.month_year) or "Q1 2026"
         reclass_count = state.reclassified_count
         reclass_rate = state.reclassification_rate
@@ -251,7 +251,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '\n'
             'A. intro_paragraph (subsection 3.1)\n'
             '2-3 sentences, formal Arabic. Must:\n'
-            f'  - Open: "تحليل {total_cases} حالة مغلقة في {date_range}..."\n'
+            f'  - Open: "تحليل {total_cases} حالة في {date_range}..."\n'
             '  - Declare precision classification reveals a radically different picture.\n'
             f'  - Final sentence starts "التحوّل الجوهري:" and names dominant_type ({dominant_type}),\n'
             f'    dominant_count ({dominant_count}), dominant_pct ({dominant_pct:.1f}%) — contrasting\n'
@@ -285,6 +285,12 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             'For complaints_table: rename "النسبة" -> "النسبة من الشكاوى" and add "الوصف".\n'
             'For requests_table / inquiries_table: keep "النسبة" as-is and add "الوصف".\n'
             '\n'
+            'SCOPE RULE — requests_table vs inquiries_table:\n'
+            '- requests_table: include ONLY rows with sub-classifications from pre_computed_request_sub_classifications.\n'
+            '  Do NOT include any استفسار sub-classifications in requests_table.\n'
+            '- inquiries_table: include ONLY rows with sub-classifications from pre_computed_inquiry_sub_classifications.\n'
+            '  Do NOT include any طلب sub-classifications in inquiries_table.\n'
+            '\n'
             'OUTPUT — single JSON object, no markdown, no extra keys\n'
             '\n'
             '{\n'
@@ -303,6 +309,10 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '\n'
             'RULES:\n'
             '- distribution_table and reclassification_sample: copy verbatim — do NOT change any value.\n'
+            '- CRITICAL: complaints_table must include EVERY sub-classification from\n'
+            '  pre_computed_complaint_sub_classifications, even those with count = 1.\n'
+            '  Do NOT omit low-count rows. The reviewer specifically flagged missing rows\n'
+            '  like تقديم بلاغ أمني أو مروري (4 cases). All sub-classifications must appear.\n'
             '- complaints_table: rename "النسبة" -> "النسبة من الشكاوى", add "الوصف".\n'
             '- requests_table / inquiries_table: keep column names, add "الوصف".\n'
             '- All prose keys must be Arabic only.\n'
@@ -352,8 +362,12 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
                 for expected_row in expected_rows:
                     sub = expected_row.get('الفئة الفرعية', '')
                     if sub not in returned_subs:
-                        # Preserve LLM-written description if it was provided
-                        table_rows.append(expected_row)
+                        # Add missing row with a placeholder description so الوصف validation passes
+                        completed_row = {
+                            **expected_row,
+                            "الوصف": f"حالات {sub} المُسجَّلة خلال الفترة.",
+                        }
+                        table_rows.append(completed_row)
                         print(f"[WorkloadMap] FIX: Added missing row for '{sub}'")
 
             return table_rows

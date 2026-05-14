@@ -142,12 +142,29 @@ ANALYSIS INSTRUCTIONS:
    - How many cases per friction point?
    - Include top_level and sub_classification in each entry
 
+   CRITICAL DISAMBIGUATION — Traffic Fine Friction Points:
+   When cases show a citizen disputing a fine because "the photo shows a different vehicle"
+   or "the vehicle in the photo is not mine", the friction point is NOT "missing vehicle photo
+   in fine notification". The notification EXISTS — the problem is the photo shows the WRONG vehicle.
+   Correct friction_point_ar: "صورة المركبة في إشعار المخالفة تُظهر مركبة مختلفة"
+   Correct root_cause_category: "platform_bug" (radar plate-matching system error)
+   Do NOT classify this as "no_proactive_notification" — the notification was sent; the data is wrong.
+
 3. FAQs - Questions answered repeatedly in the resolution
    - Extract actual Q&A from good resolution responses
    - Tag with the top_level category
    - These should help customers self-serve next time
    - ISSUE 4: All output MUST be in Arabic only. Topic names, questions, answers, descriptions.
    - Proper nouns only (MOI, SMS, OTP, UAE PASS) may remain in Latin script.
+
+   FREQUENCY COUNTING RULE (CRITICAL):
+   Set frequency = the EXACT count of cases in the dataset where this specific question
+   was the PRIMARY driver of the customer contact. Count each case exactly once.
+   Do NOT extrapolate or estimate beyond the cases provided.
+   Do NOT add "+" to frequencies — return the exact integer count.
+   A frequency of 1 means exactly 1 case. Only assign frequency > 1 if multiple DISTINCT
+   cases show the SAME question as their primary concern.
+   Under-counting is better than over-counting — if unsure, use 1.
 
 4. SELF-SERVICE TAGS - Which issues could be self-serviceable
    - Fully self-serviceable (customer can do alone)

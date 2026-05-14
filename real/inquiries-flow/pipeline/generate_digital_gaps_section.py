@@ -386,6 +386,8 @@ def generate_digital_gaps_section(
     proactive_instruction = (
         f'   - Add: يمكن تحويل {proactive_case_count} حالة '
         f'({proactive_pct}% من الإجمالي) عبر إشعار SMS/بريد إلكتروني استباقي دون أي تغيير في البنية التحتية.\n'
+        f'   CRITICAL NUMBER CONSTRAINT: If you mention proactive notification cases in section_body,\n'
+        f'   use EXACTLY {proactive_case_count} حالة ({proactive_pct}%). Do NOT use any other number.\n'
         if proactive_case_count > 0 else ''
     )
 
@@ -499,6 +501,10 @@ def generate_digital_gaps_section(
         '- No markdown, no extra keys, no extra nesting.\n'
         '- CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
         'To cite a topic name in section_body, use angle brackets « » instead of double quotes.\n'
+        '- CRITICAL DISAMBIGUATION — Traffic Fine Wrong Vehicle gap: if any gap row is about\n'
+        '  citizens disputing fines due to vehicle photo mismatch, the gap is NOT about\n'
+        '  missing photo notification. The recommendation must address fixing the radar\n'
+        '  plate-matching system, NOT adding a photo to the notification.\n'
     )
 
     # ── API call ──────────────────────────────────────────────────────────────
@@ -528,6 +534,17 @@ def generate_digital_gaps_section(
             f"Response length: {response_len} chars\n"
             f"Raw response (first {show_chars} chars):\n{response_text[:show_chars]}"
         )
+
+    # Task 11: Post-generation validation — warn if section_body contains numbers exceeding total_cases
+    section_body_check = result.get("section_body", "")
+    import re as _re
+    numbers_in_body = [int(n) for n in _re.findall(r'\b(\d+)\b', section_body_check) if int(n) > 1]
+    for n in numbers_in_body:
+        if n > total_cases:
+            print(
+                f"[DigitalGaps] WARNING: section_body contains number {n} which exceeds "
+                f"total_cases={total_cases}. This may indicate LLM hallucinated a count."
+            )
 
     # ── Reinject pre-computed values — LLM output must never override state data ──
 

@@ -121,6 +121,9 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         'مخالفة بشكل خاطىء', 'مخالفة بشكل خاطئ',
         'تحرير مخالفة بشكل خاطىء', 'تحرير مخالفة بشكل خاطئ',
         'عدم خصم', 'نقاط خاطئة',
+        'لم أذهب', 'لم اذهب', 'لم تكن في', 'لم تكون في',
+        'متواجد في',
+        'لم تكن سيارتي', 'لم تكن مركبتي',
     ]
     disputed_fine_signals_en = [
         'not my vehicle', 'not my car', 'i was not in', 'i did not go to',
@@ -132,7 +135,22 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     has_english_dispute = any(k in title.lower() for k in disputed_fine_signals_en)
     fine_also_mentioned = has_fine or any(k in title.lower() for k in ['fine', 'violation', 'ticket', 'مخالفة', 'مخالفه'])
     if (has_arabic_dispute or has_english_dispute) and fine_also_mentioned:
-        return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', 'شكوى صريحة عن مخالفة خاطئة', 0.88
+        explicit_request_signals = [
+            'أطلب', 'اطلب', 'أرجو', 'ارجو',
+            'طلب تعديل', 'تعديل بيانات',
+            'رفع المخالفة', 'رفع المخالفه',
+            'حذف المخالفة', 'حذف المخالفه',
+            'إلغاء المخالفة', 'إلغاء المخالفه',
+            'إزالة المخالفة',
+        ]
+        has_explicit_request = any(
+            normalize_arabic(k) in title_norm for k in explicit_request_signals
+        )
+        # Lower confidence forces LLM review when citizen also has an explicit action request.
+        # The LLM will apply Rule D (resolution-based) to correctly classify as طلب.
+        confidence = 0.65 if has_explicit_request else 0.88
+        return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', \
+               'صورة المركبة في الإشعار تُظهر مركبة مختلفة — خطأ في مطابقة اللوحات', confidence
 
     # --- PRIORITY 2: Security/Traffic Reports (filing, issuing, etc.) ---
     # Bug #8: 'تحرير مخالفة' removed — ambiguous, now handled by Priority 1b (disputed fine rule)
@@ -187,7 +205,12 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         'دفع مرتين', 'دفع مبلغ مرتين', 'خصمت مرتين',
         'بدون اصدار', 'دون اصدار',
     ]
-    if any(k in title_norm for k in [normalize_arabic(w) for w in system_keywords]):
+    # Task 13 Fix: Guard — if the citizen made their OWN error (not a system error),
+    # do NOT trigger the system-error path; fall through to LLM for proper classification.
+    # e.g., "أجريت إجراء خاطئاً ودفعت المبلغ الخاطئ" is an inquiry, not a system complaint.
+    user_error_signals = ['أجريت إجراء خاطئ', 'إجراء غير صحيح', 'بدلاً من', 'اجريت اجراء خاطئ']
+    has_user_error = any(normalize_arabic(k) in title_norm for k in user_error_signals)
+    if not has_user_error and any(k in title_norm for k in [normalize_arabic(w) for w in system_keywords]):
         return 'شكوى', 'شكوى على خطأ تقني أو في النظام', 'خلل تقني أو خطأ في النظام', 0.87
 
     # --- PRIORITY 6a: Renewal/Service Requests (BUG FIX 4) ---
@@ -217,10 +240,15 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     if (has_ar_followup or has_en_followup) and not is_formal_complaint:
         return 'طلب', 'متابعة طلب مقدم', 'متابعة طلب مقدم سابقاً', 0.80
 
-    # --- PRIORITY 7: License/Vehicle Inquiries ---
+    # --- PRIORITY 7: License/Vehicle Inquiries (PURE INFORMATION REQUESTS ONLY) ---
     # FIX 2: Remove bare 'تجديد' and 'استفسار' — use compound phrases to avoid catch-all
+    # Task 10 Fix: Only classify as استفسار if NO action-request signals are present.
+    # Cases like "أطلب نقل رخصة قيادة" or "أريد تعديل بيانات المركبة" must fall through to LLM.
     vehicle_keywords = ['رخصة قيادة', 'مركبة', 'ترخيص المركبة', 'تجديد الملكية', 'تجديد الرخصة']
-    if any(k in title_norm for k in [normalize_arabic(w) for w in vehicle_keywords]):
+    action_request_signals = ['أطلب', 'اطلب', 'أريد', 'اريد', 'أرجو', 'ارجو',
+                               'نقل رخصة', 'تحويل رخصة', 'تعديل', 'تصحيح', 'إلغاء', 'إلغاء الرخصة']
+    has_action_request = any(normalize_arabic(k) in title_norm for k in action_request_signals)
+    if not has_action_request and any(k in title_norm for k in [normalize_arabic(w) for w in vehicle_keywords]):
         return 'استفسار', 'استفسار عن الرخص والمركبات', 'استفسار عن الرخص والمركبات', 0.85
 
     # --- PRIORITY 8: Praise/Compliments ---
@@ -327,6 +355,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
             case_number=str(row.get('رقم_الطلب', '')),
             case_title=str(row.get('تفاصيل_الطلب', '')),
             date_opened=str(row.get('تاريخ_الإنشاء', '')),
+            date_closed=str(row.get('تاريخ_إغلاق_الطلب', '')),
             case_channel=str(row.get('قناة_تقديم_الخدمة', '')),
             description=str(row.get('تفاصيل_الطلب', '')),  # Actual description, not CRM label
             resolution_response=str(row.get('الحل', '')),

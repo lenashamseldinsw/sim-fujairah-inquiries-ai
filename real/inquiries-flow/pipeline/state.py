@@ -29,6 +29,7 @@ class CaseRow(BaseModel):
     top_level: Optional[str] = None  # Two-level taxonomy: شكوى, استفسار, طلب, شكر وثناء
     sub_classification: Optional[str] = None  # Domain-specific sub-classification
     admin: Optional[str] = None  # General administration / department name (الإدارة_العامة)
+    date_closed: Optional[str] = None  # تاريخ_إغلاق_الطلب — empty string means not yet closed
 
 
 class PatternCluster(BaseModel):
@@ -175,11 +176,27 @@ def load_state_from_json(json_path: str) -> PipelineState:
     return PipelineState(**data)
 
 
+class _NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that converts numpy scalar types to native Python types."""
+    def default(self, obj):
+        try:
+            import numpy as np
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+        except ImportError:
+            pass
+        return super().default(obj)
+
+
 def save_state_to_json(state: PipelineState, json_path: str) -> None:
     """Save state to JSON file."""
     data = state.model_dump(mode='json', exclude={'raw_df'})  # Exclude DataFrame
     with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2, cls=_NumpyEncoder)
 
 
 ARABIC_MONTHS = {

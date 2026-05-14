@@ -14,6 +14,25 @@ from typing import Tuple, Dict, Any
 from .state import PipelineState
 
 
+def _sanitize_for_json(obj):
+    """Recursively convert numpy scalars to native Python types for JSON safety."""
+    try:
+        import numpy as np
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+    except ImportError:
+        pass
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(i) for i in obj]
+    return obj
+
+
 # Column mapping: input column name -> normalized name
 COLUMN_MAPPING = {
     # Case Number
@@ -25,7 +44,7 @@ COLUMN_MAPPING = {
     # Date Opened
     'تاريخ الإنشاء': 'تاريخ_الإنشاء',
     'تاريخ_الإنشاء': 'تاريخ_الإنشاء',
-    'تاريخ إغلاق الطلب': 'تاريخ_الإنشاء',
+    'تاريخ إغلاق الطلب': 'تاريخ_إغلاق_الطلب',
     # Case Channel / قناة تقديم الخدمة
     'قناة تقديم الخدمة': 'قناة_تقديم_الخدمة',
     'قناه تقديم الخدمة': 'قناة_تقديم_الخدمة',  # Common typo variation
@@ -80,6 +99,7 @@ OPTIONAL_COLUMNS = [
     'التصنيف_الفرعي',      # Case type (may not be in input)
     'الخدمة_الرئيسية',     # Service name
     'الإدارة_العامة',     # General administration / department
+    'تاريخ_إغلاق_الطلب',  # Closure date — empty means case not yet closed
 ]
 
 # Accepted values (from reference)
@@ -314,14 +334,14 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     is_valid, result = validate_excel(df_normalized)
 
     state.raw_df = df_normalized
-    state.validated_schema = result
+    state.validated_schema = _sanitize_for_json(result)
     state.total_cases = len(df_normalized)
 
     # Count closed cases (where تاريخ_إغلاق_الطلب is not empty)
     # This is used in methodology section to report "X حالة مغلقة"
     closed_date_col = 'تاريخ_إغلاق_الطلب'
     if closed_date_col in df_normalized.columns:
-        state.closed_cases_count = df_normalized[closed_date_col].notna().sum()
+        state.closed_cases_count = int(df_normalized[closed_date_col].notna().sum())
     else:
         # Fallback: if closing date column doesn't exist, use total cases
         state.closed_cases_count = state.total_cases

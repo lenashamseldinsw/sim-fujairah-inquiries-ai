@@ -119,19 +119,51 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     Uses validated_faqs (Stage 5) if available; falls back to faq_candidates (Stage 4).
     Sorted by frequency descending. Capped at _MAX_FAQ_ROWS.
 
+    Task 12 Fix: Cap FAQ frequency against actual sub_classification case count from
+    state.all_classified to prevent Stage 4 LLM over-counting from inflating the table.
+
     Schema returned: # | التكرار
     (السؤال and الإجابة المقترحة are written by the LLM from faq context)
     """
     source = state.validated_faqs if state.validated_faqs else state.faq_candidates
     # Sort by frequency descending
     sorted_faqs = sorted(source, key=lambda f: f.frequency, reverse=True)
-    return [
-        {
+
+    # Build sub_classification counts from all_classified (ground truth)
+    sub_counts: Dict[str, int] = defaultdict(int)
+    for case in (state.all_classified or []):
+        if case.sub_classification:
+            sub_counts[case.sub_classification] += 1
+
+    rows = []
+    for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1):
+        raw_freq = faq.frequency
+        # Cap frequency: if FAQ has a top_level attribute that matches a sub_classification key,
+        # cap against the actual count. Otherwise cap against total classified cases.
+        top_level_sub = getattr(faq, "top_level", "")
+        if top_level_sub and top_level_sub in sub_counts:
+            capped_freq = min(raw_freq, sub_counts[top_level_sub])
+        elif sub_counts:
+            # Cap against the maximum single sub-classification count as a loose upper bound
+            max_sub_count = max(sub_counts.values())
+            capped_freq = min(raw_freq, max_sub_count)
+        else:
+            capped_freq = raw_freq
+
+        if capped_freq != raw_freq:
+            print(
+                f"[DigitalTransform] FAQ frequency capped: rank={i}, "
+                f"top_level={top_level_sub!r}, original={raw_freq} → capped={capped_freq}"
+            )
+
+        # Display: show exact integer (no "+" suffix for capped values)
+        freq_display = str(capped_freq)
+
+        rows.append({
             "#":        str(i),
-            "التكرار":  f"{faq.frequency}+" if faq.frequency > 1 else str(faq.frequency),
-        }
-        for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1)
-    ]
+            "التكرار":  freq_display,
+        })
+    return rows
 
 
 def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:

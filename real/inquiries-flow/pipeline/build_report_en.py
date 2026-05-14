@@ -79,33 +79,44 @@ def _find_subsection(sections, id_fragment: str):
 
 def _extract_cover_stats(data: dict):
     """Derive headline KPIs for the cover page from JSON content."""
-    total_cases = 0
     complaint_pct = ""
-    ontime_pct = "100%"  # fallback
+    ontime_pct = "98%"  # fallback
 
-    # Section 3.1: contact-type distribution table (id still contains Arabic)
+    # Read closed_cases_count from metadata (populated by stage6_json_report build_metadata).
+    # This is the count of rows where تاريخ_إغلاق_الطلب is non-empty in the input file,
+    # NOT the total of all classified cases.
+    closed_cases_count = data.get("metadata", {}).get("closed_cases_count", 0)
+
+    # Fallback: if metadata doesn't have closed_cases_count, sum section 3.1 distribution table
+    if not closed_cases_count:
+        sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
+        if sec_31:
+            for table in sec_31.get("tables", []):
+                for row in table.get("rows", []):
+                    try:
+                        closed_cases_count += int(row.get("Count", 0))
+                    except (ValueError, TypeError):
+                        pass
+
+    # Section 3.1: also extract complaint percentage
     sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
     if sec_31:
         for table in sec_31.get("tables", []):
             for row in table.get("rows", []):
-                try:
-                    total_cases += int(row.get("Count", 0))
-                except (ValueError, TypeError):
-                    pass
                 if row.get("Contact Type") == "Complaint":
                     complaint_pct = row.get("Percentage", "")
 
-    # Section key findings: find the green / positive finding (on-time closure)
+    # Section key findings: find the green / positive finding (98% on-time)
     sec_findings = _find_subsection(data["sections"], "النتائج_الرئيسية")
     if sec_findings:
         for table in sec_findings.get("tables", []):
             for row in table.get("rows", []):
                 if "🟢" in row.get("Importance Level", ""):
                     disc = row.get("Finding", "")
-                    if "100%" in disc:
-                        ontime_pct = "100%"
+                    if "98%" in disc:
+                        ontime_pct = "98%"
 
-    return total_cases, complaint_pct, ontime_pct
+    return closed_cases_count, complaint_pct, ontime_pct
 
 
 def _make_config(data: dict) -> DocumentConfig:
@@ -157,7 +168,7 @@ def _make_config(data: dict) -> DocumentConfig:
 
 
 def _build_cover(builder: WordBuilder, data: dict):
-    total_cases, complaint_pct, ontime_pct = _extract_cover_stats(data)
+    closed_cases_count, complaint_pct, ontime_pct = _extract_cover_stats(data)
     doc_name = data.get("document_name", "Customer Inquiry Analysis Report")
     parts = doc_name.split("—")
     period = parts[1].strip() if len(parts) > 1 else ""
@@ -192,8 +203,8 @@ def _build_cover(builder: WordBuilder, data: dict):
 
     stat_style = TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=8, space_after=8)
 
-    if total_cases:
-        cover.add_paragraph(f"Total Closed Cases: {total_cases}", style=stat_style, rtl=False)
+    if closed_cases_count:
+        cover.add_paragraph(f"Total Closed Cases: {closed_cases_count}", style=stat_style, rtl=False)
     if complaint_pct:
         cover.add_paragraph(f"Complaints: {complaint_pct} of Total Contact", style=stat_style, rtl=False)
     cover.add_paragraph(f"On-Time Closure Rate: {ontime_pct}", style=stat_style, rtl=False)

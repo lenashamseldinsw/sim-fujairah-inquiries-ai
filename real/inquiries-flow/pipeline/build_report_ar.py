@@ -79,19 +79,30 @@ def _find_subsection(sections, id_fragment: str):
 
 def _extract_cover_stats(data: dict):
     """Derive headline KPIs for the cover page from JSON content."""
-    total_cases = 0
     complaint_pct = ""
     ontime_pct = "98%"  # fallback
 
-    # Section 3.1: contact-type distribution table
+    # Task 2 Fix: Read closed_cases_count from metadata (set by stage6_json_report build_metadata).
+    # This is the count of rows where تاريخ_إغلاق_الطلب is non-empty in the input file,
+    # NOT the total of all classified cases.
+    closed_cases_count = data.get("metadata", {}).get("closed_cases_count", 0)
+
+    # Fallback: if metadata doesn't have closed_cases_count, sum section 3.1 distribution table
+    if not closed_cases_count:
+        sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
+        if sec_31:
+            for table in sec_31.get("tables", []):
+                for row in table.get("rows", []):
+                    try:
+                        closed_cases_count += int(row.get("العدد", 0))
+                    except (ValueError, TypeError):
+                        pass
+
+    # Section 3.1: also extract complaint percentage
     sec_31 = _find_subsection(data["sections"], "التوزيع_الفعلي")
     if sec_31:
         for table in sec_31.get("tables", []):
             for row in table.get("rows", []):
-                try:
-                    total_cases += int(row.get("العدد", 0))
-                except (ValueError, TypeError):
-                    pass
                 if row.get("نوع التواصل") == "شكوى":
                     complaint_pct = row.get("النسبة", "")
 
@@ -105,7 +116,7 @@ def _extract_cover_stats(data: dict):
                     if "98%" in disc:
                         ontime_pct = "98%"
 
-    return total_cases, complaint_pct, ontime_pct
+    return closed_cases_count, complaint_pct, ontime_pct
 
 
 def _make_config(data: dict) -> DocumentConfig:

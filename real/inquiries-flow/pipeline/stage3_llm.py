@@ -139,6 +139,38 @@ CLASSIFICATION GUIDELINES:
    - No request for action to resolve — just wants to know facts
    → KEY: "Tell me about X" (no problem statement) = Inquiry
 
+4. CRM LABEL OVERRIDE:
+   The نوع_المكالمة field (CRM label) is almost always "استفسار" regardless of actual content.
+   It reflects the intake channel, NOT the customer's true intent.
+   NEVER let نوع_المكالمة determine the final classification.
+   Always classify based on تفاصيل_الطلب and الحل content.
+
+   If تفاصيل_الطلب contains an explicit ACTION REQUEST (أطلب، أريد، أرجو + specific action),
+   and the action is NOT about expressing grievance → طلب, even if CRM says استفسار.
+
+   Examples of explicit action requests that must be طلب:
+   - Requesting transfer of driving licence between emirates (نقل رخصة قيادة)
+   - Requesting confirmation that a fine discount is applied in the system
+   - Requesting correction of vehicle data (category, plate, owner)
+   - Requesting removal of a fine from a traffic record
+   - Requesting data update: "أريد تعديل بيانات المركبة"
+
+   ADDITIONAL EXAMPLE — disputed fine + action request + resolution confirms no fine:
+   Description: "وصلتني مخالفة في الفجيرة وأنا في مدينة العين، أطلب تعديل بيانات المركبة"
+   Resolution: "تم التدقيق على بيانات المركبة وتبين عدم وجود مخالفة مرتكبة"
+   → CORRECT: طلب > طلب تعديل أو تحديث بيانات
+     (no fine exists; citizen's remaining need is a data correction request)
+   → WRONG: استفسار or شكوى عن مخالفة مشكوك فيها
+     (the grievance is resolved; what remains is an action request)
+
+   EXAMPLE — fine removal request after resolution confirms no fine:
+   Description: "السيارة متواجدة في عجمان منذ 5 أشهر، أرجو رفع المخالفة من ملفي المروري"
+   Resolution:  "تم التدقيق وتبين عدم وجود مخالفات تابعة لإمارة الفجيرة في ملف المتعامل"
+   → CORRECT: طلب > طلب تعديل أو تحديث بيانات
+     (the fine is confirmed non-existent; the citizen's remaining need is removal from record — an action request)
+   → WRONG: شكوى > شكوى عن مخالفة مشكوك فيها
+     (the grievance is already resolved by the resolution; what remains is a طلب, not a شكوى)
+
 SPECIAL RECLASSIFICATION RULES:
 
 Rule A — Multi-part messages:
@@ -151,10 +183,15 @@ Rule B — Authority/process confusion:
    - AND asking to resolve it → طلب (Request for action to untangle)
    - AND only asking for clarification → استفسار (Inquiry about jurisdiction)
 
-Rule C — Payment issues:
-   - "دفعت مبلغ X دون استلام" → شكوى (COMPLAINT: paid without service)
+Rule C — Payment issues (REVISED):
+   - "دفعت مبلغ X دون استلام الخدمة" (paid, service not received) → شكوى (COMPLAINT)
+   - "النظام خصم مني مرتين" (system double-charged) → شكوى (COMPLAINT)
    - "كم المبلغ المطلوب" → استفسار (INQUIRY: asking fee amount)
    - "ماذا أفعل لاسترجاع المبلغ" → طلب (REQUEST: asking for refund action)
+   - "أجريت إجراء خاطئاً ودفعت المبلغ الخاطئ، هل يُسترد؟" (citizen made own error, asking about refund) → استفسار
+   - KEY DISTINCTION: If the CITIZEN caused the payment issue (not the system), and they are
+     ASKING A QUESTION about the outcome (no explicit grievance expression), classify as استفسار.
+     Example case: citizen paid wrong fee amount by own mistake, asking if refund is possible → استفسار.
 
 Rule D — Resolution reveals the true nature:
    Always read the Resolution Response to determine what actually happened,
@@ -167,15 +204,29 @@ Rule D — Resolution reveals the true nature:
    → KEY: If the resolution fixed something that was broken, a failure occurred —
      the customer's neutral phrasing does not change the classification.
 
-Rule E — Physical damage reports requesting a certificate:
-   If a customer describes physical damage (car accident, property damage, falling rocks,
-   injury) AND the resolution shows a certificate was issued ("شهادة لمن يهمه الأمر" /
-   "تقرير الضرر" / "damage report"), classify as:
-   → طلب > طلب إصدار شهادة أو وثيقة
-   Do NOT classify these as شكوى unless the customer is explicitly complaining about a
-   service failure (e.g. the certificate was denied or delayed after a prior request).
-   Example: "سقوط حجارة على السيارة وكسر النافذة" + resolution shows certificate issued
-   → طلب > طلب إصدار شهادة أو وثيقة (not شكوى)
+Rule E — Physical damage reports and certificates (REVISED with guard):
+   CASE 1 — طلب: If a customer PROACTIVELY REQUESTS a damage certificate
+   (e.g., "أريد شهادة ضرر" / "أحتاج تقرير الضرر" / "أطلب وثيقة") AND the resolution
+   confirms a certificate was issued → طلب > طلب إصدار شهادة أو وثيقة
+
+   CASE 2 — شكوى: If the customer's PRIMARY INTENT is REPORTING an incident
+   (e.g., "سقطت حجارة على سيارتي" / "وقع حادث" / "تضررت ممتلكاتي") WITHOUT
+   explicitly requesting a certificate, classify as:
+   → شكوى > تقديم بلاغ أمني أو مروري
+   Even if the agent incidentally issued a certificate as part of the resolution —
+   the customer's initial contact was a complaint/incident report, not a document request.
+
+   KEY TEST: Did the citizen come to REQUEST something, or to REPORT something?
+   - "سقوط حجارة / حادث / تلف" WITHOUT "أريد شهادة / أطلب وثيقة" → شكوى (incident report)
+   - "أحتاج شهادة ضرر / أطلب وثيقة" → طلب (explicit document request)
+
+   EXAMPLE:
+   Description: "سقوط بعض الحجارة على السيارة أدت إلى كسر النافذة"
+   Resolution: agent issued a damage certificate
+   → CORRECT: شكوى > تقديم بلاغ أمني أو مروري
+     (citizen reported an incident; did not ask for a certificate)
+   → WRONG:   طلب > طلب إصدار شهادة أو وثيقة
+     (the agent issued a certificate, but that was the resolution action, not the customer's intent)
 
 RULES:
 - Base classification on actual customer intent and situation, not just keywords.
@@ -212,7 +263,8 @@ def _process_batch(client: anthropic.Anthropic, batch: List[Dict], batch_num: in
         f"Resolution: {case.get('resolution_response', '').strip()}\n"
         f"Service: {case.get('service_name', '')}\n"
         f"Channel: {case.get('case_channel', '')}\n"
-        f"Stage 2 hint: {case.get('top_level', 'N/A')} > {case.get('sub_classification', 'N/A')}"
+        f"Stage 2 suggestion (may be wrong — all rules above take precedence, especially Rule E): "
+        f"{case.get('top_level', 'N/A')} > {case.get('sub_classification', 'N/A')}"
         for case in batch
     ])
 
@@ -399,6 +451,16 @@ def normalize_classification(top_level: str, sub_classification: str) -> tuple[s
                 sub_classification = SUB_CLASSIFICATIONS[top_level][0]
             else:
                 sub_classification = "استفسار عام"
+
+    # Enforce: sub_classification must be a valid child of top_level.
+    # If not, reset to the first valid sub for that top_level.
+    valid_subs_for_top = SUB_CLASSIFICATIONS.get(top_level, [])
+    if valid_subs_for_top and sub_classification not in valid_subs_for_top:
+        print(
+            f"[Stage3] TAXONOMY FIX: sub '{sub_classification}' is not valid under "
+            f"top_level '{top_level}' — resetting to '{valid_subs_for_top[0]}'"
+        )
+        sub_classification = valid_subs_for_top[0]
 
     return top_level, sub_classification
 

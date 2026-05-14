@@ -23,6 +23,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from collections import defaultdict
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
+from .stage2_rules import SUB_CLASSIFICATIONS as _SUB_CLASSIFICATIONS
 from .generate_customer_journey_section import _build_friction_rows
 from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows
 from .generate_digital_transformation_section import (
@@ -339,7 +340,9 @@ class JSONReportBuilder:
                 "created": datetime.now().isoformat(),
                 "modified": datetime.now().isoformat(),
                 "total_paragraphs": len(self.state.all_classified),
-                "total_tables": len(self.state.gap_table) + 3
+                "total_tables": len(self.state.gap_table) + 3,
+                "total_cases": self.state.total_cases,
+                "closed_cases_count": self.state.closed_cases_count,
             }
         }
 
@@ -663,12 +666,10 @@ class JSONReportBuilder:
         request_pct = request_count / total_cases * 100 if total_cases else 0
 
         request_rows = wm_raw["requests_table"]
-        # Issue 3 Fix: Filter out استفسار rows that leaked into requests table (defensive filtering)
-        # This catches classifier misroutes where inquiry sub-categories appear in requests breakdown
-        request_rows = [
-            row for row in request_rows
-            if not (row.get("الفئة الفرعية", "").startswith("استفسار"))
-        ]
+        # Task 8 Fix: Include ALL طلب cases regardless of sub-classification name.
+        # Case 2025278919 has sub_type "استفسار عن الأسلحة والتراخيص" but top_level "طلب" —
+        # the previous startswith("استفسار") filter incorrectly dropped it.
+        # Classification inconsistencies are surfaced in Excel, not silently suppressed here.
 
         def _sub_table(rows, columns):
             return {
@@ -701,7 +702,13 @@ class JSONReportBuilder:
         inquiry_count = corrected_dist.get("استفسار", 0)
         inquiry_pct = inquiry_count / total_cases * 100 if total_cases else 0
 
-        inquiry_rows = wm_raw["inquiries_table"]
+        _inquiry_subs = set(_SUB_CLASSIFICATIONS.get('استفسار', []))
+        _request_subs = set(_SUB_CLASSIFICATIONS.get('طلب', []))
+        # Task 7 Fix: Symmetric filter — inquiries_table must only contain استفسار sub-types
+        inquiry_rows = [
+            row for row in wm_raw["inquiries_table"]
+            if row.get("الفئة الفرعية", "") not in _request_subs
+        ]
 
         subsection_35 = {
             "id": self.next_section_id("35_أبرز_الاستفسارات" if lang == "ar" else "35_inquiries"),

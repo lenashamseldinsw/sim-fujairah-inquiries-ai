@@ -74,8 +74,26 @@ SHEET_NAMES = [
 ]
 
 
+def _fix_taxonomy_consistency(cases: List[CaseRow]) -> List[CaseRow]:
+    """Correct any sub_classification that is invalid for its top_level."""
+    from .stage2_rules import SUB_CLASSIFICATIONS
+    for case in cases:
+        valid_subs = SUB_CLASSIFICATIONS.get(case.actual_contact_type, [])
+        if valid_subs and case.sub_classification not in valid_subs:
+            print(
+                f"[Stage6] TAXONOMY FIX: case {case.case_number}: "
+                f"sub '{case.sub_classification}' invalid under "
+                f"'{case.actual_contact_type}', correcting to '{valid_subs[0]}'"
+            )
+            case.sub_classification = valid_subs[0]
+    return cases
+
+
 def generate_excel(state: PipelineState, output_path: str) -> None:
     """Generate Excel workbook with classification results."""
+    # Fix any cross-taxonomy mismatches before building any sheet
+    state.all_classified = _fix_taxonomy_consistency(state.all_classified)
+
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -241,6 +259,7 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         'الحالة_SLA',              # 12
         'تاريخ_الإنشاء',           # 13
         'الإدارة_العامة',          # 14
+        'تاريخ_إغلاق_الطلب',       # 15 (passthrough from raw_df)
     ]
 
     # Write headers
@@ -310,6 +329,15 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
                 value = case.date_opened or ''
             elif header_col == 'الإدارة_العامة':
                 value = case.admin or ''
+            elif header_col == 'تاريخ_إغلاق_الطلب':
+                # Passthrough from raw_df — not stored in CaseRow
+                if raw_row is not None:
+                    for col_name in ['تاريخ_إغلاق_الطلب', 'تاريخ إغلاق الطلب']:
+                        if col_name in raw_row.index:
+                            val = raw_row[col_name]
+                            if val == val:  # pd.notna check
+                                value = str(val) if str(val) not in ('nan', 'NaT', 'None') else ''
+                            break
             # AI-generated columns
             elif header_col == 'التصنيف_الفعلي':
                 value = case.actual_contact_type or ''
@@ -344,6 +372,7 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
     ws.column_dimensions['L'].width = 18   # الحالة_SLA
     ws.column_dimensions['M'].width = 18   # تاريخ_الإنشاء
     ws.column_dimensions['N'].width = 18   # الإدارة_العامة
+    ws.column_dimensions['O'].width = 18   # تاريخ_إغلاق_الطلب
 
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{len(cases) + 1}'
@@ -1660,7 +1689,6 @@ analyzed_fields:
     - قناة_تقديم_الخدمة
     - الخدمة_الرئيسية
     - نوع_المكالمة
-    - الجنسية
     - الإدارة المختصة
   unstructured:
     - field: تفاصيل_الطلب
@@ -1694,7 +1722,7 @@ Row 1 — CRM inquiry data:
   - المصدر: تحليل الاستفسارات
   - الطبيعة: describe it as CRM data with unstructured text fields
               (case details, resolutions, service names, case descriptions)
-  - الحجم: {closed_cases} حالة مغلقة
+  - الحجم: {closed_cases} حالة
   - الفترة: {date_range}
 
 Row 2 — Customer services guidebook:
@@ -1754,8 +1782,8 @@ Rules:
 
         # HARDCODED SECTION 2.2: منهجية التصنيف
         classification_method_hardcoded = (
-            "يعتمد التحليل على شجرة قرار من أربعة مستويات، حيث طبيعة المطلوب وليس الصياغة هي المعيار الفاصل. يُطرح على كل حالة اختباران متتاليان: "
-            "(1) الاختبار الأول: هل يُعبّر النص عن استياء، أو إبلاغ عن إخفاق، أو رغبة في تقديم بلاغ رسمي أو اعتراض؟ "
+            "يعتمد التحليل على شجرة قرار من أربعة مستويات، حيث طبيعة المطلوب وليس الصياغة هي المعيار الفاصل. يُطرح على كل حالة اختباران متتاليان:\n"
+            "(1) الاختبار الأول: هل يُعبّر النص عن استياء، أو إبلاغ عن إخفاق، أو رغبة في تقديم بلاغ رسمي أو اعتراض؟\n"
             "(2) الاختبار الثاني: هل يطلب النص تنفيذ إجراء محدد كتقديم خدمة أو متابعة طلب أو تعديل بيانات، وليس مجرد الحصول على معلومة؟\n"
             "قواعد التصنيف:\n"
             "→ إن كان الجواب نعم على الأول: شكوى (حتى لو تضمّن النص طلباً لاتخاذ إجراء)؛\n"
@@ -1770,7 +1798,7 @@ Rules:
             {
                 "المصدر": "تحليل الاستفسارات",
                 "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الحالة، الحلول، أسماء الخدمات، وصف الحالة)",
-                "الحجم": f"{closed_count} حالة مغلقة",
+                "الحجم": f"{closed_count} حالة",
                 "الفترة": date_range
             },
             {
@@ -1783,7 +1811,7 @@ Rules:
 
         # HARDCODED SECTION 2.3: الحقول المحللة
         analyzed_fields_text = (
-            "الحقول المنظمة المستخدمة في التحليل: رقم الطلب، الخدمة الرئيسية، نوع المكالمة الأصلي، حالة الطلب، قناة التواصل، الجنسية، والإدارة المختصة. "
+            "الحقول المنظمة المستخدمة في التحليل: رقم الطلب، الخدمة الرئيسية، نوع المكالمة الأصلي، حالة الطلب، قناة التواصل، والإدارة المختصة. "
             "الحقول غير المنظمة — محور هذا التحليل: تفاصيل الطلب ورد المعالجة. هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بعيداً عن التصنيف الشكلي في النظام."
         )
 
