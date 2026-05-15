@@ -129,6 +129,31 @@ def format_arabic_number(num: int) -> str:
     return str(num)
 
 
+def arabic_case_count(n) -> str:
+    """Return grammatically correct Arabic count string for 'case(s)'.
+
+    Arabic rules:
+      n == 0          → "لا حالات"
+      n == 1          → "حالة واحدة"
+      2 <= n <= 10    → "{n} حالات"   (plural)
+      n > 10          → "{n} حالة"    (singular — Arabic grammar for 11+)
+      n is "4+" etc.  → "{n} حالات"   (treat as plural)
+    """
+    if isinstance(n, str) and '+' in n:
+        return f"{n} حالات"
+    try:
+        n = int(n)
+    except (ValueError, TypeError):
+        return f"{n} حالة"
+    if n == 0:
+        return "لا حالات"
+    if n == 1:
+        return "حالة واحدة"
+    if 2 <= n <= 10:
+        return f"{n} حالات"
+    return f"{n} حالة"
+
+
 def calculate_similarity(text1: str, text2: str) -> float:
     """
     Simple similarity metric using word overlap.

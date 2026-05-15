@@ -98,12 +98,14 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     # --- PRIORITY 1: Traffic Fine Disputes (Contesting a fine, not filing) ---
     # Require اعتراض or خطأ alongside مخالفة to avoid shadowing "filing a report" cases
     # Also check for English equivalents: incorrect, dispute, contest, disagree, wrong, object
-    arabic_contest = any(k in title_norm for k in [normalize_arabic(w) for w in ['اعتراض', 'خطأ في اللوحة']])
+    arabic_contest = normalize_arabic('اعتراض') in title_norm
     english_contest = any(k in title_norm for k in ['incorrect', 'dispute', 'contest', 'disagree', 'wrong fine', 'objection'])
     has_contest = arabic_contest or english_contest
 
     # Bug #2: also catch informal spelling مخالفه and English ticket
-    arabic_fine = normalize_arabic('مخالفة') in title_norm or normalize_arabic('مخالفه') in title_norm
+    arabic_fine = (normalize_arabic('مخالفة') in title_norm
+               or normalize_arabic('مخالفه') in title_norm
+               or normalize_arabic('مخالفات') in title_norm)
     english_fine = any(k in title.lower() for k in ['fine', 'traffic fine', 'speeding', 'violation', 'ticket'])
     has_fine = arabic_fine or english_fine
 
@@ -146,11 +148,10 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         has_explicit_request = any(
             normalize_arabic(k) in title_norm for k in explicit_request_signals
         )
-        # Lower confidence forces LLM review when citizen also has an explicit action request.
-        # The LLM will apply Rule D (resolution-based) to correctly classify as طلب.
-        confidence = 0.65 if has_explicit_request else 0.88
-        return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', \
-               'صورة المركبة في الإشعار تُظهر مركبة مختلفة — خطأ في مطابقة اللوحات', confidence
+        if not has_explicit_request:
+            return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', \
+                   'صورة المركبة في الإشعار تُظهر مركبة مختلفة — خطأ في مطابقة اللوحات', 0.88
+        # else: fall through to Stage 3 LLM — explicit action request signals طلب not شكوى
 
     # --- PRIORITY 2: Security/Traffic Reports (filing, issuing, etc.) ---
     # Bug #8: 'تحرير مخالفة' removed — ambiguous, now handled by Priority 1b (disputed fine rule)
@@ -237,7 +238,12 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     has_ar_followup = any(k in title_norm for k in [normalize_arabic(w) for w in followup_keywords_ar])
     has_en_followup = any(k in title.lower() for k in followup_keywords_en)
     is_formal_complaint = any(k in title_norm for k in [normalize_arabic(w) for w in ['أتقدم بشكوى', 'أقدم شكوى', 'شكوى رسمية', 'مشكلة']])
-    if (has_ar_followup or has_en_followup) and not is_formal_complaint:
+    strong_followup_anchors = [
+        'تقدمت بشكوى', 'تقدمت بطلب', 'سبق وتقدمت',
+        'طلب سابق', 'شكوى سابقة', 'قدمت طلباً', 'منذ',
+    ]
+    has_strong_anchor = any(normalize_arabic(k) in title_norm for k in strong_followup_anchors)
+    if (has_ar_followup or has_en_followup) and has_strong_anchor and not is_formal_complaint:
         return 'طلب', 'متابعة طلب مقدم', 'متابعة طلب مقدم سابقاً', 0.80
 
     # --- PRIORITY 7: License/Vehicle Inquiries (PURE INFORMATION REQUESTS ONLY) ---
@@ -272,15 +278,17 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     # If resolution confirms fine was erroneous, classify as "مشكوك فيها" (complaint about error)
 
     fine_confirmed_valid_keywords = [
-        'المخالفة صحيحة',           # Fine is correct
-        'تم التحقق',                # Verified
-        'مخالفة قانونية',          # Legal fine
-        'النقاط صحيحة',             # Points are correct
-        'صحت المخالفة',             # Fine was correct
-        'النقاط المخصومة صحيحة',    # Deducted points are correct
-        'تجاوز الحد',                # Exceeded limit
-        'ثبت ارتكاب',               # Proven to have committed
-        'تم إثبات',                  # Proven/confirmed
+        'المخالفة صحيحة',
+        'المخالفات صحيحة',        # Plural form — covers "المخالفات المتعلقة بإمارة الفجيرة صحيحة"
+        'تم التحقق',
+        'مخالفة قانونية',
+        'النقاط صحيحة',
+        'صحت المخالفة',
+        'النقاط المخصومة صحيحة',
+        'تجاوز الحد',
+        'ثبت ارتكاب',
+        'تم إثبات',
+        'عليه مراجعة الادارة',    # Directed to appeal at admin — fine upheld, covers case 212027
     ]
     fine_found_erroneous_keywords = [
         'لا توجد مخالفة',           # No fine exists

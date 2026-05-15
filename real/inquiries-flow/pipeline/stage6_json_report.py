@@ -366,20 +366,20 @@ class JSONReportBuilder:
         categories = ["شكوى", "استفسار", "طلب", "شكر وثناء"]
 
         return {
-            "type": "bar",
+            "type": "column",
             "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
             "categories": categories,
             "series": [
                 {
-                    "name": "التصنيف الأصلي",
-                    "data": [float(original_counts.get(c, 0)) for c in categories]
+                    "name": "التصنيف الصحيح",   # series 0 → colors[0] = gold ✓
+                    "data": [float(actual_counts.get(c, 0)) for c in categories]
                 },
                 {
-                    "name": "التصنيف الصحيح",
-                    "data": [float(actual_counts.get(c, 0)) for c in categories]
+                    "name": "التصنيف الأصلي",   # series 1 → colors[1] = grey ✓
+                    "data": [float(original_counts.get(c, 0)) for c in categories]
                 }
             ],
-            "colors": ["#2E5090", "#B68A35"]
+            "colors": ["#B68A35", "#999999"]
         }
 
     def build_executive_summary_section(self, lang: str = "ar") -> Dict[str, Any]:
@@ -398,8 +398,8 @@ class JSONReportBuilder:
             body = ''
         # Fall back to computed summary if body is empty or stub
         if not body or body.startswith('جاري') or body.startswith('Generating'):
-            # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" reporting
-            total = self.state.closed_cases_count if self.state.closed_cases_count > 0 else len(self.state.all_classified)
+            # Use total_cases (all cases, open or closed) for cover/intro reporting
+            total = self.state.total_cases if self.state.total_cases > 0 else len(self.state.all_classified)
             complaint_count = sum(
                 1 for c in self.state.all_classified
                 if c.actual_contact_type == 'شكوى'
@@ -407,7 +407,7 @@ class JSONReportBuilder:
             complaint_rate = (complaint_count / total * 100) if total > 0 else 0
             if lang == 'ar':
                 body = (
-                    f"يُقدّم هذا التقرير تحليلاً ذكياً مُندمجاً لـ {total} حالة مغلقة "
+                    f"يُقدّم هذا التقرير تحليلاً ذكياً مُندمجاً لـ {total} حالة "
                     f"من بيانات CRM لشرطة الفجيرة "
                     f"{convert_month_year_to_arabic(self.state.month_year) or 'الربع الأول 2026'}. "
                     f"الهدف ليس عرض الأرقام، بل تحويل البيانات إلى قرارات ورؤى قابلة للتنفيذ. "
@@ -416,7 +416,7 @@ class JSONReportBuilder:
                 )
             else:
                 body = (
-                    f"This report presents an intelligent analysis of {total} closed cases "
+                    f"This report presents an intelligent analysis of {total} cases "
                     f"from Fujairah Police CRM "
                     f"({self.state.month_year or 'Q1 2026'}). "
                     f"After applying precise classification criteria, complaints represent "

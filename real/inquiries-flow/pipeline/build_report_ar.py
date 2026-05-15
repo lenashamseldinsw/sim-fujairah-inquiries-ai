@@ -214,7 +214,7 @@ def _build_cover(builder: WordBuilder, data: dict):
     meta = data.get("metadata", {})
     created = meta.get("created", "2026-04-30")[:10]
     cover.add_paragraph(
-        f"شرطة الفجيرة  |  {created}  |  تحليل ذكاء األعمال المتكامل",
+        f"شرطة الفجيرة  |  {created}  |  تحليل ذكاء الأعمال المتكامل",
         style=TextStyle(color=SOFT_GRAY, alignment="CENTER", space_before=0, space_after=0),
         rtl=True,
     )
@@ -237,12 +237,10 @@ def _render_table(builder: WordBuilder, table: dict):
     rtl_columns = list(reversed(columns))
     ordered_rows = [{col: row.get(col, "") for col in rtl_columns} for row in rows]
 
-    caption = table.get("caption")
     builder.add_table(
         ordered_rows,
         style=TABLE_STYLE,
         rtl=True,
-        caption=caption,
     )
 
 

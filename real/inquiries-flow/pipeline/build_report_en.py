@@ -82,10 +82,9 @@ def _extract_cover_stats(data: dict):
     complaint_pct = ""
     ontime_pct = "98%"  # fallback
 
-    # Read closed_cases_count from metadata (populated by stage6_json_report build_metadata).
-    # This is the count of rows where تاريخ_إغلاق_الطلب is non-empty in the input file,
-    # NOT the total of all classified cases.
-    closed_cases_count = data.get("metadata", {}).get("closed_cases_count", 0)
+    # Read total_cases from metadata (populated by stage6_json_report build_metadata).
+    # This is the total number of cases regardless of closure status.
+    closed_cases_count = data.get("metadata", {}).get("total_cases", 0)
 
     # Fallback: if metadata doesn't have closed_cases_count, sum section 3.1 distribution table
     if not closed_cases_count:
@@ -204,7 +203,7 @@ def _build_cover(builder: WordBuilder, data: dict):
     stat_style = TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=8, space_after=8)
 
     if closed_cases_count:
-        cover.add_paragraph(f"Total Closed Cases: {closed_cases_count}", style=stat_style, rtl=False)
+        cover.add_paragraph(f"Total Cases: {closed_cases_count}", style=stat_style, rtl=False)
     if complaint_pct:
         cover.add_paragraph(f"Complaints: {complaint_pct} of Total Contact", style=stat_style, rtl=False)
     cover.add_paragraph(f"On-Time Closure Rate: {ontime_pct}", style=stat_style, rtl=False)
@@ -236,12 +235,10 @@ def _render_table(builder: WordBuilder, table: dict):
     # LTR: preserve natural column order
     ordered_rows = [{col: row.get(col, "") for col in columns} for row in rows]
 
-    caption = table.get("caption")
     builder.add_table(
         ordered_rows,
         style=TABLE_STYLE,
         rtl=False,
-        caption=caption,
     )
 
 

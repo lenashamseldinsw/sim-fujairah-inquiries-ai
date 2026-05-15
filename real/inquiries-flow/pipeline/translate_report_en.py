@@ -39,6 +39,21 @@ Return only the translated JSON.
 """
 
 
+MAX_ATTEMPTS = 3
+
+
+def _strip_fences(text: str) -> str:
+    """Remove accidental markdown code fences the model may add despite instructions."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        inner = lines[1:]
+        if inner and inner[-1].strip() == "```":
+            inner = inner[:-1]
+        text = "\n".join(inner).strip()
+    return text
+
+
 def translate_report_to_english(
     report_json: Dict[str, Any],
     api_key: str,
@@ -47,9 +62,8 @@ def translate_report_to_english(
     """
     Translate all Arabic string values in report_json to English.
 
-    Uses the same LLM (claude-sonnet-4-6) and Anthropic client as the rest of
-    the pipeline.  The full JSON is sent in a single call — it is well within the
-    model's 200k-token context window.
+    Retries up to MAX_ATTEMPTS times if the LLM call fails or the response
+    cannot be parsed as valid JSON.
 
     Args:
         report_json: The Arabic report dict produced by generate_json_report().
@@ -58,7 +72,7 @@ def translate_report_to_english(
 
     Returns:
         A deep copy of report_json with Arabic values replaced by English translations,
-        or None if the call fails for any reason.
+        or None if all attempts fail.
     """
     if not report_json:
         print("[TranslateEN] report_json is empty — skipping translation.")
@@ -76,48 +90,58 @@ def translate_report_to_english(
 
     print(f"[TranslateEN] Sending report JSON ({len(report_json_str):,} chars) to {model} for translation...")
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=model,
-            max_tokens=16000,
-            system=_SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": _USER_TEMPLATE.format(report_json_str=report_json_str),
-                }
-            ],
-        )
-    except anthropic.APIError as exc:
-        print(f"[TranslateEN] Anthropic API error: {exc}")
-        return None
-    except Exception as exc:
-        print(f"[TranslateEN] Unexpected error calling LLM: {exc}")
-        return None
+    client = anthropic.Anthropic(api_key=api_key)
+    user_content = _USER_TEMPLATE.format(report_json_str=report_json_str)
 
-    raw_response = message.content[0].text if message.content else ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        if attempt > 1:
+            print(f"[TranslateEN] Retry attempt {attempt}/{MAX_ATTEMPTS}...")
 
-    # Strip accidental markdown fences the model may add despite instructions
-    raw_response = raw_response.strip()
-    if raw_response.startswith("```"):
-        lines = raw_response.splitlines()
-        # Drop first line (```json or ```) and last line (```)
-        inner_lines = lines[1:] if lines[-1].strip() == "```" else lines[1:]
-        if inner_lines and inner_lines[-1].strip() == "```":
-            inner_lines = inner_lines[:-1]
-        raw_response = "\n".join(inner_lines).strip()
+        # --- LLM call ---
+        try:
+            message = client.messages.create(
+                model=model,
+                max_tokens=16000,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_content}],
+            )
+        except anthropic.APIError as exc:
+            print(f"[TranslateEN] Anthropic API error on attempt {attempt}: {exc}")
+            if attempt == MAX_ATTEMPTS:
+                return None
+            continue
+        except Exception as exc:
+            print(f"[TranslateEN] Unexpected error calling LLM on attempt {attempt}: {exc}")
+            if attempt == MAX_ATTEMPTS:
+                return None
+            continue
 
-    try:
-        translated = json.loads(raw_response)
-    except json.JSONDecodeError as exc:
-        print(f"[TranslateEN] Failed to parse LLM response as JSON: {exc}")
-        print(f"[TranslateEN] Raw response (first 500 chars): {raw_response[:500]}")
-        return None
+        raw_response = message.content[0].text if message.content else ""
+        raw_response = _strip_fences(raw_response)
 
-    if not isinstance(translated, dict):
-        print(f"[TranslateEN] LLM returned unexpected type: {type(translated)}")
-        return None
+        if not raw_response:
+            print(f"[TranslateEN] Empty response from LLM on attempt {attempt}")
+            if attempt == MAX_ATTEMPTS:
+                return None
+            continue
 
-    print("[TranslateEN] Translation complete.")
-    return translated
+        # --- JSON parse ---
+        try:
+            translated = json.loads(raw_response)
+        except json.JSONDecodeError as exc:
+            print(f"[TranslateEN] JSON parse failed on attempt {attempt}: {exc}")
+            print(f"[TranslateEN] Raw response (first 500 chars): {raw_response[:500]}")
+            if attempt == MAX_ATTEMPTS:
+                return None
+            continue
+
+        if not isinstance(translated, dict):
+            print(f"[TranslateEN] LLM returned unexpected type on attempt {attempt}: {type(translated)}")
+            if attempt == MAX_ATTEMPTS:
+                return None
+            continue
+
+        print(f"[TranslateEN] Translation complete (attempt {attempt}).")
+        return translated
+
+    return None

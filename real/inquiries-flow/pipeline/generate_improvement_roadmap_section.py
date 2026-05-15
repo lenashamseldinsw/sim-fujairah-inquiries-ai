@@ -281,7 +281,7 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
             "effort":                   "منخفض",
             "source":                   _SOURCE_ANALYSIS_ONLY,
             "seed_recommendation_ar":   rec_text,
-            "seed_impact_ar":           f"إلغاء {cases_eliminated}+ حالة تواصل",
+            "seed_impact_ar":           f"إلغاء {cases_eliminated}+ حالات تواصل",
             "case_count":               cases_eliminated,
         })
 

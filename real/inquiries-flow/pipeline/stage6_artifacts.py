@@ -1215,7 +1215,7 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
         raise ValueError("state.guidebook_year not set - Stage 5 must complete successfully")
 
     # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty)
-    case_count = state.closed_cases_count if state.closed_cases_count > 0 else state.total_cases
+    case_count = state.total_cases
     date_range = convert_month_year_to_arabic(state.month_year)
     guidebook_pages = state.guidebook_pages
     guidebook_faq_count = state.guidebook_faq_count
@@ -1231,7 +1231,7 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
             {
                 'Source': 'Inquiry Analysis',
                 'Nature': 'CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)',
-                'Size': f'{case_count} closed cases',
+                'Size': f'{case_count} cases',
                 'Period': date_range
             },
             {
@@ -1247,7 +1247,7 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
             {
                 "المصدر": "تحليل الاستفسارات",
                 "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الطلب، الحلول، أسماء الخدمات، أوصاف الحالات)",
-                "الحجم": f"{case_count} حالة مغلقة",
+                "الحجم": f"{case_count} حالة",
                 "الفترة": date_range
             },
             {
@@ -1262,7 +1262,7 @@ def _build_sources_table(state: PipelineState, sources_input: List[Dict[str, Any
             {
                 "Source": "Inquiry Analysis",
                 "Nature": "CRM data with unstructured text fields (case details, resolutions, service names, case descriptions)",
-                "Size": f"{case_count} closed cases",
+                "Size": f"{case_count} cases",
                 "Period": date_range
             },
             {

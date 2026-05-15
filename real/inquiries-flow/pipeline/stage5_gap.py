@@ -337,7 +337,7 @@ def run_stage5(
 
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=8000,  # Increased to accommodate full gap_table analysis
+            max_tokens=16000,  # Large datasets need room for full gap_table + faq_validations
             system="You are an expert analyst of government customer service. Provide gap analysis based on the guidebook and customer interaction patterns. Return detailed, bilingual recommendations.",
             tools=[GAP_ANALYSIS_TOOL],
             tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text

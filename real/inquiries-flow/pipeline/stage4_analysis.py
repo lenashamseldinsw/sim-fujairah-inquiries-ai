@@ -183,6 +183,56 @@ ANALYSIS INSTRUCTIONS:
    Correct root_cause_category: "platform_bug" (radar plate-matching system error)
    Do NOT classify this as "no_proactive_notification" — the notification was sent; the data is wrong.
 
+   FRICTION POINT DISAMBIGUATION RULES:
+
+   1. "صورة المركبة تُظهر مركبة مختلفة / مخالفة على متعامل لم يكن في الفجيرة":
+      ONLY include cases where the citizen explicitly states:
+      (a) the photo shows a different vehicle/plate, OR
+      (b) they were physically absent from Fujairah on the date of the fine.
+      Do NOT include cases where the citizen merely disputes the fine amount,
+      requests removal of a fine confirmed non-existent, or asks about a fine
+      procedure — those belong to other friction groups or are standalone طلب cases.
+
+   2. "عدم وضوح حالة طلب تجديد الرخصة / تسجيل المركبة":
+      ONLY include cases where the citizen submitted a renewal or registration
+      request previously and is following up because they received NO status update.
+      Do NOT include cases where the citizen is asking about requirements,
+      making a first-time request, or following up on a fine-related matter.
+
+   3. "اعتراض على صحة المخالفة — غياب قناة رقمية":
+      ONLY include cases where the citizen is formally contesting the fine's
+      validity AND references the lack of a digital appeal channel.
+      Do NOT include cases that are mere inquiries about a fine, or cases where
+      the fine was confirmed non-existent in the resolution.
+
+   FREQUENCY COUNTING RULE (reinforced):
+   Count each case exactly once. A case can only belong to ONE friction cluster.
+   If a case has features matching multiple clusters, assign it to the cluster
+   that best describes the PRIMARY friction experienced.
+
+   CASE-LEVEL COUNTING — HOW TO DERIVE case_count:
+   The section headers show the TOTAL cases per sub_classification group (e.g. "(8 cases)").
+   These group totals are NOT the case_count for a friction point.
+
+   case_count = the number of individual cases whose description OR resolution text
+   contains explicit evidence of this specific friction point's qualifying criteria
+   (defined in the disambiguation rules above).
+
+   To count correctly:
+   1. Read each case in the relevant group(s) individually.
+   2. Ask: does THIS case's text explicitly demonstrate the friction?
+      - For wrong-vehicle / absent-from-Fujairah: only count if the case text says
+        "صورة المخالفة تُظهر سيارة أخرى" OR "لم أكن في الفجيرة" (or equivalent).
+        Do NOT count cases that merely dispute a fine without this specific evidence.
+      - For licence renewal / no status update: only count if the citizen previously
+        submitted a request and is following up because they received NO update.
+        Do NOT count first-time requests or requirement inquiries.
+   3. case_count = sum of cases that pass step 2.
+
+   Do NOT use the group header total as case_count.
+   When in doubt about a case, do NOT count it.
+   Under-counting is always safer than over-counting.
+
 3. FAQs - Questions answered repeatedly in the resolution
    - Extract actual Q&A from good resolution responses
    - Tag with the top_level category
@@ -333,6 +383,46 @@ def _reconcile_counts(
 
         reconciled_friction = friction.model_copy(update={"case_count": reconciled_count})
         reconciled_journey_map.append(reconciled_friction)
+
+    # ── Cross-friction consistency check ──────────────────────────────────────
+    # For friction entries sharing the same (top_level, root_cause_category),
+    # combined case_count must not exceed the actual count of cases with that
+    # top_level in all_classified. Fully data-driven — no hardcoded numbers.
+    top_level_actual = defaultdict(int)
+    for case in all_classified:
+        if case.top_level:
+            top_level_actual[case.top_level] += 1
+
+    group_index = defaultdict(list)  # (top_level, root_cause_category) → [(idx, friction)]
+    for i, friction in enumerate(reconciled_journey_map):
+        key = (friction.top_level or '', friction.root_cause_category or '')
+        group_index[key].append((i, friction))
+
+    for (top_level, root_cause), group in group_index.items():
+        if not top_level or len(group) < 2:
+            continue
+        combined = sum(f.case_count for _, f in group)
+        ceiling = top_level_actual.get(top_level, combined)
+        if combined > ceiling:
+            print(
+                f"[Stage4] CROSS-FRICTION CAP: top_level='{top_level}' "
+                f"root_cause='{root_cause}' combined={combined} > ceiling={ceiling}. "
+                f"Scaling down proportionally across {len(group)} friction entries."
+            )
+            for idx, friction in group:
+                scaled = max(0, round(friction.case_count / combined * ceiling))
+                reconciled_journey_map[idx] = friction.model_copy(
+                    update={"case_count": scaled}
+                )
+            # Fix rounding drift so group total == ceiling exactly
+            actual_total = sum(reconciled_journey_map[i].case_count for i, _ in group)
+            if actual_total != ceiling:
+                largest_i = max((i for i, _ in group),
+                                key=lambda i: reconciled_journey_map[i].case_count)
+                f = reconciled_journey_map[largest_i]
+                reconciled_journey_map[largest_i] = f.model_copy(
+                    update={"case_count": f.case_count + (ceiling - actual_total)}
+                )
 
     # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
@@ -645,7 +735,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=64000,
+            max_tokens=16000,
             system=build_analysis_system_prompt(),
             tools=[ANALYSIS_TOOL],
             tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
