@@ -382,6 +382,129 @@ class JSONReportBuilder:
             "colors": ["#B68A35", "#999999"]
         }
 
+    # ------------------------------------------------------------------
+    # Section 3.1 supplementary charts
+    # ------------------------------------------------------------------
+
+    _SEVERITY_DISPLAY_MAP: Dict[str, str] = {
+        'طلب روتينى': 'طلب عادي',
+        'طلب روتيني': 'طلب عادي',
+        'طلب حرج': 'طلب عاجل',
+        'طلب معقد': 'طلب معقد',
+    }
+    _SEVERITY_ORDER = ['طلب عادي', 'طلب عاجل', 'طلب معقد']
+    _SEVERITY_COLORS = ['#B68A35', '#999999', '#FF0000']
+
+    def build_service_distribution_chart(self) -> Optional[Dict[str, Any]]:
+        """Column chart — distribution of requests by service (الخدمة column)."""
+        if self.state.raw_df is None:
+            return None
+
+        df = self.state.raw_df
+        col = next((c for c in ['الخدمة', 'الخدمة '] if c in df.columns), None)
+        if col is None:
+            return None
+
+        counts = (
+            df[col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace('', float('nan'))
+            .dropna()
+            .value_counts()
+        )
+        if counts.empty:
+            return None
+
+        categories = counts.index.tolist()
+        values = [float(v) for v in counts.values.tolist()]
+
+        return {
+            "type": "column",
+            "title": "توزيع الطلبات على الخدمات",
+            "categories": categories,
+            "series": [
+                {
+                    "name": "توزيع الطلبات على الخدمات",
+                    "data": values,
+                }
+            ],
+            "colors": ["#B68A35"],
+        }
+
+    def build_sla_compliance_chart(self) -> Optional[Dict[str, Any]]:
+        """Pie chart — requests closed within the SLA deadline."""
+        if not self.state.all_classified:
+            return None
+
+        on_time = sum(
+            1 for c in self.state.all_classified
+            if str(c.sla_color).strip() == 'نعم'
+        )
+        total = len(self.state.all_classified)
+        if total == 0:
+            return None
+
+        off_time = total - on_time
+
+        return {
+            "type": "pie",
+            "title": "إغلاق الطلب خلال الوقت المحدد",
+            "categories": ["ضمن الوقت المحدد", "خارج الوقت المحدد"],
+            "series": [
+                {
+                    "name": "إغلاق الطلب خلال الوقت المحدد",
+                    "data": [float(on_time), float(off_time)],
+                }
+            ],
+            "colors": ["#B68A35", "#999999"],
+        }
+
+    def build_severity_chart(self) -> Optional[Dict[str, Any]]:
+        """Pie chart — severity distribution of requests (شدة الطلب column)."""
+        if self.state.raw_df is None:
+            return None
+
+        df = self.state.raw_df
+        col = next(
+            (c for c in ['شدة الطلب', 'شدة_الطلب'] if c in df.columns),
+            None,
+        )
+        if col is None:
+            return None
+
+        counts: Dict[str, int] = defaultdict(int)
+        for val in df[col].dropna().astype(str):
+            val = val.strip()
+            if not val:
+                continue
+            mapped = self._SEVERITY_DISPLAY_MAP.get(val, val)
+            counts[mapped] += 1
+
+        if not counts:
+            return None
+
+        categories = [s for s in self._SEVERITY_ORDER if counts.get(s, 0) > 0]
+        values = [float(counts[s]) for s in categories]
+        colors = [
+            self._SEVERITY_COLORS[self._SEVERITY_ORDER.index(s)]
+            for s in categories
+        ]
+
+        return {
+            "type": "pie",
+            "title": "شدة الطلب",
+            "categories": categories,
+            "series": [
+                {
+                    "name": "شدة الطلب",
+                    "data": values,
+                }
+            ],
+            "colors": colors,
+        }
+
     def build_executive_summary_section(self, lang: str = "ar") -> Dict[str, Any]:
         """BUG 3: Build executive summary section by reading from language-specific dict."""
         # Read from correct language dict
@@ -578,6 +701,15 @@ class JSONReportBuilder:
         # Bar chart — reuse existing method, no duplication
         classification_chart = self.build_classification_chart()
 
+        # Additional 3.1 charts
+        service_chart = self.build_service_distribution_chart()
+        sla_chart = self.build_sla_compliance_chart()
+        severity_chart = self.build_severity_chart()
+        charts_31 = [
+            c for c in [classification_chart, service_chart, sla_chart, severity_chart]
+            if c is not None
+        ]
+
         # 3.1 actual distribution
         intro_paragraph = wm_raw["intro_paragraph"]
 
@@ -598,7 +730,7 @@ class JSONReportBuilder:
             "level": 2,
             "content": intro_paragraph,
             "tables": [dist_table],
-            "charts": [classification_chart] if classification_chart else [],
+            "charts": charts_31,
         }
 
         # 3.2 classification accuracy

@@ -1512,7 +1512,7 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
         # Extract classification metrics
         total_cases = state.total_cases
         # Use closed_cases_count (where تاريخ_إغلاق_الطلب is not empty) for "حالة مغلقة" reporting
-        closed_cases = state.closed_cases_count if state.closed_cases_count > 0 else total_cases
+        closed_cases = total_cases
         all_classified = state.all_classified or []
 
         # Use centralized reclassification stats from state (computed in generate_artifacts_stage6)
@@ -1641,7 +1641,7 @@ source_1_crm:
   - date_range: "{date_range}"
   - content_description: >
       CRM data — unstructured text fields (case details, resolutions,
-      service names, case descriptions). Only cases where تاريخ_إغلاق_الطلب is not empty.
+      service names, case descriptions). 
 
 source_2_guidebook:
   - pages: {guidebook_pages}

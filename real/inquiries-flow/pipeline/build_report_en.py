@@ -4,6 +4,7 @@ Reads the English-translated report JSON (e.g. inquiries_report_*_data_en.json)
 and writes a styled LTR .docx following the design palette in design-palette.md.
 """
 
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -244,13 +245,15 @@ def _render_table(builder: WordBuilder, table: dict):
 
 def _render_chart(builder: WordBuilder, chart: dict):
     colors = chart.get("colors", [])
+    chart_type = chart.get("type", "column")
     series = []
     for i, s in enumerate(chart.get("series", [])):
         entry = {
             "name": s.get("name", ""),
             "values": s.get("data", []),
         }
-        if i < len(colors):
+        # For pie charts slice colors come from ChartStyle.series_colors, not per-series color
+        if chart_type != "pie" and i < len(colors):
             entry["color"] = colors[i].lstrip("#")
         series.append(entry)
 
@@ -260,12 +263,17 @@ def _render_chart(builder: WordBuilder, chart: dict):
         "series": series,
     }
 
-    chart_type = chart.get("type", "column")
+    style = CHART_STYLE
+    if chart_type == "pie" and colors:
+        style = dataclasses.replace(
+            CHART_STYLE,
+            series_colors=[c.lstrip("#") for c in colors],
+        )
 
     builder.add_chart(
         chart_data,
         chart_type=chart_type,
-        style=CHART_STYLE,
+        style=style,
         rtl=False,
     )
 
