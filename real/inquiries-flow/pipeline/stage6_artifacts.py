@@ -13,6 +13,7 @@ Report dict is stored in state.report_json for passing to display functions.
 import json
 import sys
 import anthropic
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
@@ -664,6 +665,7 @@ def _build_pre_computed_findings(
     friction_count: int,
     sla_closed: int,
     sla_rate: float,
+    rc_totals_auth: dict = None,
 ) -> list:
     """
     Pre-compute the findings table deterministically from state data.
@@ -738,8 +740,13 @@ def _build_pre_computed_findings(
         # Pick the largest group
         largest_group = max(grouped_by_cause.values(), key=lambda g: sum(f['case_count'] for f in g))
         friction_point_count_in_group = len(largest_group)
-        case_count_in_group = sum(f['case_count'] for f in largest_group)
         group_cause = largest_group[0]['root_cause']
+        # Use the full authoritative journey_map total when available (covers frictions beyond
+        # the first-10 slice used to build friction_points).
+        if rc_totals_auth and group_cause in rc_totals_auth:
+            case_count_in_group = rc_totals_auth[group_cause]
+        else:
+            case_count_in_group = sum(f['case_count'] for f in largest_group)
         group_cause_label = _root_cause_label(group_cause)
 
         # Title: Leading number is FRICTION POINT COUNT, not case count
@@ -883,6 +890,13 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # FIX: Pre-compute findings table deterministically from state before LLM call
         # Avoids LLM inventing ambiguous case-count titles
         friction_count = len(state.journey_map or [])
+
+        # Authoritative per-root-cause totals from the full journey_map (not the first-10 slice).
+        # Passed to _build_pre_computed_findings so row 4 uses the correct grouped case count.
+        rc_totals_auth: dict = defaultdict(int)
+        for _f in (state.journey_map or []):
+            rc_totals_auth[_f.root_cause_category] += _f.case_count
+
         pre_computed_findings = _build_pre_computed_findings(
             total_cases=total_cases,
             misclassification_count=misclassification_count,
@@ -895,6 +909,7 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             friction_count=friction_count,
             sla_closed=sla_closed,
             sla_rate=sla_rate,
+            rc_totals_auth=rc_totals_auth,
         )
 
         # Extract gaps with enhanced guidebook intelligence

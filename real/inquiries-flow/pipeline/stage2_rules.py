@@ -148,10 +148,14 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
         has_explicit_request = any(
             normalize_arabic(k) in title_norm for k in explicit_request_signals
         )
-        if not has_explicit_request:
+        has_no_deduction = normalize_arabic('عدم خصم') in title_norm
+        has_accident_free_day = normalize_arabic('بلا حوادث') in title_norm
+        is_points_service_complaint = has_no_deduction and has_accident_free_day
+
+        if not has_explicit_request and not is_points_service_complaint:
             return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', \
                    'صورة المركبة في الإشعار تُظهر مركبة مختلفة — خطأ في مطابقة اللوحات', 0.88
-        # else: fall through to Stage 3 LLM — explicit action request signals طلب not شكوى
+        # else: fall through to Stage 3 LLM
 
     # --- PRIORITY 2: Security/Traffic Reports (filing, issuing, etc.) ---
     # Bug #8: 'تحرير مخالفة' removed — ambiguous, now handled by Priority 1b (disputed fine rule)
