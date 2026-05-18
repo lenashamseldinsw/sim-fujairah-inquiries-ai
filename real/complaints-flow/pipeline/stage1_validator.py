@@ -369,7 +369,7 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     # 1. Channel distribution (strip trailing spaces from raw values)
     if 'قناة_تقديم_الخدمة' in df_normalized.columns:
         channel_counts = df_normalized['قناة_تقديم_الخدمة'].str.strip().value_counts()
-        state.channel_distribution = channel_counts.to_dict()
+        state.channel_distribution = _sanitize_for_json(channel_counts.to_dict())
 
     # 2. Digital channel rate (تطبيق الهاتف + موقع إلكتروني + NCRM = digital)
     DIGITAL_CHANNELS = ['تطبيق الهاتف', 'موقع الكترونى', 'NCRM']
@@ -383,7 +383,7 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
 
     # 3. Severity distribution
     if 'شدة_الطلب' in df_normalized.columns:
-        state.complaint_severity_distribution = (
+        state.complaint_severity_distribution = _sanitize_for_json(
             df_normalized['شدة_الطلب'].value_counts().to_dict()
         )
 
@@ -393,7 +393,7 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
         dept_clean = df_normalized[dept_col].str.replace(
             r'^الفجيرة\s*-\s*', '', regex=True
         ).str.strip()
-        state.department_distribution = dept_clean.value_counts().to_dict()
+        state.department_distribution = _sanitize_for_json(dept_clean.value_counts().to_dict())
 
     # 5. Rejection rate (الحالة == 'طلب مرفوض')
     if 'الحالة' in df_normalized.columns:
