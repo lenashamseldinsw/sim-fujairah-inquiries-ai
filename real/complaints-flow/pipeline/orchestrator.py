@@ -100,7 +100,26 @@ class PipelineOrchestrator:
             (success, message, result_dict)
         """
         try:
-            df = pd.read_excel(file_path, header=COMPLAINTS_EXCEL_HEADER_ROW, sheet_name=0)
+            # Auto-detect header row by trying multiple options
+            df = None
+            header_row_used = None
+            for header_row in [COMPLAINTS_EXCEL_HEADER_ROW, 1, 0, 2, 3]:
+                try:
+                    df_attempt = pd.read_excel(file_path, header=header_row, sheet_name=0)
+                    # Check if we have at least one required column
+                    required_cols = {'رقم الطلب', 'تفاصيل الطلب', 'الحل', 'الخدمة'}
+                    found_cols = set(df_attempt.columns)
+                    if any(col in found_cols for col in required_cols):
+                        df = df_attempt
+                        header_row_used = header_row
+                        print(f"[Stage1] Auto-detected header row: {header_row}")
+                        break
+                except Exception:
+                    continue
+
+            if df is None:
+                return False, f"Could not read Excel file with required columns: رقم الطلب, تفاصيل الطلب, الحل, الخدمة", {}
+
             self.state = run_stage1(self.state, df)
             self.save_state()
             print(f"[Stage1] Case count audit: total_cases={self.state.total_cases}, raw_df_rows={len(self.state.raw_df) if self.state.raw_df is not None else 0}")
