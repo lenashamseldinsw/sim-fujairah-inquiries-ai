@@ -947,17 +947,45 @@ def init_session_state():
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
 def get_analyzer_for_flow(flow_type: str):
     """Get analyzer for the specified flow type."""
-    if flow_type == 'complaints':
-        flow_path = Path(__file__).parent / "complaints-flow" / "analysis" / "__init__.py"
-    else:
-        flow_path = Path(__file__).parent / "inquiries-flow" / "analysis" / "__init__.py"
+    try:
+        print(f"[ANALYZER] Loading {flow_type} analyzer...")
+        if flow_type == 'complaints':
+            flow_path = Path(__file__).parent / "complaints-flow" / "analysis" / "__init__.py"
+        else:
+            flow_path = Path(__file__).parent / "inquiries-flow" / "analysis" / "__init__.py"
 
-    spec = importlib.util.spec_from_file_location(f"_{flow_type}_analysis", flow_path)
-    flow_analysis = importlib.util.module_from_spec(spec)
-    sys.modules[f"_{flow_type}_analysis"] = flow_analysis
-    spec.loader.exec_module(flow_analysis)
+        print(f"[ANALYZER] Flow path: {flow_path}")
+        print(f"[ANALYZER] File exists: {flow_path.exists()}")
 
-    return flow_analysis.RealAnalyzer()
+        spec = importlib.util.spec_from_file_location(f"_{flow_type}_analysis", str(flow_path))
+        flow_analysis = importlib.util.module_from_spec(spec)
+        sys.modules[f"_{flow_type}_analysis"] = flow_analysis
+        print(f"[ANALYZER] Loading module...")
+        spec.loader.exec_module(flow_analysis)
+        print(f"[ANALYZER] Module loaded. Creating RealAnalyzer instance...")
+
+        # Get API key from Streamlit secrets and pass it to analyzer
+        api_key = None
+        try:
+            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            print(f"[ANALYZER] ✓ API key loaded from Streamlit secrets")
+        except Exception as e:
+            print(f"[ANALYZER] Could not load from st.secrets: {e}, falling back to environment")
+
+        analyzer = flow_analysis.RealAnalyzer(api_key=api_key)
+        print(f"[ANALYZER] ✓ {flow_type} analyzer created successfully")
+        return analyzer
+    except ValueError as e:
+        error_msg = str(e)
+        print(f"[ANALYZER] ✗ ValueError: {error_msg}")
+        if "ANTHROPIC_API_KEY" in error_msg:
+            raise ValueError("API key not configured. Please set ANTHROPIC_API_KEY in Streamlit secrets.")
+        raise
+    except Exception as e:
+        print(f"[ANALYZER] ✗ Exception: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def get_analyzer():
     """Get analyzer for inquiries flow (app_inq_comp is real-only)."""
@@ -985,10 +1013,14 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
 
     try:
         # Get analyzer for the selected flow
+        print(f"\n[PROCESS] Starting {flow_type} flow processing")
+        print(f"[PROCESS] Getting analyzer for {flow_type}...")
         analyzer = get_analyzer_for_flow(flow_type)
+        print(f"[PROCESS] ✓ Analyzer loaded: {analyzer.__class__.__name__}")
 
         # Process the first file
         uploaded_file = uploaded_files[0]
+        print(f"[PROCESS] Processing file: {uploaded_file.name} ({uploaded_file.size} bytes)")
 
         # Progress display
         progress_placeholder = st.empty()
@@ -1004,19 +1036,36 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
             progress_bar.progress(min(pct, 1.0))
 
         # Run analyzer
+        print(f"[PROCESS] Starting analysis...")
         report = analyzer.analyze(uploaded_file, progress_callback=update_progress)
+        print(f"[PROCESS] ✓ Analysis complete. Success: {report.get('success', False)}")
 
         # Clear progress
         progress_placeholder.empty()
         progress_bar.empty()
 
         if not report.get('success', False):
-            st.error(report.get('message', 'Analysis failed'))
+            error_msg = report.get('message', 'Analysis failed')
+            print(f"[PROCESS] ✗ Analysis failed: {error_msg}")
+            st.error(error_msg)
             return None
 
         return report
 
+    except ValueError as e:
+        error_msg = str(e)
+        print(f"[PROCESS] ✗ ValueError: {error_msg}")
+        if "API key" in error_msg:
+            st.error("Configuration Error: ANTHROPIC_API_KEY not set. Please configure it in Streamlit secrets (~/.streamlit/secrets.toml)")
+        else:
+            st.error(f"Error: {error_msg}")
+        return None
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        print(f"[PROCESS] ✗ Exception: {error_msg}")
+        import traceback
+        print("[PROCESS] Full traceback:")
+        traceback.print_exc()
         st.error(f"Error: {str(e)}")
         return None
 
@@ -1068,7 +1117,10 @@ def show_landing_page(lang):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button(tx['btn_inq'], key='btn_inq', use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+        btn_inq = st.button(tx['btn_inq'], key='btn_inq_nav', use_container_width=True)
+        if btn_inq:
+            print(f"[Landing] Inquiries button clicked → navigating to inquiries page")
             st.session_state.page = 'inquiries'
             st.rerun()
 
@@ -1085,7 +1137,12 @@ def show_landing_page(lang):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button(tx['btn_cmp'], key='btn_cmp', use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
+        btn_cmp = st.button(tx['btn_cmp'], key='btn_cmp_nav', use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        if btn_cmp:
+            print(f"[Landing] Complaints button clicked → navigating to complaints page")
             st.session_state.page = 'complaints'
             st.rerun()
 
@@ -1237,14 +1294,12 @@ def show_complaints_page(lang):
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown('<div class="blue-uploader">', unsafe_allow_html=True)
         uploaded_files = st.file_uploader(
             tx['uploader_label'],
             type=['xlsx', 'xls', 'pdf'],
             accept_multiple_files=False,
             key='cmp_uploader'
         )
-        st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
             st.session_state.uploaded_file = uploaded_files
@@ -1264,11 +1319,9 @@ def show_complaints_page(lang):
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
             if st.button(tx['btn_start_cmp'], key='start_cmp', use_container_width=True):
                 st.session_state.processing = True
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.processing:
         st.markdown(f"""
@@ -1301,7 +1354,6 @@ def show_complaints_page(lang):
         display_report_tabs(lang, flow_type='complaints')
 
         if st.session_state.report_data.get('word_path'):
-            st.markdown('<div class="blue-download">', unsafe_allow_html=True)
             with open(st.session_state.report_data['word_path'], 'rb') as f:
                 st.download_button(
                     label=tx['btn_download_cmp'],
@@ -1310,16 +1362,13 @@ def show_complaints_page(lang):
                     mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                     use_container_width=True
                 )
-            st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
         if st.button(tx['btn_reset'], key='reset_cmp', use_container_width=True):
             st.session_state.uploaded_file = None
             st.session_state.processing = False
             st.session_state.completed = False
             st.session_state.report_data = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1338,12 +1387,19 @@ def main():
             st.rerun()
 
     # Page routing
+    print(f"[Main] Current page: {st.session_state.page}")
     if st.session_state.page == 'landing':
+        print(f"[Main] → Rendering landing page")
         show_landing_page(lang)
     elif st.session_state.page == 'inquiries':
+        print(f"[Main] → Rendering inquiries page")
         show_inquiries_page(lang)
     elif st.session_state.page == 'complaints':
+        print(f"[Main] → Rendering complaints page")
         show_complaints_page(lang)
+    else:
+        print(f"[Main] ✗ Unknown page: {st.session_state.page}")
+        st.error(f"Unknown page: {st.session_state.page}")
 
 
 if __name__ == "__main__":
