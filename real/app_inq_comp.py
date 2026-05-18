@@ -7,7 +7,6 @@ import importlib.util
 import sys
 from pathlib import Path
 from report_display import display_report_tabs
-from analysis import DemoAnalyzer
 from dotenv import load_dotenv
 import zipfile
 import io
@@ -945,11 +944,8 @@ def get_analyzer_for_flow(flow_type: str):
     return flow_analysis.RealAnalyzer()
 
 def get_analyzer():
-    """Get the appropriate analyzer based on APP_MODE environment variable."""
-    if APP_MODE == 'real':
-        return get_analyzer_for_flow('inquiries')
-    else:
-        return DemoAnalyzer()
+    """Get analyzer for inquiries flow (app_inq_comp is real-only)."""
+    return get_analyzer_for_flow('inquiries')
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
