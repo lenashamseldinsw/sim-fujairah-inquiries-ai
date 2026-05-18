@@ -1,15 +1,18 @@
-"""Real analysis module with agentic AI implementation."""
+"""
+Real Complaints Analysis Module
+
+Exports:
+- RealAnalyzer: AI-based analyzer using 6-stage pipeline
+- DynamicReportDisplay: Report display component
+- Analyzer: Base interface
+"""
 
 from .base import Analyzer
-from .dynamic_display import DynamicReportDisplay
 from .real import RealAnalyzer
-from .adaptive_extractor import AdaptiveReportExtractor
-from .report_structure_detector import ReportStructureDetector
+from .dynamic_display import DynamicReportDisplay
 
 __all__ = [
     'Analyzer',
-    'DynamicReportDisplay',
     'RealAnalyzer',
-    'AdaptiveReportExtractor',
-    'ReportStructureDetector'
+    'DynamicReportDisplay',
 ]

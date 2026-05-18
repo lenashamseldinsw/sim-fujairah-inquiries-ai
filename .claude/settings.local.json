@@ -48,7 +48,9 @@
       "Bash(python debug_bold_ending.py)",
       "Bash(ls -la *.py)",
       "Bash(python verify_q1_extraction.py)",
-      "Bash(python3 /tmp/test_analyzer_full.py)"
+      "Bash(python3 /tmp/test_analyzer_full.py)",
+      "Bash(python -m py_compile generate_workload_map_section.py)",
+      "Bash(python3 -m py_compile pipeline/generate_improvement_roadmap_section.py pipeline/generate_workload_map_section.py pipeline/generate_conclusion_section.py pipeline/generate_ai_use_cases_section.py pipeline/stage6_json_report.py pipeline/build_report_ar.py)"
     ],
     "additionalDirectories": [
       "/Users/lena/Documents/Sword/sim-fujairah-inquiries-ai/outputs",

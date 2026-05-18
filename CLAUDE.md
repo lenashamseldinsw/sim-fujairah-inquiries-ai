@@ -31,14 +31,35 @@ sim-fujairah-inquiries-ai/
 │   └── test_adaptive_system.py    # Test script for extraction
 │
 ├── real/                           # Real version (development, real branch)
-│   ├── app.py                     # Real UI (Streamlit, independent copy)
+│   ├── app.py                     # Single-flow UI (legacy, for backward compatibility)
+│   ├── app_inq_comp.py            # UNIFIED UI for both inquiries + complaints flows
+│   ├── report_display.py          # Report display handler (supports both flows)
 │   ├── chart_parser.py            # Chart parsing utilities
 │   ├── analysis/
-│   │   ├── __init__.py            # Exports real components
+│   │   ├── __init__.py            # UNIFIED analyzer loader (supports both flows)
 │   │   ├── base.py                # Abstract Analyzer interface
 │   │   ├── dynamic_display.py     # Dynamic report display
-│   │   └── real.py                # RealAnalyzer (AI-based, TODO)
-│   └── .env                       # Real environment config
+│   │   └── real.py                # RealAnalyzer (AI-based, legacy single-flow)
+│   ├── inquiries-flow/            # Inquiries pipeline
+│   │   ├── analysis/
+│   │   │   ├── __init__.py        # Exports inquiries analyzer + display
+│   │   │   ├── base.py            # Analyzer interface
+│   │   │   ├── real.py            # RealAnalyzer for inquiries (6-stage pipeline)
+│   │   │   └── dynamic_display.py # Report display for inquiries
+│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages
+│   │   └── output/                # Generated reports and cache
+│   ├── complaints-flow/           # Complaints pipeline
+│   │   ├── analysis/
+│   │   │   ├── __init__.py        # Exports complaints analyzer + display
+│   │   │   ├── base.py            # Analyzer interface
+│   │   │   ├── real.py            # RealAnalyzer for complaints (6-stage pipeline)
+│   │   │   └── dynamic_display.py # Report display for complaints
+│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages
+│   │   └── output/                # Generated reports and cache
+│   ├── inquiries-output/          # Root output folder (backward compatibility)
+│   ├── complaints-output/         # Root output folder (backward compatibility)
+│   ├── .env                       # Real environment config
+│   └── test files...              # Test scripts for each flow
 │
 ├── docs/                           # Documentation (consolidated)
 ├── Makefile                        # Updated: cd demo/real && streamlit run app.py
@@ -67,17 +88,39 @@ cd demo && streamlit run app.py
 
 Opens at `http://localhost:8501` with pre-built reports for both inquiries and complaints flows.
 
-### Real Version (Development)
+### Real Version - Unified App (Recommended)
 
-The real version with AI-based analysis (work in progress):
+The real version with AI-based analysis supporting **both inquiries and complaints** flows:
 
 ```bash
-make real
-# Or manually:
+cd real && streamlit run app_inq_comp.py
+```
+
+**Features:**
+- Single landing page with flow selection
+- Separate pages for inquiries and complaints analysis
+- Unified analyzer routing that loads the correct pipeline
+- Both flows generate Word reports, Excel files, and JSON data
+- Display integrates with dynamic_report_display.py for both flows
+
+**How it works:**
+1. User lands on home page and selects "Inquiries" or "Complaints"
+2. App loads the appropriate analyzer from `inquiries-flow/` or `complaints-flow/`
+3. File is processed through the 6-stage pipeline
+4. Results displayed with dynamic report viewer
+5. Download links provided for Word and Excel outputs
+
+### Real Version - Legacy Single Flow (Backward Compatibility)
+
+If you need to run just one flow:
+
+```bash
+# Set which flow to run
+export APP_MODE=inquiries  # or 'complaints'
 cd real && streamlit run app.py
 ```
 
-**Note:** The `RealAnalyzer` is still in development. Current version will show placeholder messages.
+**Note:** `app.py` only supports inquiries. Use `app_inq_comp.py` for complaints.
 
 ## Adaptive Report System (Demo Only)
 
@@ -273,7 +316,52 @@ If you need a third implementation (e.g., `experimental`):
 5. Add to Makefile: `make experimental: cd experimental && streamlit run app.py`
 6. Create `experimental/.env` with `APP_MODE=experimental`
 
+## Unified Real App Architecture
+
+### New Files (Real Version)
+
+#### `real/app_inq_comp.py`
+The unified app that handles both inquiries and complaints flows:
+- **Lines 1-50**: Imports and setup (dynamic flow imports from `analysis`)
+- **Lines 200-400**: CSS styling for both flows (gold for inquiries, blue for complaints)
+- **Lines 400-600**: Session state initialization
+- **Lines 600-700**: Analyzer setup - uses `get_analyzer_for_flow()` to load correct analyzer
+- **Lines 700-1000**: Landing page with flow selection (two cards)
+- **Lines 1000-1500**: Inquiries page (file upload, processing, display)
+- **Lines 1500-2000**: Complaints page (file upload, processing, display)
+- **Lines 2000-2100**: Main router that switches between pages
+
+**Key function:**
+```python
+get_analyzer_for_flow(flow_type: str)  # Load analyzer for 'inquiries' or 'complaints'
+```
+
+#### `real/report_display.py`
+Unified report display handler:
+- `display_report_tabs(lang, flow_type, period)` - Displays reports for either flow
+- Automatically selects cache dir based on flow_type
+- Uses `get_display_for_flow()` to load the correct DynamicReportDisplay
+
+#### `real/analysis/__init__.py` (UPDATED)
+Now supports **dynamic analyzer loading** for both flows:
+- `set_flow_context(flow_type)` - Sets which flow to use
+- `get_analyzer_for_flow(flow_type)` - Factory to create analyzer for specific flow
+- `get_display_for_flow(flow_type, lang, cache_dir)` - Factory to create display for specific flow
+- Backward compatible: `RealAnalyzer`, `DynamicReportDisplay` still work for default flow (inquiries)
+
+**Old behavior:** Always loaded inquiries analyzer (had `or True` bug)  
+**New behavior:** Dynamically loads from appropriate flow folder based on context
+
 ## Key Files Explained
+
+### `real/app_inq_comp.py` (NEW - Unified)
+The recommended entry point for the real version. Supports both flows in one app.
+
+### `real/report_display.py` (NEW - Unified)
+Handles report display for both flows. Called by app_inq_comp.py after analysis.
+
+### `real/analysis/__init__.py` (UPDATED - Now Dynamic)
+Previously hard-coded to inquiries. Now dynamically loads analyzers via `get_analyzer_for_flow()`.
 
 ### `demo/app.py`
 
