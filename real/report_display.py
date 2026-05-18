@@ -1,9 +1,10 @@
 """Unified report display handler for both inquiries and complaints flows."""
 
 import streamlit as st
+import sys
+import importlib.util
 from pathlib import Path
 from typing import Optional
-from analysis import get_display_for_flow
 
 
 def display_report_tabs(
@@ -26,11 +27,19 @@ def display_report_tabs(
             # Determine cache dir based on flow_type
             if flow_type == 'complaints':
                 cache_dir = str(Path(__file__).parent / "complaints-output" / "cache")
+                flow_path = Path(__file__).parent / "complaints-flow" / "analysis" / "__init__.py"
             else:
                 cache_dir = str(Path(__file__).parent / "inquiries-output" / "cache")
+                flow_path = Path(__file__).parent / "inquiries-flow" / "analysis" / "__init__.py"
 
-            # Get display for the appropriate flow
-            display = get_display_for_flow(flow_type, lang=lang, cache_dir=cache_dir)
+            # Load the appropriate flow's analysis module
+            spec = importlib.util.spec_from_file_location(f"_{flow_type}_analysis", flow_path)
+            flow_analysis = importlib.util.module_from_spec(spec)
+            sys.modules[f"_{flow_type}_analysis"] = flow_analysis
+            spec.loader.exec_module(flow_analysis)
+
+            # Get the DynamicReportDisplay from the flow module
+            display = flow_analysis.DynamicReportDisplay(lang=lang, cache_dir=cache_dir)
 
             # Use English JSON if available and requested
             if lang == 'en' and report_data.get('report_json_en'):
@@ -42,4 +51,6 @@ def display_report_tabs(
 
     except Exception as e:
         st.error(f"Error displaying report: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False

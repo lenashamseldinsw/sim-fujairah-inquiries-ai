@@ -3,9 +3,11 @@ import time
 import os
 import json
 import random
+import importlib.util
+import sys
 from pathlib import Path
 from report_display import display_report_tabs
-from analysis import DemoAnalyzer, RealAnalyzer
+from analysis import DemoAnalyzer
 from dotenv import load_dotenv
 import zipfile
 import io
@@ -928,10 +930,23 @@ def init_session_state():
 
 
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
+def get_analyzer_for_flow(flow_type: str):
+    """Get analyzer for the specified flow type."""
+    if flow_type == 'complaints':
+        flow_path = Path(__file__).parent / "complaints-flow" / "analysis" / "__init__.py"
+    else:
+        flow_path = Path(__file__).parent / "inquiries-flow" / "analysis" / "__init__.py"
+
+    spec = importlib.util.spec_from_file_location(f"_{flow_type}_analysis", flow_path)
+    flow_analysis = importlib.util.module_from_spec(spec)
+    sys.modules[f"_{flow_type}_analysis"] = flow_analysis
+    spec.loader.exec_module(flow_analysis)
+
+    return flow_analysis.RealAnalyzer()
+
 def get_analyzer():
     """Get the appropriate analyzer based on APP_MODE environment variable."""
     if APP_MODE == 'real':
-        from analysis import get_analyzer_for_flow
         return get_analyzer_for_flow('inquiries')
     else:
         return DemoAnalyzer()
@@ -957,9 +972,6 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
         return None
 
     try:
-        # Import dynamic analyzer loading
-        from analysis import get_analyzer_for_flow
-
         # Get analyzer for the selected flow
         analyzer = get_analyzer_for_flow(flow_type)
 
