@@ -968,9 +968,14 @@ def get_analyzer_for_flow(flow_type: str):
         api_key = None
         try:
             api_key = st.secrets.get("ANTHROPIC_API_KEY")
-            print(f"[ANALYZER] ✓ API key loaded from Streamlit secrets")
+            if api_key:
+                print(f"[ANALYZER] ✓ API key loaded from Streamlit secrets: {api_key[:20]}...")
+            else:
+                print(f"[ANALYZER] ⚠ st.secrets.get() returned None")
+                print(f"[ANALYZER] Available secrets keys: {list(st.secrets.keys())}")
         except Exception as e:
             print(f"[ANALYZER] Could not load from st.secrets: {e}, falling back to environment")
+            api_key = None
 
         analyzer = flow_analysis.RealAnalyzer(api_key=api_key)
         print(f"[ANALYZER] ✓ {flow_type} analyzer created successfully")
