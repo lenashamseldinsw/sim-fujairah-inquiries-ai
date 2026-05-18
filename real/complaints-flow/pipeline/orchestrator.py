@@ -343,23 +343,25 @@ class PipelineOrchestrator:
 
     def run_full_pipeline(
         self,
-        file_path: str,
-        excel_path: str,
-        word_path: str,
+        file_path: Optional[str] = None,
+        excel_path: str = None,
+        word_path: str = None,
         language: str = 'ar',
         progress_callback=None,
-        methodology_path: Optional[str] = None
+        methodology_path: Optional[str] = None,
+        df: Optional[object] = None
     ) -> Dict[str, Any]:
         """
         Run all 6 stages in sequence.
 
         Args:
-            file_path: Path to input Excel file with case data
+            file_path: Path to input Excel file with case data (optional if df is provided)
             excel_path: Path for Excel output
             word_path: Path for Word output
             language: Language for output ('ar' or 'en')
             progress_callback: Optional function(pct, msg_ar, msg_en) for UI updates
             methodology_path: Optional path to منهجية JSON file (if provided, loads before stage 1)
+            df: Optional pre-loaded DataFrame (if provided, file_path is ignored)
 
         Returns:
             Results dict with stage outcomes
@@ -385,7 +387,20 @@ class PipelineOrchestrator:
         # Stage 1
         if progress_callback:
             progress_callback(0.10, "التحقق من صيغة البيانات", "Stage 1: File Validation")
-        success, msg, validation = self.run_stage1_validator(file_path)
+
+        # If DataFrame provided, use it directly; otherwise read from file_path
+        if df is not None:
+            try:
+                self.state = run_stage1(self.state, df)
+                self.save_state()
+                print(f"[Stage1] Case count audit: total_cases={self.state.total_cases}, raw_df_rows={len(self.state.raw_df) if self.state.raw_df is not None else 0}")
+                success, msg = True, "Schema validation passed"
+                validation = self.state.validated_schema
+            except Exception as e:
+                success, msg, validation = False, f"Stage 1 error: {str(e)}", {}
+        else:
+            success, msg, validation = self.run_stage1_validator(file_path)
+
         results['stages']['stage1'] = {'success': success, 'message': msg}
         if not success:
             results['errors'].append(msg)
