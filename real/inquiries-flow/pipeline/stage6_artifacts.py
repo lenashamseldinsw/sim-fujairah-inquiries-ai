@@ -1807,13 +1807,12 @@ Rules:
             "→ إن كان التعبير عن رضا وثناء: شكر وثناء."
         )
 
-        # Build sources table using closed_cases_count (where تاريخ_إغلاق_الطلب is not empty)
-        closed_count = state.closed_cases_count if state.closed_cases_count > 0 else total_cases
+        # Build sources table using total_cases
         sources_rows = [
             {
                 "المصدر": "تحليل الاستفسارات",
                 "الطبيعة": "بيانات CRM — نصوص غير مهيكلة (تفاصيل الحالة، الحلول، أسماء الخدمات، وصف الحالة)",
-                "الحجم": f"{closed_count} حالة",
+                "الحجم": f"{total_cases} حالة",
                 "الفترة": date_range
             },
             {
@@ -1902,7 +1901,7 @@ def _create_basic_report_sections(state: PipelineState) -> None:
                     {
                         'المصدر': 'تحليل الاستفسارات',
                         'الطبيعة': 'بيانات CRM — نصوص غير مهيكلة',
-                        'الحجم': f'{state.total_cases} حالة مغلقة',
+                        'الحجم': f'{state.total_cases} حالة',
                         'الفترة': convert_month_year_to_arabic(state.month_year) or 'يناير — مارس 2026'
                     },
                     {

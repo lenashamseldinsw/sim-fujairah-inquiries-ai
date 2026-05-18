@@ -331,10 +331,8 @@ def _reconcile_counts(
             # Exact sub_classification match — cap and deduct from budget
             # to prevent two friction points from double-counting the same cases
             remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
-            reconciled_count = min(friction.case_count, remaining_budget)
-            sub_classification_budget[friction.sub_classification] = max(
-                0, remaining_budget - reconciled_count
-            )
+            reconciled_count = remaining_budget
+            sub_classification_budget[friction.sub_classification] = 0
         else:
             # No exact match — LLM returned an approximate or merged sub_classification.
             # Try word-overlap against actual_counts keys to find the closest match.
@@ -362,8 +360,8 @@ def _reconcile_counts(
             if best_key and best_overlap >= 1:
                 # Plausible fuzzy match — use that key's remaining budget
                 remaining_budget = sub_classification_budget.get(best_key, 0)
-                reconciled_count = min(friction.case_count, remaining_budget)
-                sub_classification_budget[best_key] = max(0, remaining_budget - reconciled_count)
+                reconciled_count = remaining_budget
+                sub_classification_budget[best_key] = 0
                 print(
                     f"[Stage4] FUZZY MATCH: friction '{friction.cluster_ar or friction.cluster}' "
                     f"sub_classification={friction.sub_classification!r} → matched '{best_key}' "
