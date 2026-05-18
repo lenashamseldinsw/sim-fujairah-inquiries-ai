@@ -901,6 +901,22 @@ def load_css(lang='ar'):
         text-align: center !important;
     }}
 
+    /* ── LANGUAGE TOGGLE BUTTON ── */
+    [data-testid="stButton"]:has(button:contains("EN")),
+    [data-testid="stButton"]:has(button:contains("العربية")) {{
+        max-width: 60px !important;
+    }}
+
+    [data-testid="stButton"] button {{
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 0.75rem !important;
+        min-height: auto !important;
+        height: auto !important;
+        background: linear-gradient(110deg, {GOLD_DARK} 0%, {GOLD} 50%, {GOLD_LIGHT} 100%) !important;
+        color: {BG_DEEP} !important;
+    }}
+
     /* ── MISC ── */
     h1, h2, h3, h4, h5, h6, p, span, div, label {{
         direction: {DIR} !important;
@@ -1316,7 +1332,8 @@ def main():
     col_left, col_right = st.columns([11, 1])
     with col_right:
         new_lang = 'ar' if lang == 'en' else 'en'
-        if st.button('EN / العربية', key='lang_toggle'):
+        button_text = 'العربية' if lang == 'en' else 'EN'
+        if st.button(button_text, key='lang_toggle', use_container_width=True):
             st.session_state.language = new_lang
             st.rerun()
 
