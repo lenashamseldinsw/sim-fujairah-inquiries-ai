@@ -20,11 +20,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pipeline.orchestrator import PipelineOrchestrator
 
 class RealAnalyzer:
-    def __init__(self):
-        api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    def __init__(self, api_key=None):
+        # Try to get API key from parameter, then st.secrets, then environment
+        if api_key is None:
+            try:
+                api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            except:
+                api_key = None
+
+        if api_key is None:
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in secrets or environment")
-        self.api_key = api_key  # ← was missing self.
+        self.api_key = api_key
         self.client = anthropic.Anthropic(api_key=api_key)
 
         # Create temp directory for outputs

@@ -202,6 +202,25 @@ def load_state_from_json(json_path: str) -> PipelineState:
     return PipelineState(**data)
 
 
+def _sanitize_value(obj):
+    """Recursively convert numpy types to native Python types."""
+    try:
+        import numpy as np
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, (np.integer, np.floating)):
+            return obj.item()
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: _sanitize_value(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [_sanitize_value(item) for item in obj]
+    except (ImportError, AttributeError):
+        pass
+    return obj
+
+
 class _NumpyEncoder(json.JSONEncoder):
     """JSON encoder that converts numpy scalar types to native Python types."""
     def default(self, obj):
@@ -223,6 +242,8 @@ class _NumpyEncoder(json.JSONEncoder):
 def save_state_to_json(state: PipelineState, json_path: str) -> None:
     """Save state to JSON file."""
     data = state.model_dump(mode='json', exclude={'raw_df'})  # Exclude DataFrame
+    # Recursively sanitize nested numpy types
+    data = _sanitize_value(data)
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2, cls=_NumpyEncoder)
 
