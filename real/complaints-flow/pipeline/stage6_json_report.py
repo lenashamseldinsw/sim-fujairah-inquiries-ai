@@ -436,33 +436,31 @@ class JSONReportBuilder:
         }
 
     def build_resolution_status_chart(self) -> Optional[Dict[str, Any]]:
-        """Pie chart — complaints resolved vs rejected."""
+        """Pie chart — complaints accepted vs rejected (based on sla_color)."""
         if not self.state.all_classified:
             return None
 
-        # Count resolution status from case_type field (الحالة in complaints context)
-        status_counts = Counter(c.case_type for c in self.state.all_classified if c.case_type)
-
-        # Map to resolution categories
-        approved = status_counts.get('تم الموافقة على الحل', 0)
-        completed = status_counts.get('طلب منجز', 0)
-        rejected = status_counts.get('طلب مرفوض', 0)
+        accepted = sum(
+            1 for c in self.state.all_classified
+            if str(c.sla_color).strip() == 'نعم'
+        )
         total = len(self.state.all_classified)
-
         if total == 0:
             return None
+
+        rejected = total - accepted
 
         return {
             "type": "pie",
             "title": "حالة معالجة الشكاوى",
-            "categories": ["موافق عليه", "منجز", "مرفوض"],
+            "categories": ["مقبولة", "مرفوضة"],
             "series": [
                 {
                     "name": "حالة المعالجة",
-                    "data": [float(approved), float(completed), float(rejected)],
+                    "data": [float(accepted), float(rejected)],
                 }
             ],
-            "colors": ["#B68A35", "#999999", "#FF0000"],
+            "colors": ["#B68A35", "#FF0000"],
         }
 
     def build_severity_chart(self) -> Optional[Dict[str, Any]]:
@@ -995,10 +993,10 @@ class JSONReportBuilder:
                     f"[JSONReportBuilder] gap_table row {idx} missing 'الشدّة'. "
                     f"LLM must copy severity emoji from pre_computed_gap_table."
                 )
-            if "وضع التطبيق / الموقع الحالي" not in row or not row["وضع التطبيق / الموقع الحالي"].strip():
+            if "وضع استقبال الشكاوى والمعالجة" not in row or not row["وضع استقبال الشكاوى والمعالجة"].strip():
                 raise RuntimeError(
-                    f"[JSONReportBuilder] gap_table row {idx} missing 'وضع التطبيق / الموقع الحالي'. "
-                    f"LLM must provide this column."
+                    f"[JSONReportBuilder] gap_table row {idx} missing 'وضع استقبال الشكاوى والمعالجة'. "
+                    f"LLM must provide this column with current state and missing actions."
                 )
             if "التوصية" not in row or not row["التوصية"].strip():
                 raise RuntimeError(
@@ -1064,7 +1062,7 @@ class JSONReportBuilder:
         section_body = dg_raw["section_body"]
 
         gap_table_dict = {
-            "columns": ["الموضوع", "الحالات", "الشدّة", "وضع التطبيق / الموقع الحالي", "نوع الفجوة", "التوصية"],
+            "columns": ["الموضوع", "الحالات", "الشدّة", "وضع استقبال الشكاوى والمعالجة", "نوع الفجوة", "التوصية"],
             "rows":    gap_table_rows,
             "row_count": len(gap_table_rows),
             "col_count": 6,
