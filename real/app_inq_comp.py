@@ -917,6 +917,42 @@ def load_css(lang='ar'):
         color: {BG_DEEP} !important;
     }}
 
+    /* ── PROGRESS ── */
+    .progress-container {{
+        direction: {DIR} !important;
+        width: 100%;
+        margin: 1.5rem 0;
+    }}
+    .custom-progress-wrapper {{
+        width: 100%;
+        height: 8px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 1.5rem 0;
+        display: flex;
+    }}
+    .custom-progress-bar {{
+        height: 100%;
+        background: linear-gradient(90deg, {GOLD_DARK}, {GOLD}, {GOLD_LIGHT});
+        border-radius: 10px;
+        transition: width 0.4s ease;
+        width: 0%;
+    }}
+    .custom-progress-bar.rtl {{
+        margin-left: auto;
+        border-radius: 10px 0 0 10px;
+        transform: scaleX(-1);
+    }}
+    /* Hide default Streamlit progress bar and replace with custom */
+    .stProgress {{
+        display: none !important;
+    }}
+    /* Blue progress bar */
+    .blue-progress .custom-progress-bar {{
+        background: linear-gradient(90deg, {BLUE_DARK}, {BLUE}, {BLUE_LIGHT}) !important;
+    }}
+
     /* ── MISC ── */
     h1, h2, h3, h4, h5, h6, p, span, div, label {{
         direction: {DIR} !important;
@@ -938,6 +974,9 @@ def init_session_state():
         'processing': False,
         'completed': False,
         'progress': 0,
+        'analysis_error': None,
+        'error_traceback': None,
+        'report_data': None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -997,6 +1036,35 @@ def get_analyzer():
     return get_analyzer_for_flow('inquiries')
 
 
+# ── Download Utilities ────────────────────────────────────────────────────────
+def create_report_zip(report_data: dict) -> bytes:
+    """Create a zip file containing all report outputs.
+
+    Args:
+        report_data: Dict with word_path, word_path_en, and excel_path
+
+    Returns:
+        Bytes of the zip file
+    """
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Add Arabic Word report
+        if report_data.get('word_path') and os.path.exists(report_data['word_path']):
+            zf.write(report_data['word_path'], arcname='تقرير_الشكاوى.docx')
+
+        # Add English Word report
+        if report_data.get('word_path_en') and os.path.exists(report_data['word_path_en']):
+            zf.write(report_data['word_path_en'], arcname='Complaints_Report.docx')
+
+        # Add Excel file
+        if report_data.get('excel_path') and os.path.exists(report_data['excel_path']):
+            zf.write(report_data['excel_path'], arcname='تصنيف_الشكاوى.xlsx')
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 def validate_file(uploaded_file, lang='ar'):
     tx = T[lang]
@@ -1008,7 +1076,7 @@ def validate_file(uploaded_file, lang='ar'):
 
 
 # ── Processing ────────────────────────────────────────────────────────────────
-def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
+def process_file(uploaded_files, flow_type='inquiries', lang='ar', progress_callback=None):
     """Process file with appropriate analyzer for the flow."""
     tx = T[lang]
 
@@ -1027,27 +1095,26 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
         uploaded_file = uploaded_files[0]
         print(f"[PROCESS] Processing file: {uploaded_file.name} ({uploaded_file.size} bytes)")
 
-        # Progress display
-        progress_placeholder = st.empty()
-        progress_bar = st.progress(0)
+        # Use provided progress callback or create a default one
+        if progress_callback is None:
+            progress_placeholder = st.empty()
+            progress_bar = st.progress(0)
 
-        def update_progress(pct, msg_ar, msg_en):
-            msg = msg_ar if lang == 'ar' else msg_en
-            progress_placeholder.markdown(f"""
-            <div style="text-align:center;padding:1rem;color:#E4E4F0;">
-                {msg}
-            </div>
-            """, unsafe_allow_html=True)
-            progress_bar.progress(min(pct, 1.0))
+            def default_update_progress(pct, msg_ar, msg_en):
+                msg = msg_ar if lang == 'ar' else msg_en
+                progress_placeholder.markdown(f"""
+                <div style="text-align:center;padding:1rem;color:#E4E4F0;">
+                    {msg}
+                </div>
+                """, unsafe_allow_html=True)
+                progress_bar.progress(min(pct, 1.0))
+
+            progress_callback = default_update_progress
 
         # Run analyzer
         print(f"[PROCESS] Starting analysis...")
-        report = analyzer.analyze(uploaded_file, progress_callback=update_progress)
+        report = analyzer.analyze(uploaded_file, progress_callback=progress_callback)
         print(f"[PROCESS] ✓ Analysis complete. Success: {report.get('success', False)}")
-
-        # Clear progress
-        progress_placeholder.empty()
-        progress_bar.empty()
 
         if not report.get('success', False):
             error_msg = report.get('message', 'Analysis failed')
@@ -1169,125 +1236,275 @@ def show_inquiries_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
-    col_back = st.columns([1, 8, 1])
-    with col_back[0]:
-        if st.button(tx['nav_back'], key='back_inq'):
-            st.session_state.page = 'landing'
-            st.session_state.completed = False
-            st.rerun()
-
     st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
 
     if not st.session_state.completed:
         st.markdown(f"""
         <div class="panel">
-            <h2 class="panel-title">{tx['inq_panel_title']}</h2>
-            <p class="panel-subtitle">{tx['inq_panel_sub']}</p>
+            <div class="panel-title">{tx['inq_panel_title']}</div>
+            <div class="panel-subtitle">{tx['inq_panel_sub']}</div>
             <div class="panel-divider"></div>
         </div>
         """, unsafe_allow_html=True)
 
-        uploaded_files = st.file_uploader(
-            tx['uploader_label'],
-            type=['xlsx', 'xls', 'pdf'],
-            accept_multiple_files=False,
-            key='inq_uploader'
-        )
+        with st.container():
+            st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
+            uploaded_files = st.file_uploader(
+                tx['uploader_label'],
+                type=['xlsx', 'xls', 'pdf'],
+                help=tx['uploader_help'],
+                label_visibility="collapsed",
+                key='inq_uploader',
+                accept_multiple_files=True,
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
+            # Store file metadata along with content to survive session serialization
             st.session_state.uploaded_file = uploaded_files
-            size_mb = uploaded_files.size / (1024 * 1024)
-            size_str = f"{size_mb:.2f} {tx['size_mb']}" if size_mb >= 1 else f"{uploaded_files.size / 1024:.0f} {tx['size_kb']}"
+            st.session_state.uploaded_file_metadata = [
+                {'name': f.name, 'type': f.type, 'size': f.size} for f in uploaded_files
+            ]
+            print(f"[Upload-INQ] Stored {len(uploaded_files)} file(s) in session state")
 
+        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
+        metadata_list = st.session_state.get('uploaded_file_metadata', [])
+
+        if files_to_display:
+            for idx, uploaded_file in enumerate(files_to_display):
+                # Get metadata from stored list if available, otherwise try to access from object
+                if idx < len(metadata_list):
+                    metadata = metadata_list[idx]
+                    file_name = metadata.get('name', 'Unknown')
+                    file_type = metadata.get('type', 'Unknown')
+                    file_size = metadata.get('size', 0) / 1024
+                else:
+                    # Fallback to object attributes
+                    file_name = getattr(uploaded_file, 'name', 'Unknown')
+                    file_type = getattr(uploaded_file, 'type', 'Unknown')
+                    if hasattr(uploaded_file, 'size'):
+                        file_size = uploaded_file.size / 1024
+                    else:
+                        file_size = len(uploaded_file) / 1024
+
+                size_str = (f"{file_size:.1f} {tx['size_kb']}" if file_size < 1024
+                           else f"{file_size/1024:.2f} {tx['size_mb']}")
+
+                st.markdown(f"""
+                <div class="file-meta" style="max-width:820px;margin:0.8rem auto;">
+                    <div class="file-meta-row">
+                        <span class="file-meta-key">{tx['file_key']}</span>
+                        <span class="file-meta-val">{file_name}</span>
+                    </div>
+                    <div class="file-meta-row">
+                        <span class="file-meta-key">{tx['size_key']}</span>
+                        <span class="file-meta-val">{size_str}</span>
+                    </div>
+                    <div class="file-meta-row">
+                        <span class="file-meta-key">{tx['type_key']}</span>
+                        <span class="file-meta-val">{file_type}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if not st.session_state.processing:
+                st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button(tx['btn_start_inq'], use_container_width=True, type="primary", key="inq_start"):
+                        st.session_state.processing = True
+                        st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.session_state.processing:
+        st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
+
+        # Create enhanced loading UI with stage indicators and progress bar
+        progress_placeholder = st.empty()
+        progress_bar = st.progress(0)
+
+        def update_progress_inq(progress_pct, msg_ar, msg_en):
+            """Update UI with progress from pipeline stages."""
+            msg = msg_ar if lang == 'ar' else msg_en
+            pct_display = int(progress_pct * 100)
+            print(f"[Progress] {pct_display}% - {msg_ar}")
+
+            # Define 6 stages
+            stages = [
+                ('1', 'التحقق من صيغة الملف', 'File Validation', 0, 10),
+                ('2', 'تصنيف القواعد', 'Rule Classification', 10, 30),
+                ('3', 'معالجة الذكاء الاصطناعي', 'AI Classification', 30, 50),
+                ('4', 'تحليل الأنماط', 'Pattern Analysis', 50, 70),
+                ('5', 'تحليل الفجوات', 'Gap Analysis', 70, 85),
+                ('6', 'توليد التقرير', 'Report Generation', 85, 100),
+            ]
+
+            current_stage = '1'
+            for stage_num, stage_ar, stage_en, start, end in stages:
+                if start <= pct_display <= end:
+                    current_stage = stage_num
+                    break
+
+            # Build stage indicators for inquiries (gold color)
+            stage_html = '<div style="display:flex;gap:0.5rem;justify-content:center;margin-bottom:1rem;">'
+            for stage_num, stage_ar, stage_en, _, _ in stages:
+                is_current = stage_num == current_stage
+                is_complete = int(current_stage) > int(stage_num)
+
+                if is_complete:
+                    badge_style = f"background-color:{GREEN_OK};color:#000;border:2px solid {GREEN_OK};"
+                    badge_text = "✓"
+                elif is_current:
+                    badge_style = f"background-color:{GOLD};color:#000;border:2px solid {GOLD};animation:pulse 1s infinite;"
+                    badge_text = stage_num
+                else:
+                    badge_style = f"background-color:{BG_CARD};color:{TEXT_MUTED};border:2px solid {BORDER_G};"
+                    badge_text = stage_num
+
+                stage_html += f'<div style="width:2.5rem;height:2.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;{badge_style}">{badge_text}</div>'
+
+            stage_html += '</div>'
+
+            progress_placeholder.markdown(f"""
+            <style>
+                @keyframes pulse {{
+                    0% {{ opacity: 1; }}
+                    50% {{ opacity: 0.7; }}
+                    100% {{ opacity: 1; }}
+                }}
+            </style>
+            {stage_html}
+            <div class="custom-progress-wrapper" style="direction: {'rtl' if lang == 'ar' else 'ltr'};">
+                <div class="custom-progress-bar {'rtl' if lang == 'ar' else ''}" style="width: {pct_display}%;"></div>
+            </div>
+            <div style="text-align:center;padding:0.5rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
+                {msg}
+            </div>
+            <div style="text-align:center;padding:0.5rem;color:{TEXT_MUTED};font-size:0.9rem;">
+                {pct_display}%
+            </div>
+            """, unsafe_allow_html=True)
+            progress_bar.progress(min(progress_pct, 1.0))
+
+        try:
+            files_to_process = st.session_state.get('uploaded_file', [])
+            if not files_to_process:
+                st.error("❌ No files to process. Please upload files first.")
+                st.session_state.processing = False
+                st.rerun()
+
+            report = process_file(files_to_process, flow_type='inquiries', lang=lang, progress_callback=update_progress_inq)
+
+            # Clear progress indicators
+            progress_placeholder.empty()
+            progress_bar.empty()
+
+            st.session_state.processing = False
+            st.session_state.completed = True
+
+            if report:
+                st.session_state.report_data = report
+
+                # Check for errors in the report itself
+                if report.get('success') is False:
+                    st.session_state.analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
+                else:
+                    st.session_state.analysis_error = None
+            else:
+                st.session_state.analysis_error = "Analysis returned no data"
+
+        except Exception as e:
+            st.session_state.processing = False
+            st.session_state.completed = False
+            st.session_state.analysis_error = f"Analysis failed: {str(e)}"
+            import traceback
+            st.session_state.error_traceback = traceback.format_exc()
+            print(f"[Main] Exception: {str(e)}\n{traceback.format_exc()}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.rerun()
+
+    else:
+        if st.session_state.get('analysis_error'):
             st.markdown(f"""
-            <div class="file-meta">
-                <div class="file-meta-row">
-                    <span class="file-meta-key">{tx['file_key']}</span>
-                    <span class="file-meta-val">{uploaded_files.name}</span>
-                </div>
-                <div class="file-meta-row">
-                    <span class="file-meta-key">{tx['size_key']}</span>
-                    <span class="file-meta-val">{size_str}</span>
-                </div>
+            <div class="error-panel">
+                <div style="font-size:1.8rem;margin-bottom:0.4rem;">❌</div>
+                <div style="font-weight:bold;font-size:1.1rem;">Analysis Failed</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.error(f"**Error:** {st.session_state.analysis_error}")
+            if st.session_state.get('error_traceback'):
+                with st.expander("📋 Technical Details"):
+                    st.code(st.session_state.error_traceback, language='python')
+
+            st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(tx['btn_reset'], use_container_width=True, key="inq_reset_error"):
+                    st.session_state.uploaded_file = None
+                    st.session_state.processing = False
+                    st.session_state.completed = False
+                    st.session_state.analysis_error = None
+                    st.session_state.error_traceback = None
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+        elif st.session_state.get('completed'):
+            st.markdown(f"""
+            <div class="success-panel">
+                <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
+                <div class="success-title">{tx['success_title_inq']}</div>
+                <div class="success-sub">{tx['success_sub_inq']}</div>
             </div>
             """, unsafe_allow_html=True)
 
-            if st.button(tx['btn_start_inq'], key='start_inq', use_container_width=True):
-                st.session_state.processing = True
-                st.rerun()
+            st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
+            if st.session_state.get('report_data'):
+                display_report_tabs(lang, flow_type='inquiries')
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.processing:
-        st.markdown(f"""
-        <div class="stage-panel">
-            <span class="stage-badge">{tx['stage_badge_inq']}</span>
-            <h2 class="stage-title">{tx['stage_title']}</h2>
-            <p class="stage-desc">{tx['stage_desc_inq']}</p>
-        </div>
-        """, unsafe_allow_html=True)
+            # Download button
+            if st.session_state.get('report_data'):
+                st.markdown('<div style="max-width:820px;margin:2rem auto 0;">', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.session_state.report_data.get('word_path'):
+                        zip_data = create_report_zip(st.session_state.report_data)
+                        st.download_button(
+                            label=tx['btn_download_inq'],
+                            data=zip_data,
+                            file_name='تقرير_الاستفسارات.zip',
+                            mime='application/zip',
+                            use_container_width=True,
+                            key="inq_download",
+                        )
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        try:
-            report = process_file([st.session_state.uploaded_file], flow_type='inquiries', lang=lang)
+            st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(tx['btn_reset'], use_container_width=True, key="inq_reset"):
+                    st.session_state.uploaded_file = None
+                    st.session_state.processing = False
+                    st.session_state.completed = False
+                    st.session_state.report_data = None
+                    st.session_state.analysis_error = None
+                    st.session_state.error_traceback = None
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            if report and report.get('success', False):
-                st.session_state.report_data = report
-                st.session_state.processing = False
-                st.session_state.completed = True
-                st.session_state.analysis_error = None
-                st.rerun()
-            elif report and report.get('error'):
-                # Error dict returned from process_file
-                st.session_state.processing = False
-                st.session_state.analysis_error = report.get('error', 'Unknown error')
-                st.rerun()
-            else:
-                st.session_state.processing = False
-                st.session_state.analysis_error = "Analysis failed: No response from analyzer"
-                st.rerun()
-        except Exception as e:
-            print(f"[UI] Error during inquiries processing: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            st.session_state.processing = False
-            st.session_state.analysis_error = f"Error: {str(e)}"
-            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.get('analysis_error'):
-        st.error(f"❌ {tx['success_title_inq']}: {st.session_state.analysis_error}")
-        if st.button(tx['btn_reset'], key='reset_inq_error', use_container_width=True):
-            st.session_state.uploaded_file = None
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.report_data = None
-            st.session_state.analysis_error = None
-            st.rerun()
-        return
-
-    if st.session_state.completed and st.session_state.get('report_data'):
-        st.markdown(f"""
-        <div class="success-panel">
-            <h2 class="success-title">✅ {tx['success_title_inq']}</h2>
-            <p class="success-sub">{tx['success_sub_inq']}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        display_report_tabs(lang, flow_type='inquiries')
-
-        if st.session_state.report_data.get('word_path'):
-            with open(st.session_state.report_data['word_path'], 'rb') as f:
-                st.download_button(
-                    label=tx['btn_download_inq'],
-                    data=f,
-                    file_name='inquiries_report.docx',
-                    mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    use_container_width=True
-                )
-
-        if st.button(tx['btn_reset'], key='reset_inq', use_container_width=True):
-            st.session_state.uploaded_file = None
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.report_data = None
-            st.rerun()
+    st.markdown(f"""
+    <div class="footer">
+        <p class="footer-text" style="font-weight:600;color:{TEXT_MUTED};">
+            {tx['footer_copy']}
+        </p>
+        <div class="footer-divider"></div>
+        <p class="footer-text">{tx['footer_sub']}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ── Complaints Page ───────────────────────────────────────────────────────────
@@ -1303,125 +1520,275 @@ def show_complaints_page(lang):
     </div>
     """, unsafe_allow_html=True)
 
-    col_back = st.columns([1, 8, 1])
-    with col_back[0]:
-        if st.button(tx['nav_back'], key='back_cmp'):
-            st.session_state.page = 'landing'
-            st.session_state.completed = False
-            st.rerun()
-
     st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
 
     if not st.session_state.completed:
         st.markdown(f"""
         <div class="panel-blue">
-            <h2 class="panel-title">{tx['cmp_panel_title']}</h2>
-            <p class="panel-subtitle">{tx['cmp_panel_sub']}</p>
+            <div class="panel-title">{tx['cmp_panel_title']}</div>
+            <div class="panel-subtitle">{tx['cmp_panel_sub']}</div>
             <div class="panel-divider"></div>
         </div>
         """, unsafe_allow_html=True)
 
-        uploaded_files = st.file_uploader(
-            tx['uploader_label'],
-            type=['xlsx', 'xls', 'pdf'],
-            accept_multiple_files=False,
-            key='cmp_uploader'
-        )
+        with st.container():
+            st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
+            uploaded_files = st.file_uploader(
+                tx['uploader_label'],
+                type=['xlsx', 'xls', 'pdf'],
+                help=tx['uploader_help'],
+                label_visibility="collapsed",
+                key='cmp_uploader',
+                accept_multiple_files=True,
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_files:
+            # Store file metadata along with content to survive session serialization
             st.session_state.uploaded_file = uploaded_files
-            size_mb = uploaded_files.size / (1024 * 1024)
-            size_str = f"{size_mb:.2f} {tx['size_mb']}" if size_mb >= 1 else f"{uploaded_files.size / 1024:.0f} {tx['size_kb']}"
+            st.session_state.uploaded_file_metadata = [
+                {'name': f.name, 'type': f.type, 'size': f.size} for f in uploaded_files
+            ]
+            print(f"[Upload-CMP] Stored {len(uploaded_files)} file(s) in session state")
 
+        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
+        metadata_list = st.session_state.get('uploaded_file_metadata', [])
+
+        if files_to_display:
+            for idx, uploaded_file in enumerate(files_to_display):
+                # Get metadata from stored list if available, otherwise try to access from object
+                if idx < len(metadata_list):
+                    metadata = metadata_list[idx]
+                    file_name = metadata.get('name', 'Unknown')
+                    file_type = metadata.get('type', 'Unknown')
+                    file_size = metadata.get('size', 0) / 1024
+                else:
+                    # Fallback to object attributes
+                    file_name = getattr(uploaded_file, 'name', 'Unknown')
+                    file_type = getattr(uploaded_file, 'type', 'Unknown')
+                    if hasattr(uploaded_file, 'size'):
+                        file_size = uploaded_file.size / 1024
+                    else:
+                        file_size = len(uploaded_file) / 1024
+
+                size_str = (f"{file_size:.1f} {tx['size_kb']}" if file_size < 1024
+                           else f"{file_size/1024:.2f} {tx['size_mb']}")
+
+                st.markdown(f"""
+                <div class="file-meta-blue" style="max-width:820px;margin:0.8rem auto;">
+                    <div class="file-meta-row">
+                        <span class="file-meta-key-blue">{tx['file_key']}</span>
+                        <span class="file-meta-val">{file_name}</span>
+                    </div>
+                    <div class="file-meta-row">
+                        <span class="file-meta-key-blue">{tx['size_key']}</span>
+                        <span class="file-meta-val">{size_str}</span>
+                    </div>
+                    <div class="file-meta-row">
+                        <span class="file-meta-key-blue">{tx['type_key']}</span>
+                        <span class="file-meta-val">{file_type}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if not st.session_state.processing:
+                st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button(tx['btn_start_cmp'], use_container_width=True, type="primary", key="cmp_start"):
+                        st.session_state.processing = True
+                        st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.session_state.processing:
+        st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
+
+        # Create enhanced loading UI with stage indicators and progress bar
+        progress_placeholder = st.empty()
+        progress_bar = st.progress(0)
+
+        def update_progress_cmp(progress_pct, msg_ar, msg_en):
+            """Update UI with progress from pipeline stages."""
+            msg = msg_ar if lang == 'ar' else msg_en
+            pct_display = int(progress_pct * 100)
+            print(f"[Progress] {pct_display}% - {msg_ar}")
+
+            # Define 6 stages
+            stages = [
+                ('1', 'التحقق من صيغة الملف', 'File Validation', 0, 10),
+                ('2', 'تصنيف القواعد', 'Rule Classification', 10, 30),
+                ('3', 'معالجة الذكاء الاصطناعي', 'AI Classification', 30, 50),
+                ('4', 'تحليل الأنماط', 'Pattern Analysis', 50, 70),
+                ('5', 'تحليل الفجوات', 'Gap Analysis', 70, 85),
+                ('6', 'توليد التقرير', 'Report Generation', 85, 100),
+            ]
+
+            current_stage = '1'
+            for stage_num, stage_ar, stage_en, start, end in stages:
+                if start <= pct_display <= end:
+                    current_stage = stage_num
+                    break
+
+            # Build stage indicators for complaints (blue color)
+            stage_html = '<div style="display:flex;gap:0.5rem;justify-content:center;margin-bottom:1rem;">'
+            for stage_num, stage_ar, stage_en, _, _ in stages:
+                is_current = stage_num == current_stage
+                is_complete = int(current_stage) > int(stage_num)
+
+                if is_complete:
+                    badge_style = f"background-color:{GREEN_OK};color:#000;border:2px solid {GREEN_OK};"
+                    badge_text = "✓"
+                elif is_current:
+                    badge_style = f"background-color:{BLUE};color:#000;border:2px solid {BLUE};animation:pulse 1s infinite;"
+                    badge_text = stage_num
+                else:
+                    badge_style = f"background-color:{BG_CARD};color:{TEXT_MUTED};border:2px solid {BORDER_B};"
+                    badge_text = stage_num
+
+                stage_html += f'<div style="width:2.5rem;height:2.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;{badge_style}">{badge_text}</div>'
+
+            stage_html += '</div>'
+
+            progress_placeholder.markdown(f"""
+            <style>
+                @keyframes pulse {{
+                    0% {{ opacity: 1; }}
+                    50% {{ opacity: 0.7; }}
+                    100% {{ opacity: 1; }}
+                }}
+            </style>
+            {stage_html}
+            <div class="blue-progress custom-progress-wrapper" style="direction: {'rtl' if lang == 'ar' else 'ltr'};">
+                <div class="custom-progress-bar {'rtl' if lang == 'ar' else ''}" style="width: {pct_display}%;"></div>
+            </div>
+            <div style="text-align:center;padding:0.5rem;color:#E4E4F0;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">
+                {msg}
+            </div>
+            <div style="text-align:center;padding:0.5rem;color:{TEXT_MUTED};font-size:0.9rem;">
+                {pct_display}%
+            </div>
+            """, unsafe_allow_html=True)
+            progress_bar.progress(min(progress_pct, 1.0))
+
+        try:
+            files_to_process = st.session_state.get('uploaded_file', [])
+            if not files_to_process:
+                st.error("❌ No files to process. Please upload files first.")
+                st.session_state.processing = False
+                st.rerun()
+
+            report = process_file(files_to_process, flow_type='complaints', lang=lang, progress_callback=update_progress_cmp)
+
+            # Clear progress indicators
+            progress_placeholder.empty()
+            progress_bar.empty()
+
+            st.session_state.processing = False
+            st.session_state.completed = True
+
+            if report:
+                st.session_state.report_data = report
+
+                # Check for errors in the report itself
+                if report.get('success') is False:
+                    st.session_state.analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
+                else:
+                    st.session_state.analysis_error = None
+            else:
+                st.session_state.analysis_error = "Analysis returned no data"
+
+        except Exception as e:
+            st.session_state.processing = False
+            st.session_state.completed = False
+            st.session_state.analysis_error = f"Analysis failed: {str(e)}"
+            import traceback
+            st.session_state.error_traceback = traceback.format_exc()
+            print(f"[Main] Exception: {str(e)}\n{traceback.format_exc()}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.rerun()
+
+    else:
+        if st.session_state.get('analysis_error'):
             st.markdown(f"""
-            <div class="file-meta-blue">
-                <div class="file-meta-row">
-                    <span class="file-meta-key-blue">{tx['file_key']}</span>
-                    <span class="file-meta-val">{uploaded_files.name}</span>
-                </div>
-                <div class="file-meta-row">
-                    <span class="file-meta-key-blue">{tx['size_key']}</span>
-                    <span class="file-meta-val">{size_str}</span>
-                </div>
+            <div class="error-panel">
+                <div style="font-size:1.8rem;margin-bottom:0.4rem;">❌</div>
+                <div style="font-weight:bold;font-size:1.1rem;">Analysis Failed</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.error(f"**Error:** {st.session_state.analysis_error}")
+            if st.session_state.get('error_traceback'):
+                with st.expander("📋 Technical Details"):
+                    st.code(st.session_state.error_traceback, language='python')
+
+            st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset_error"):
+                    st.session_state.uploaded_file = None
+                    st.session_state.processing = False
+                    st.session_state.completed = False
+                    st.session_state.analysis_error = None
+                    st.session_state.error_traceback = None
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+        elif st.session_state.get('completed'):
+            st.markdown(f"""
+            <div class="success-panel">
+                <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
+                <div class="success-title">{tx['success_title_cmp']}</div>
+                <div class="success-sub">{tx['success_sub_cmp']}</div>
             </div>
             """, unsafe_allow_html=True)
 
-            if st.button(tx['btn_start_cmp'], key='start_cmp', use_container_width=True):
-                st.session_state.processing = True
-                st.rerun()
+            st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
+            if st.session_state.get('report_data'):
+                display_report_tabs(lang, flow_type='complaints')
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.processing:
-        st.markdown(f"""
-        <div class="stage-panel-blue">
-            <span class="stage-badge-blue">{tx['stage_badge_cmp']}</span>
-            <h2 class="stage-title">{tx['stage_title']}</h2>
-            <p class="stage-desc">{tx['stage_desc_cmp']}</p>
-        </div>
-        """, unsafe_allow_html=True)
+            # Download button
+            if st.session_state.get('report_data'):
+                st.markdown('<div style="max-width:820px;margin:2rem auto 0;">', unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.session_state.report_data.get('word_path'):
+                        zip_data = create_report_zip(st.session_state.report_data)
+                        st.download_button(
+                            label=tx['btn_download_cmp'],
+                            data=zip_data,
+                            file_name='تقرير_الشكاوى.zip',
+                            mime='application/zip',
+                            use_container_width=True,
+                            key="cmp_download",
+                        )
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        try:
-            report = process_file([st.session_state.uploaded_file], flow_type='complaints', lang=lang)
+            st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset"):
+                    st.session_state.uploaded_file = None
+                    st.session_state.processing = False
+                    st.session_state.completed = False
+                    st.session_state.report_data = None
+                    st.session_state.analysis_error = None
+                    st.session_state.error_traceback = None
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            if report and report.get('success', False):
-                st.session_state.report_data = report
-                st.session_state.processing = False
-                st.session_state.completed = True
-                st.session_state.analysis_error = None
-                st.rerun()
-            elif report and report.get('error'):
-                # Error dict returned from process_file
-                st.session_state.processing = False
-                st.session_state.analysis_error = report.get('error', 'Unknown error')
-                st.rerun()
-            else:
-                st.session_state.processing = False
-                st.session_state.analysis_error = "Analysis failed: No response from analyzer"
-                st.rerun()
-        except Exception as e:
-            print(f"[UI] Error during complaints processing: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            st.session_state.processing = False
-            st.session_state.analysis_error = f"Error: {str(e)}"
-            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.get('analysis_error'):
-        st.error(f"❌ {tx['success_title_cmp']}: {st.session_state.analysis_error}")
-        if st.button(tx['btn_reset'], key='reset_cmp_error', use_container_width=True):
-            st.session_state.uploaded_file = None
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.report_data = None
-            st.session_state.analysis_error = None
-            st.rerun()
-        return
-
-    if st.session_state.completed and st.session_state.get('report_data'):
-        st.markdown(f"""
-        <div class="success-panel">
-            <h2 class="success-title">✅ {tx['success_title_cmp']}</h2>
-            <p class="success-sub">{tx['success_sub_cmp']}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        display_report_tabs(lang, flow_type='complaints')
-
-        if st.session_state.report_data.get('word_path'):
-            with open(st.session_state.report_data['word_path'], 'rb') as f:
-                st.download_button(
-                    label=tx['btn_download_cmp'],
-                    data=f,
-                    file_name='complaints_report.docx',
-                    mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    use_container_width=True
-                )
-
-        if st.button(tx['btn_reset'], key='reset_cmp', use_container_width=True):
-            st.session_state.uploaded_file = None
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.report_data = None
-            st.rerun()
+    st.markdown(f"""
+    <div class="footer">
+        <p class="footer-text" style="font-weight:600;color:{TEXT_MUTED};">
+            {tx['footer_copy']}
+        </p>
+        <div class="footer-divider"></div>
+        <p class="footer-text">{tx['footer_sub']}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1430,8 +1797,20 @@ def main():
     lang = st.session_state.language
     load_css(lang)
 
-    # Language toggle
-    col_left, col_right = st.columns([11, 1])
+    # Top navigation bar
+    col_left, col_center, col_right = st.columns([6, 6, 2])
+
+    with col_center:
+        if st.session_state.page in ('inquiries', 'complaints'):
+            st.markdown('<div class="nav-back-wrap">', unsafe_allow_html=True)
+            if st.button(T[lang]['nav_back'], key="nav_back"):
+                st.session_state.page = 'landing'
+                st.session_state.uploaded_file = None
+                st.session_state.processing = False
+                st.session_state.completed = False
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
     with col_right:
         new_lang = 'ar' if lang == 'en' else 'en'
         button_text = 'العربية' if lang == 'en' else 'EN'

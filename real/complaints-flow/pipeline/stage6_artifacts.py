@@ -110,14 +110,14 @@ CATEGORY_SHEET_MAP = {
 
 def _fix_taxonomy_consistency(cases: List[CaseRow]) -> List[CaseRow]:
     """Correct any sub_classification that is invalid for its top_level."""
-    from .stage2_rules import SUB_CLASSIFICATIONS
+    from .stage2_rules import ALL_COMPLAINT_SUB_CATEGORIES
     for case in cases:
-        valid_subs = SUB_CLASSIFICATIONS.get(case.actual_contact_type, [])
-        if valid_subs and case.sub_classification not in valid_subs:
+        # All complaints have the same set of valid sub-categories
+        valid_subs = ALL_COMPLAINT_SUB_CATEGORIES
+        if case.sub_classification not in valid_subs:
             print(
                 f"[Stage6] TAXONOMY FIX: case {case.case_number}: "
-                f"sub '{case.sub_classification}' invalid under "
-                f"'{case.actual_contact_type}', correcting to '{valid_subs[0]}'"
+                f"sub '{case.sub_classification}' invalid, correcting to '{valid_subs[0]}'"
             )
             case.sub_classification = valid_subs[0]
     return cases
@@ -678,11 +678,11 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     else:
         print("[GenSections] WARNING: state.gap_table is empty — skipping digital_gaps section")
 
-    # digital_transformation requires FAQ data from Stages 4/5; skip gracefully if unavailable
-    if state.validated_faqs or state.faq_candidates:
-        wave1_tasks['digital_transformation'] = (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي')
-    else:
-        print("[GenSections] WARNING: state.validated_faqs and state.faq_candidates are empty — skipping digital_transformation section")
+    # digital_transformation section — always include to maintain section numbering
+    # Will be generated even if FAQ data is minimal; LLM will provide context-driven content
+    wave1_tasks['digital_transformation'] = (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي')
+    if not (state.validated_faqs or state.faq_candidates):
+        print("[GenSections] NOTE: digital_transformation will be generated without FAQ data from stages 4/5")
 
     # ai_use_cases requires gap_table from Stage 5; skip gracefully if unavailable
     if state.gap_table:

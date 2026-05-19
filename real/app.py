@@ -1154,6 +1154,7 @@ def load_css(lang='ar'):
     .custom-progress-bar.rtl {{
         margin-left: auto;
         border-radius: 10px 0 0 10px;
+        transform: scaleX(-1);
     }}
     /* Hide default Streamlit progress bar and replace with custom */
     .stProgress {{

@@ -481,11 +481,11 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     else:
         print("[GenSections] WARNING: state.gap_table is empty — skipping digital_gaps section")
 
-    # digital_transformation requires FAQ data from Stages 4/5; skip gracefully if unavailable
-    if state.validated_faqs or state.faq_candidates:
-        wave1_tasks['digital_transformation'] = (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي')
-    else:
-        print("[GenSections] WARNING: state.validated_faqs and state.faq_candidates are empty — skipping digital_transformation section")
+    # digital_transformation section — always include to maintain section numbering
+    # Will be generated even if FAQ data is minimal; LLM will provide context-driven content
+    wave1_tasks['digital_transformation'] = (generate_digital_transformation_section, 'سادساً: التحليل الرابع — خطة التحويل الرقمي')
+    if not (state.validated_faqs or state.faq_candidates):
+        print("[GenSections] NOTE: digital_transformation will be generated without FAQ data from stages 4/5")
 
     # ai_use_cases requires gap_table from Stage 5; skip gracefully if unavailable
     if state.gap_table:

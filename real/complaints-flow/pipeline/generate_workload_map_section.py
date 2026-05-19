@@ -82,8 +82,8 @@ def _build_channel_rows(
     official_channels: Optional[List[str]] = None,
 ) -> List[Dict[str, str]]:
     """
-    Build channel analysis table rows with digital channel flag.
-    Counts channel usage and marks digital vs. non-digital.
+    Build channel analysis table rows with descriptions.
+    Counts channel usage and provides a description for each channel type.
 
     Args:
         channel_dist: Distribution of channels from state
@@ -98,17 +98,32 @@ def _build_channel_rows(
     else:
         digital_channels = {"تطبيق", "بريد إلكتروني", "بوابة إلكترونية", "موقع", "ويتس آب"}
 
+    # Channel description mapping
+    channel_descriptions = {
+        "تطبيق": "تقديم الشكاوى من خلال التطبيق الرسمي — طريقة موثقة وسريعة",
+        "بريد إلكتروني": "تقديم الشكاوى عبر البريد الإلكتروني — توثيق رسمي للمخاطبات",
+        "بوابة إلكترونية": "تقديم الشكاوى عبر البوابة الإلكترونية — وصول مباشر للنظام",
+        "موقع": "تقديم الشكاوى عبر الموقع الإلكتروني — واجهة سهلة الاستخدام",
+        "ويتس آب": "تقديم الشكاوى عبر تطبيق المراسلة — تواصل فوري وسهل",
+        "هاتف": "تقديم الشكاوى عبر المكالمة الهاتفية — تواصل مباشر مع الموظفين",
+        "شخصي": "تقديم الشكاوى بشكل مباشر في المكاتب — حضور شخصي للتقرير",
+    }
+
     rows = []
     for channel, count in sorted(channel_dist.items(), key=lambda x: x[1], reverse=True):
         if not channel or channel.strip() == "":
             continue
         pct = f"{count / total_cases * 100:.1f}%" if total_cases else "0%"
-        is_digital = "✓ نعم" if channel in digital_channels else "لا"
+        # Use predefined description or generate generic one
+        description = channel_descriptions.get(
+            channel.strip(),
+            f"تقديم الشكاوى عبر {channel} — إحدى قنوات التواصل المتاحة"
+        )
         rows.append({
-            "القناة": channel,
+            "قناة التواصل": channel,
             "العدد": str(count),
             "النسبة": pct,
-            "قناة رقمية": is_digital,
+            "الوصف": description,
         })
     return rows
 
@@ -122,7 +137,7 @@ def _build_resolution_analysis_rows(
     Counts by الحالة value: تم الموافقة على الحل, طلب منجز, طلب مرفوض
     Also counts duplicates from "مكرر" mentions.
 
-    Row schema: نوع الإغلاق | العدد | النسبة | الملاحظة
+    Row schema: نوع الإغلاق | العدد | النسبة | الوصف
     """
     resolution_counts = defaultdict(int)
     duplicate_count = 0
@@ -152,6 +167,14 @@ def _build_resolution_analysis_rows(
     rejection_count = resolution_counts.get("طلب مرفوض", 0)
     rejection_rate = rejection_count / total_resolved * 100 if total_resolved else 0
 
+    # Description mapping for resolution statuses
+    status_descriptions = {
+        "تم الموافقة على الحل": "الشكاوى التي تمت الموافقة على حلها من قبل الجهات المختصة",
+        "طلب منجز": "الشكاوى المنجزة والمغلقة بنجاح بعد معالجة كاملة",
+        "طلب مرفوض": "الشكاوى المرفوضة لأسباب إجرائية أو لعدم استيفاء الشروط",
+        "قيد المعالجة": "الشكاوى التي لا تزال قيد المعالجة والفحص",
+    }
+
     # Build rows
     rows = []
     row_order = ["تم الموافقة على الحل", "طلب منجز", "طلب مرفوض", "قيد المعالجة"]
@@ -161,18 +184,17 @@ def _build_resolution_analysis_rows(
             continue
         pct = f"{count / total_resolved * 100:.1f}%" if total_resolved else "0%"
 
-        # Add note for high rejection cases
-        note = ""
-        if status == "طلب مرفوض" and rejection_rate > 10:
-            note = f"معدل الرفض: {rejection_rate:.1f}%"
-        elif status == "طلب مرفوض" and duplicate_count > 0:
-            note = f"منها {duplicate_count} حالات مكررة"
+        # Use predefined description
+        description = status_descriptions.get(
+            status,
+            f"الشكاوى ذات حالة المعالجة: {status}"
+        )
 
         rows.append({
             "نوع الإغلاق": status,
             "العدد": str(count),
             "النسبة": pct,
-            "الملاحظة": note,
+            "الوصف": description,
         })
 
     return rows
@@ -370,7 +392,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             'pre_computed_department_distribution (admin departments — copy verbatim):\n'
             f'{department_rows_json}\n'
             '\n'
-            'YOUR TASK — write ONLY the three prose items below; tables are pre-computed\n'
+            'YOUR TASK — write ONLY the four prose/table items below; tables are pre-computed\n'
             '\n'
             'A. intro_paragraph (subsection 3.1 lead-in)\n'
             '2-3 sentences, formal Arabic. Must:\n'
@@ -378,13 +400,19 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '  - Identify complaint sub-categories as the core of workload distribution.\n'
             '  - Note the concentration in specific complaint types (from the pre_computed table).\n'
             '\n'
-            'B. channels_intro (subsection 3.2 lead-in)\n'
+            'B. channel_insight (subsection 3.2 lead-in) — KEY: use this exact field name\n'
             '1-2 sentences, formal Arabic. Must:\n'
             f'  - Note that {digital_channel_rate:.1f}% of complaints arrived via digital channels.\n'
             '  - Highlight the shift toward self-service and app-based submissions.\n'
             '  - End with a colon (":") — the table follows immediately.\n'
             '\n'
-            'C. "الوصف" column for complaint sub-classifications ONLY\n'
+            'C. resolution_intro (subsection 3.3 lead-in) — KEY: use this exact field name\n'
+            '1-2 sentences, formal Arabic describing how complaints are resolved:\n'
+            f'  - Reference the resolution status distribution from pre_computed_resolution_analysis.\n'
+            '  - Comment on approval vs. rejection patterns.\n'
+            '  - End with a period — the resolution analysis paragraph follows.\n'
+            '\n'
+            'D. "الوصف" column for complaint sub-classifications ONLY\n'
             'For EACH row in pre_computed_complaint_sub_classifications, add a "الوصف" field:\n'
             '  1 concise Arabic sentence (20–35 words) describing what this complaint type represents\n'
             '  from the customer\'s perspective. Write from the citizen/driver perspective.\n'
@@ -400,7 +428,8 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '{\n'
             '  "section": "workload_map",\n'
             '  "intro_paragraph": "...",\n'
-            '  "channels_intro": "...",\n'
+            '  "channel_insight": "...",\n'
+            '  "resolution_intro": "...",\n'
             '  "complaints_table": [\n'
             '    {"الفئة الفرعية": "...", "العدد": "...", "النسبة من الشكاوى": "...", "الوصف": "..."}\n'
             '  ]\n'

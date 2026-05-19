@@ -179,12 +179,12 @@ def _compute_traffic_complaint_pct(state: PipelineState) -> tuple[int, float]:
     cases = state.all_classified or []
     total = len(cases) or 1
 
-    # Count complaints where main_service or category contains traffic keywords
+    # Count complaints where service_name or complaint_category contains traffic keywords
     traffic_keywords = {"مرور", "traffic", "مخالفات", "رخصة", "vehicle"}
     traffic_count = sum(
         1 for c in cases
-        if (c.main_service and any(kw in str(c.main_service).lower() for kw in traffic_keywords))
-        or (c.category and any(kw in str(c.category).lower() for kw in traffic_keywords))
+        if (c.service_name and any(kw in str(c.service_name).lower() for kw in traffic_keywords))
+        or (c.complaint_category and any(kw in str(c.complaint_category).lower() for kw in traffic_keywords))
     )
     pct = round(traffic_count / total * 100, 1)
     return traffic_count, pct
