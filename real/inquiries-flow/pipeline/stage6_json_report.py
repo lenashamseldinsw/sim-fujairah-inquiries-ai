@@ -366,7 +366,7 @@ class JSONReportBuilder:
         categories = ["شكوى", "استفسار", "طلب", "شكر وثناء"]
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
             "categories": categories,
             "series": [
@@ -421,7 +421,7 @@ class JSONReportBuilder:
         values = [float(v) for v in counts.values.tolist()]
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "توزيع الطلبات على الخدمات",
             "categories": categories,
             "series": [
