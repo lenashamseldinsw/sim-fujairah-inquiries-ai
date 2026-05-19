@@ -1052,27 +1052,23 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar'):
         if not report.get('success', False):
             error_msg = report.get('message', 'Analysis failed')
             print(f"[PROCESS] ✗ Analysis failed: {error_msg}")
-            st.error(error_msg)
-            return None
+            # Don't call st.error() here as it won't persist across rerun
+            # Instead, return error info for caller to handle
+            return {'error': error_msg, 'success': False}
 
         return report
 
     except ValueError as e:
         error_msg = str(e)
         print(f"[PROCESS] ✗ ValueError: {error_msg}")
-        if "API key" in error_msg:
-            st.error("Configuration Error: ANTHROPIC_API_KEY not set. Please configure it in Streamlit secrets (~/.streamlit/secrets.toml)")
-        else:
-            st.error(f"Error: {error_msg}")
-        return None
+        return {'error': error_msg, 'success': False}
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
         print(f"[PROCESS] ✗ Exception: {error_msg}")
         import traceback
         print("[PROCESS] Full traceback:")
         traceback.print_exc()
-        st.error(f"Error: {str(e)}")
-        return None
+        return {'error': error_msg, 'success': False}
 
 
 # ── Landing Page ──────────────────────────────────────────────────────────────
@@ -1232,15 +1228,20 @@ def show_inquiries_page(lang):
         try:
             report = process_file([st.session_state.uploaded_file], flow_type='inquiries', lang=lang)
 
-            if report:
+            if report and report.get('success', False):
                 st.session_state.report_data = report
                 st.session_state.processing = False
                 st.session_state.completed = True
                 st.session_state.analysis_error = None
                 st.rerun()
+            elif report and report.get('error'):
+                # Error dict returned from process_file
+                st.session_state.processing = False
+                st.session_state.analysis_error = report.get('error', 'Unknown error')
+                st.rerun()
             else:
                 st.session_state.processing = False
-                st.session_state.analysis_error = "Analysis failed: Unknown error"
+                st.session_state.analysis_error = "Analysis failed: No response from analyzer"
                 st.rerun()
         except Exception as e:
             print(f"[UI] Error during inquiries processing: {str(e)}")
@@ -1361,15 +1362,20 @@ def show_complaints_page(lang):
         try:
             report = process_file([st.session_state.uploaded_file], flow_type='complaints', lang=lang)
 
-            if report:
+            if report and report.get('success', False):
                 st.session_state.report_data = report
                 st.session_state.processing = False
                 st.session_state.completed = True
                 st.session_state.analysis_error = None
                 st.rerun()
+            elif report and report.get('error'):
+                # Error dict returned from process_file
+                st.session_state.processing = False
+                st.session_state.analysis_error = report.get('error', 'Unknown error')
+                st.rerun()
             else:
                 st.session_state.processing = False
-                st.session_state.analysis_error = "Analysis failed: Unknown error"
+                st.session_state.analysis_error = "Analysis failed: No response from analyzer"
                 st.rerun()
         except Exception as e:
             print(f"[UI] Error during complaints processing: {str(e)}")
