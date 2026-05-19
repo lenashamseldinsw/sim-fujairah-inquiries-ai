@@ -68,59 +68,82 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build FAQ rows from validated FAQs and candidates for the transformation section.
 
+    ISSUE 4 FIX: Return rows matching build_digital_transformation_section columns:
+    #, السؤال, الإجابة المقترحة, التكرار
+
     Args:
         state: Pipeline state containing validated_faqs and faq_candidates
 
     Returns:
-        List of row dicts with 'السؤال' and 'الإجابة' keys
+        List of row dicts with FAQ columns
     """
     rows = []
+    counter = 1
 
     # Add validated FAQs first (higher confidence)
     if state.validated_faqs:
         for faq in state.validated_faqs:
+            if counter > 5:
+                break
             q = faq.get('question') if isinstance(faq, dict) else getattr(faq, 'question', '')
             a = faq.get('answer') if isinstance(faq, dict) else getattr(faq, 'answer', '')
+            freq = faq.get('frequency', faq.get('case_count', '')) if isinstance(faq, dict) else getattr(faq, 'frequency', '')
             if q and a:
                 rows.append({
+                    '#': str(counter),
                     'السؤال': q,
-                    'الإجابة': a,
+                    'الإجابة المقترحة': a,
+                    'التكرار': str(freq) if freq else '—',
                 })
+                counter += 1
 
     # Add candidates as fallback
-    if state.faq_candidates and len(rows) < 5:
+    if state.faq_candidates and counter <= 5:
         for candidate in state.faq_candidates:
+            if counter > 5:
+                break
             q = candidate.get('question') if isinstance(candidate, dict) else getattr(candidate, 'question', '')
             a = candidate.get('answer') if isinstance(candidate, dict) else getattr(candidate, 'answer', '')
+            freq = candidate.get('frequency', candidate.get('case_count', '')) if isinstance(candidate, dict) else getattr(candidate, 'frequency', '')
             if q and a:
                 rows.append({
+                    '#': str(counter),
                     'السؤال': q,
-                    'الإجابة': a,
+                    'الإجابة المقترحة': a,
+                    'التكرار': str(freq) if freq else '—',
                 })
+                counter += 1
 
-    return rows[:5]  # Limit to 5 FAQs
+    return rows
 
 
 def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build notification opportunity rows for proactive alerts.
 
+    ISSUE 4 FIX: Return rows matching build_digital_transformation_section columns:
+    نوع الإشعار, الحالات المُلغاة, محتوى الإشعار (مثال), القناة, الأثر المتوقع
+
     Args:
         state: Pipeline state containing notification_opportunities
 
     Returns:
-        List of row dicts with notification scenario details
+        List of row dicts with notification columns
     """
     rows = []
 
     if hasattr(state, 'notification_opportunities') and state.notification_opportunities:
         for notif in state.notification_opportunities:
             if isinstance(notif, dict):
-                rows.append({
-                    'نوع الإخطار': notif.get('type', ''),
-                    'السيناريو': notif.get('scenario', ''),
-                    'الفائدة المتوقعة': notif.get('expected_benefit', ''),
-                })
+                # Map state notification fields to expected row columns
+                row = {
+                    'نوع الإشعار': notif.get('type', notif.get('notification_type', '')),
+                    'الحالات المُلغاة': str(notif.get('cases_eliminated', notif.get('case_count', ''))),
+                    'محتوى الإشعار (مثال)': notif.get('content', notif.get('example_message', '')),
+                    'القناة': notif.get('channel', notif.get('delivery_channel', '')),
+                    'الأثر المتوقع': notif.get('expected_benefit', notif.get('expected_impact', '')),
+                }
+                rows.append(row)
 
     return rows
 
@@ -139,43 +162,25 @@ def generate_digital_transformation_section(state: PipelineState, api_key: str) 
         api_key: Anthropic API key for LLM calls (if needed for refinement)
 
     Returns:
-        Dict with 'sections' key containing subsections and tables
+        ISSUE 4 FIX: Dict with 'section_body', 'faq_table', 'notification_table' keys
+        as expected by build_digital_transformation_section in stage6_json_report.py
     """
-    result = {
-        'sections': [],
-        'tables': [],
-    }
-
-    # Build FAQ section
+    # Build FAQ rows
     faq_rows = _build_faq_rows_for_transform(state)
-    if faq_rows:
-        result['sections'].append({
-            'title': 'الأسئلة الشائعة',
-            'subtitle': '6.1',
-            'table': {
-                'columns': ['السؤال', 'الإجابة'],
-                'rows': faq_rows,
-            }
-        })
 
-    # Build notification opportunities section
+    # Build notification rows
     notif_rows = _build_notification_rows(state)
-    if notif_rows:
-        result['sections'].append({
-            'title': 'فرص الإخطار الاستباقي',
-            'subtitle': '6.2',
-            'table': {
-                'columns': ['نوع الإخطار', 'السيناريو', 'الفائدة المتوقعة'],
-                'rows': notif_rows,
-            }
-        })
 
-    # Add intro paragraph if we have data
-    if faq_rows or notif_rows:
-        month_year = convert_month_year_to_arabic(state.month_year) if state.month_year else 'الفترة الحالية'
-        result['intro'] = f"""
-        تمثل خطة التحويل الرقمي رؤية شاملة لتحسين تجربة المتعاملين من خلال الخدمات الرقمية.
-        بناءً على تحليل البيانات من {month_year}، تم تحديد الأولويات التالية:
-        """
+    # Generate section body (intro paragraph)
+    month_year = convert_month_year_to_arabic(state.month_year) if state.month_year else 'الفترة الحالية'
+    section_body = (
+        f"تمثل خطة التحويل الرقمي رؤية شاملة لتحسين تجربة المتعاملين من خلال الخدمات الرقمية. "
+        f"بناءً على تحليل البيانات من {month_year}، تم تحديد الأولويات التالية:"
+    )
 
-    return result
+    # Return structure matching what build_digital_transformation_section expects
+    return {
+        'section_body': section_body,
+        'faq_table': faq_rows,  # List of dicts with 'السؤال' and 'الإجابة' keys
+        'notification_table': notif_rows,  # List of dicts with notification details
+    }
