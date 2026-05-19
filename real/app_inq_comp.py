@@ -970,6 +970,20 @@ def init_session_state():
     defaults = {
         'page': 'landing',
         'language': 'ar',
+        # Flow-specific state - separate keys for each flow to prevent contamination
+        'inquiries_uploaded_file': None,
+        'inquiries_processing': False,
+        'inquiries_completed': False,
+        'inquiries_report_data': None,
+        'inquiries_analysis_error': None,
+        'inquiries_error_traceback': None,
+        'complaints_uploaded_file': None,
+        'complaints_processing': False,
+        'complaints_completed': False,
+        'complaints_report_data': None,
+        'complaints_analysis_error': None,
+        'complaints_error_traceback': None,
+        # Legacy keys for backward compatibility (will be phased out)
         'uploaded_file': None,
         'processing': False,
         'completed': False,
@@ -1037,29 +1051,40 @@ def get_analyzer():
 
 
 # ── Download Utilities ────────────────────────────────────────────────────────
-def create_report_zip(report_data: dict) -> bytes:
+def create_report_zip(report_data: dict, flow_type: str = 'inquiries') -> bytes:
     """Create a zip file containing all report outputs.
 
     Args:
         report_data: Dict with word_path, word_path_en, and excel_path
+        flow_type: 'inquiries' or 'complaints' to determine file names
 
     Returns:
         Bytes of the zip file
     """
+    # Determine flow-specific filenames
+    if flow_type == 'complaints':
+        ar_word_name = 'تقرير_الشكاوى.docx'
+        en_word_name = 'Complaints_Report.docx'
+        excel_name = 'تصنيف_الشكاوى.xlsx'
+    else:  # inquiries
+        ar_word_name = 'تقرير_الاستفسارات.docx'
+        en_word_name = 'Inquiries_Report.docx'
+        excel_name = 'تصنيف_الاستفسارات.xlsx'
+
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         # Add Arabic Word report
         if report_data.get('word_path') and os.path.exists(report_data['word_path']):
-            zf.write(report_data['word_path'], arcname='تقرير_الشكاوى.docx')
+            zf.write(report_data['word_path'], arcname=ar_word_name)
 
         # Add English Word report
         if report_data.get('word_path_en') and os.path.exists(report_data['word_path_en']):
-            zf.write(report_data['word_path_en'], arcname='Complaints_Report.docx')
+            zf.write(report_data['word_path_en'], arcname=en_word_name)
 
         # Add Excel file
         if report_data.get('excel_path') and os.path.exists(report_data['excel_path']):
-            zf.write(report_data['excel_path'], arcname='تصنيف_الشكاوى.xlsx')
+            zf.write(report_data['excel_path'], arcname=excel_name)
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
@@ -1240,7 +1265,7 @@ def show_inquiries_page(lang):
 
     st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
 
-    if not st.session_state.completed:
+    if not st.session_state.inquiries_completed:
         st.markdown(f"""
         <div class="panel">
             <div class="panel-title">{tx['inq_panel_title']}</div>
@@ -1263,14 +1288,14 @@ def show_inquiries_page(lang):
 
         if uploaded_files:
             # Store file metadata along with content to survive session serialization
-            st.session_state.uploaded_file = uploaded_files
-            st.session_state.uploaded_file_metadata = [
+            st.session_state.inquiries_uploaded_file = uploaded_files
+            st.session_state.inquiries_uploaded_file_metadata = [
                 {'name': f.name, 'type': f.type, 'size': f.size} for f in uploaded_files
             ]
             print(f"[Upload-INQ] Stored {len(uploaded_files)} file(s) in session state")
 
-        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
-        metadata_list = st.session_state.get('uploaded_file_metadata', [])
+        files_to_display = st.session_state.get('inquiries_uploaded_file', []) if uploaded_files or st.session_state.get('inquiries_uploaded_file') else []
+        metadata_list = st.session_state.get('inquiries_uploaded_file_metadata', [])
 
         if files_to_display:
             for idx, uploaded_file in enumerate(files_to_display):
@@ -1309,16 +1334,16 @@ def show_inquiries_page(lang):
                 </div>
                 """, unsafe_allow_html=True)
 
-            if not st.session_state.processing:
+            if not st.session_state.inquiries_processing:
                 st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button(tx['btn_start_inq'], use_container_width=True, type="primary", key="inq_start"):
-                        st.session_state.processing = True
+                        st.session_state.inquiries_processing = True
                         st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.processing:
+    if st.session_state.inquiries_processing:
         st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
 
         # Create enhanced loading UI with stage indicators and progress bar
@@ -1389,10 +1414,10 @@ def show_inquiries_page(lang):
             progress_bar.progress(min(progress_pct, 1.0))
 
         try:
-            files_to_process = st.session_state.get('uploaded_file', [])
+            files_to_process = st.session_state.get('inquiries_uploaded_file', [])
             if not files_to_process:
                 st.error("❌ No files to process. Please upload files first.")
-                st.session_state.processing = False
+                st.session_state.inquiries_processing = False
                 st.rerun()
 
             report = process_file(files_to_process, flow_type='inquiries', lang=lang, progress_callback=update_progress_inq)
@@ -1401,56 +1426,56 @@ def show_inquiries_page(lang):
             progress_placeholder.empty()
             progress_bar.empty()
 
-            st.session_state.processing = False
-            st.session_state.completed = True
+            st.session_state.inquiries_processing = False
+            st.session_state.inquiries_completed = True
 
             if report:
-                st.session_state.report_data = report
+                st.session_state.inquiries_report_data = report
 
                 # Check for errors in the report itself
                 if report.get('success') is False:
-                    st.session_state.analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
+                    st.session_state.inquiries_analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
                 else:
-                    st.session_state.analysis_error = None
+                    st.session_state.inquiries_analysis_error = None
             else:
-                st.session_state.analysis_error = "Analysis returned no data"
+                st.session_state.inquiries_analysis_error = "Analysis returned no data"
 
         except Exception as e:
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.analysis_error = f"Analysis failed: {str(e)}"
+            st.session_state.inquiries_processing = False
+            st.session_state.inquiries_completed = False
+            st.session_state.inquiries_analysis_error = f"Analysis failed: {str(e)}"
             import traceback
-            st.session_state.error_traceback = traceback.format_exc()
+            st.session_state.inquiries_error_traceback = traceback.format_exc()
             print(f"[Main] Exception: {str(e)}\n{traceback.format_exc()}")
 
         st.markdown('</div>', unsafe_allow_html=True)
         st.rerun()
 
     else:
-        if st.session_state.get('analysis_error'):
+        if st.session_state.get('inquiries_analysis_error'):
             st.markdown(f"""
             <div class="error-panel">
                 <div style="font-size:1.8rem;margin-bottom:0.4rem;">❌</div>
                 <div style="font-weight:bold;font-size:1.1rem;">Analysis Failed</div>
             </div>
             """, unsafe_allow_html=True)
-            st.error(f"**Error:** {st.session_state.analysis_error}")
-            if st.session_state.get('error_traceback'):
+            st.error(f"**Error:** {st.session_state.inquiries_analysis_error}")
+            if st.session_state.get('inquiries_error_traceback'):
                 with st.expander("📋 Technical Details"):
-                    st.code(st.session_state.error_traceback, language='python')
+                    st.code(st.session_state.inquiries_error_traceback, language='python')
 
             st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button(tx['btn_reset'], use_container_width=True, key="inq_reset_error"):
-                    st.session_state.uploaded_file = None
-                    st.session_state.processing = False
-                    st.session_state.completed = False
-                    st.session_state.analysis_error = None
+                    st.session_state.inquiries_uploaded_file = None
+                    st.session_state.inquiries_processing = False
+                    st.session_state.inquiries_completed = False
+                    st.session_state.inquiries_analysis_error = None
                     st.session_state.error_traceback = None
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-        elif st.session_state.get('completed'):
+        elif st.session_state.get('inquiries_completed'):
             st.markdown(f"""
             <div class="success-panel">
                 <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
@@ -1460,17 +1485,17 @@ def show_inquiries_page(lang):
             """, unsafe_allow_html=True)
 
             st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
-            if st.session_state.get('report_data'):
+            if st.session_state.get('inquiries_report_data'):
                 display_report_tabs(lang, flow_type='inquiries')
             st.markdown('</div>', unsafe_allow_html=True)
 
             # Download button
-            if st.session_state.get('report_data'):
+            if st.session_state.get('inquiries_report_data'):
                 st.markdown('<div style="max-width:820px;margin:2rem auto 0;">', unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
-                    if st.session_state.report_data.get('word_path'):
-                        zip_data = create_report_zip(st.session_state.report_data)
+                    if st.session_state.inquiries_report_data.get('word_path'):
+                        zip_data = create_report_zip(st.session_state.inquiries_report_data, flow_type='inquiries')
                         st.download_button(
                             label=tx['btn_download_inq'],
                             data=zip_data,
@@ -1485,12 +1510,12 @@ def show_inquiries_page(lang):
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button(tx['btn_reset'], use_container_width=True, key="inq_reset"):
-                    st.session_state.uploaded_file = None
-                    st.session_state.processing = False
-                    st.session_state.completed = False
-                    st.session_state.report_data = None
-                    st.session_state.analysis_error = None
-                    st.session_state.error_traceback = None
+                    st.session_state.inquiries_uploaded_file = None
+                    st.session_state.inquiries_processing = False
+                    st.session_state.inquiries_completed = False
+                    st.session_state.inquiries_report_data = None
+                    st.session_state.inquiries_analysis_error = None
+                    st.session_state.inquiries_error_traceback = None
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1524,7 +1549,7 @@ def show_complaints_page(lang):
 
     st.markdown('<div style="max-width:820px;margin:0 auto;">', unsafe_allow_html=True)
 
-    if not st.session_state.completed:
+    if not st.session_state.complaints_completed:
         st.markdown(f"""
         <div class="panel-blue">
             <div class="panel-title">{tx['cmp_panel_title']}</div>
@@ -1547,14 +1572,14 @@ def show_complaints_page(lang):
 
         if uploaded_files:
             # Store file metadata along with content to survive session serialization
-            st.session_state.uploaded_file = uploaded_files
-            st.session_state.uploaded_file_metadata = [
+            st.session_state.complaints_uploaded_file = uploaded_files
+            st.session_state.complaints_uploaded_file_metadata = [
                 {'name': f.name, 'type': f.type, 'size': f.size} for f in uploaded_files
             ]
             print(f"[Upload-CMP] Stored {len(uploaded_files)} file(s) in session state")
 
-        files_to_display = st.session_state.get('uploaded_file', []) if uploaded_files or st.session_state.get('uploaded_file') else []
-        metadata_list = st.session_state.get('uploaded_file_metadata', [])
+        files_to_display = st.session_state.get('complaints_uploaded_file', []) if uploaded_files or st.session_state.get('complaints_uploaded_file') else []
+        metadata_list = st.session_state.get('complaints_uploaded_file_metadata', [])
 
         if files_to_display:
             for idx, uploaded_file in enumerate(files_to_display):
@@ -1593,16 +1618,16 @@ def show_complaints_page(lang):
                 </div>
                 """, unsafe_allow_html=True)
 
-            if not st.session_state.processing:
+            if not st.session_state.complaints_processing:
                 st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button(tx['btn_start_cmp'], use_container_width=True, type="primary", key="cmp_start"):
-                        st.session_state.processing = True
+                        st.session_state.complaints_processing = True
                         st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.processing:
+    if st.session_state.complaints_processing:
         st.markdown('<div style="max-width:820px;margin:1.5rem auto 0;">', unsafe_allow_html=True)
 
         # Create enhanced loading UI with stage indicators and progress bar
@@ -1673,10 +1698,10 @@ def show_complaints_page(lang):
             progress_bar.progress(min(progress_pct, 1.0))
 
         try:
-            files_to_process = st.session_state.get('uploaded_file', [])
+            files_to_process = st.session_state.get('complaints_uploaded_file', [])
             if not files_to_process:
                 st.error("❌ No files to process. Please upload files first.")
-                st.session_state.processing = False
+                st.session_state.complaints_processing = False
                 st.rerun()
 
             report = process_file(files_to_process, flow_type='complaints', lang=lang, progress_callback=update_progress_cmp)
@@ -1685,56 +1710,56 @@ def show_complaints_page(lang):
             progress_placeholder.empty()
             progress_bar.empty()
 
-            st.session_state.processing = False
-            st.session_state.completed = True
+            st.session_state.complaints_processing = False
+            st.session_state.complaints_completed = True
 
             if report:
-                st.session_state.report_data = report
+                st.session_state.complaints_report_data = report
 
                 # Check for errors in the report itself
                 if report.get('success') is False:
-                    st.session_state.analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
+                    st.session_state.complaints_analysis_error = f"Pipeline error: {report.get('error', 'Unknown error')}"
                 else:
-                    st.session_state.analysis_error = None
+                    st.session_state.complaints_analysis_error = None
             else:
-                st.session_state.analysis_error = "Analysis returned no data"
+                st.session_state.complaints_analysis_error = "Analysis returned no data"
 
         except Exception as e:
-            st.session_state.processing = False
-            st.session_state.completed = False
-            st.session_state.analysis_error = f"Analysis failed: {str(e)}"
+            st.session_state.complaints_processing = False
+            st.session_state.complaints_completed = False
+            st.session_state.complaints_analysis_error = f"Analysis failed: {str(e)}"
             import traceback
-            st.session_state.error_traceback = traceback.format_exc()
+            st.session_state.complaints_error_traceback = traceback.format_exc()
             print(f"[Main] Exception: {str(e)}\n{traceback.format_exc()}")
 
         st.markdown('</div>', unsafe_allow_html=True)
         st.rerun()
 
     else:
-        if st.session_state.get('analysis_error'):
+        if st.session_state.get('complaints_analysis_error'):
             st.markdown(f"""
             <div class="error-panel">
                 <div style="font-size:1.8rem;margin-bottom:0.4rem;">❌</div>
                 <div style="font-weight:bold;font-size:1.1rem;">Analysis Failed</div>
             </div>
             """, unsafe_allow_html=True)
-            st.error(f"**Error:** {st.session_state.analysis_error}")
-            if st.session_state.get('error_traceback'):
+            st.error(f"**Error:** {st.session_state.complaints_analysis_error}")
+            if st.session_state.get('complaints_error_traceback'):
                 with st.expander("📋 Technical Details"):
-                    st.code(st.session_state.error_traceback, language='python')
+                    st.code(st.session_state.complaints_error_traceback, language='python')
 
             st.markdown('<div style="max-width:820px;margin:2.5rem auto 0;">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset_error"):
-                    st.session_state.uploaded_file = None
-                    st.session_state.processing = False
-                    st.session_state.completed = False
-                    st.session_state.analysis_error = None
-                    st.session_state.error_traceback = None
+                    st.session_state.complaints_uploaded_file = None
+                    st.session_state.complaints_processing = False
+                    st.session_state.complaints_completed = False
+                    st.session_state.complaints_analysis_error = None
+                    st.session_state.complaints_error_traceback = None
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-        elif st.session_state.get('completed'):
+        elif st.session_state.get('complaints_completed'):
             st.markdown(f"""
             <div class="success-panel">
                 <div style="font-size:1.8rem;margin-bottom:0.4rem;">✅</div>
@@ -1744,17 +1769,17 @@ def show_complaints_page(lang):
             """, unsafe_allow_html=True)
 
             st.markdown('<div style="max-width:900px;margin:2rem auto;">', unsafe_allow_html=True)
-            if st.session_state.get('report_data'):
+            if st.session_state.get('complaints_report_data'):
                 display_report_tabs(lang, flow_type='complaints')
             st.markdown('</div>', unsafe_allow_html=True)
 
             # Download button
-            if st.session_state.get('report_data'):
+            if st.session_state.get('complaints_report_data'):
                 st.markdown('<div style="max-width:820px;margin:2rem auto 0;">', unsafe_allow_html=True)
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
-                    if st.session_state.report_data.get('word_path'):
-                        zip_data = create_report_zip(st.session_state.report_data)
+                    if st.session_state.complaints_report_data.get('word_path'):
+                        zip_data = create_report_zip(st.session_state.complaints_report_data, flow_type='complaints')
                         st.download_button(
                             label=tx['btn_download_cmp'],
                             data=zip_data,
@@ -1769,12 +1794,12 @@ def show_complaints_page(lang):
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button(tx['btn_reset'], use_container_width=True, key="cmp_reset"):
-                    st.session_state.uploaded_file = None
-                    st.session_state.processing = False
-                    st.session_state.completed = False
-                    st.session_state.report_data = None
-                    st.session_state.analysis_error = None
-                    st.session_state.error_traceback = None
+                    st.session_state.complaints_uploaded_file = None
+                    st.session_state.complaints_processing = False
+                    st.session_state.complaints_completed = False
+                    st.session_state.complaints_report_data = None
+                    st.session_state.complaints_analysis_error = None
+                    st.session_state.complaints_error_traceback = None
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
