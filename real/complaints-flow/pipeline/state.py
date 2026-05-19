@@ -241,8 +241,9 @@ class _NumpyEncoder(json.JSONEncoder):
 
 def save_state_to_json(state: PipelineState, json_path: str) -> None:
     """Save state to JSON file."""
-    data = state.model_dump(mode='json', exclude={'raw_df'})  # Exclude DataFrame
-    # Recursively sanitize nested numpy types
+    # Use model_dump() without mode='json' to avoid Pydantic trying to serialize numpy types
+    data = state.model_dump(exclude={'raw_df'})  # Exclude DataFrame, don't force JSON mode yet
+    # Recursively sanitize nested numpy types before JSON serialization
     data = _sanitize_value(data)
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2, cls=_NumpyEncoder)
