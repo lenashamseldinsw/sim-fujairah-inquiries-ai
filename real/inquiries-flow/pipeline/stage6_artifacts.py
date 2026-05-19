@@ -13,6 +13,7 @@ Report dict is stored in state.report_json for passing to display functions.
 import json
 import sys
 import anthropic
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
@@ -465,6 +466,49 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     state.report_sections_ar = {}
 
     # ──────────────────────────────────────────────────────────────────────────────────
+    # PRE-WAVE: Correct proactive_notification_case_count deterministically
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # state.proactive_notification_case_count is LLM-supplied from Stage 4 and unreliable.
+    # The authoritative count is the sum of case_count from gap_table rows where
+    # proactive_notification_opportunity=True — the same calculation used by
+    # generate_digital_gaps_section.py locally.
+    if state.gap_table:
+        deterministic_proactive_count = sum(
+            g.case_count for g in state.gap_table
+            if g.proactive_notification_opportunity
+        )
+        if deterministic_proactive_count != state.proactive_notification_case_count:
+            print(
+                f"[GenSections] Correcting proactive_notification_case_count: "
+                f"LLM={state.proactive_notification_case_count} → "
+                f"deterministic={deterministic_proactive_count} (from gap_table)"
+            )
+        state.proactive_notification_case_count = deterministic_proactive_count
+
+    # Re-reconcile notification_opportunities against the corrected count.
+    # _reconcile_counts() in stage4 already did this, but used the wrong cap.
+    if state.notification_opportunities and state.proactive_notification_case_count > 0:
+        llm_total = sum(
+            n.get('cases_eliminated', 0) for n in state.notification_opportunities
+            if isinstance(n.get('cases_eliminated'), int)
+        )
+        if llm_total > 0:
+            corrected = []
+            for n in state.notification_opportunities:
+                llm_count = n.get('cases_eliminated', 0)
+                if not isinstance(llm_count, int):
+                    corrected.append(n)
+                    continue
+                scaled = round(llm_count / llm_total * state.proactive_notification_case_count)
+                scaled = max(1, scaled) if llm_count > 0 else 0
+                corrected.append({**n, 'cases_eliminated': scaled})
+            state.notification_opportunities = corrected
+            print(
+                f"[GenSections] Re-reconciled notification_opportunities: "
+                f"LLM total={llm_total} → corrected to {state.proactive_notification_case_count}"
+            )
+
+    # ──────────────────────────────────────────────────────────────────────────────────
     # WAVE 1: 7 independent sections — run in parallel
     # ──────────────────────────────────────────────────────────────────────────────────
     print("[GenSections] WAVE 1: Starting 7 parallel section generations...")
@@ -664,6 +708,7 @@ def _build_pre_computed_findings(
     friction_count: int,
     sla_closed: int,
     sla_rate: float,
+    rc_totals_auth: dict = None,
 ) -> list:
     """
     Pre-compute the findings table deterministically from state data.
@@ -738,8 +783,13 @@ def _build_pre_computed_findings(
         # Pick the largest group
         largest_group = max(grouped_by_cause.values(), key=lambda g: sum(f['case_count'] for f in g))
         friction_point_count_in_group = len(largest_group)
-        case_count_in_group = sum(f['case_count'] for f in largest_group)
         group_cause = largest_group[0]['root_cause']
+        # Use the full authoritative journey_map total when available (covers frictions beyond
+        # the first-10 slice used to build friction_points).
+        if rc_totals_auth and group_cause in rc_totals_auth:
+            case_count_in_group = rc_totals_auth[group_cause]
+        else:
+            case_count_in_group = sum(f['case_count'] for f in largest_group)
         group_cause_label = _root_cause_label(group_cause)
 
         # Title: Leading number is FRICTION POINT COUNT, not case count
@@ -883,6 +933,13 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # FIX: Pre-compute findings table deterministically from state before LLM call
         # Avoids LLM inventing ambiguous case-count titles
         friction_count = len(state.journey_map or [])
+
+        # Authoritative per-root-cause totals from the full journey_map (not the first-10 slice).
+        # Passed to _build_pre_computed_findings so row 4 uses the correct grouped case count.
+        rc_totals_auth: dict = defaultdict(int)
+        for _f in (state.journey_map or []):
+            rc_totals_auth[_f.root_cause_category] += _f.case_count
+
         pre_computed_findings = _build_pre_computed_findings(
             total_cases=total_cases,
             misclassification_count=misclassification_count,
@@ -895,6 +952,7 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             friction_count=friction_count,
             sla_closed=sla_closed,
             sla_rate=sla_rate,
+            rc_totals_auth=rc_totals_auth,
         )
 
         # Extract gaps with enhanced guidebook intelligence

@@ -278,6 +278,25 @@ Be specific with example case IDs and counts.
 """
 
 
+def _overlap_ratio(text_a: str, text_b: str, min_word_len: int = 3) -> float:
+    """
+    Compute word overlap ratio between two Arabic strings.
+    Returns the proportion of words in text_a that also appear in text_b.
+    Words shorter than min_word_len are ignored (prepositions, particles, etc.).
+    Returns 0.0 if text_a has no qualifying words.
+    """
+    def words(text):
+        return set(w for w in (text or "").strip().split() if len(w) >= min_word_len)
+
+    words_a = words(text_a)
+    words_b = words(text_b)
+
+    if not words_a:
+        return 0.0
+
+    return len(words_a & words_b) / len(words_a)
+
+
 def _reconcile_counts(
     journey_map: list,
     patterns: list,
@@ -328,11 +347,45 @@ def _reconcile_counts(
         actual_count = actual_counts.get(friction.sub_classification)
 
         if actual_count is not None:
-            # Exact sub_classification match — cap and deduct from budget
-            # to prevent two friction points from double-counting the same cases
+            # Count cases that match BOTH sub_classification AND classification_reason.
+            # classification_reason is set deterministically by Stage 2 rules, and
+            # best-effort by Stage 3 LLM — making it a reliable friction-point-level filter.
+            friction_label = (
+                friction.friction_point_ar or
+                friction.friction_point or
+                friction.cluster_ar or
+                friction.cluster or ""
+            ).strip()
+
+            OVERLAP_THRESHOLD = 0.5  # at least 50% of friction_label words must appear in classification_reason
+
+            if friction_label:
+                reason_matched = sum(
+                    1 for case in all_classified
+                    if case.sub_classification == friction.sub_classification
+                    and _overlap_ratio(friction_label, case.classification_reason) >= OVERLAP_THRESHOLD
+                )
+            else:
+                reason_matched = 0
+
             remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
-            reconciled_count = remaining_budget
-            sub_classification_budget[friction.sub_classification] = 0
+
+            if reason_matched > 0:
+                # Use reason-level count, capped at remaining budget to prevent double-counting
+                reconciled_count = min(reason_matched, remaining_budget)
+            else:
+                # No classification_reason match (e.g. Stage 3 free-text reason doesn't match
+                # friction_point_ar exactly) — fall back to full remaining budget as before
+                reconciled_count = remaining_budget
+                print(
+                    f"[Stage4] FALLBACK: no classification_reason match for friction "
+                    f"'{friction_label}' in sub_classification '{friction.sub_classification}'. "
+                    f"Using full remaining budget ({remaining_budget})."
+                )
+
+            sub_classification_budget[friction.sub_classification] = max(
+                0, remaining_budget - reconciled_count
+            )
         else:
             # No exact match — LLM returned an approximate or merged sub_classification.
             # Try word-overlap against actual_counts keys to find the closest match.

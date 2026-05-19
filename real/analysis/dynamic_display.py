@@ -376,7 +376,7 @@ class DynamicReportDisplay:
                                num_items: int,
                                provided_colors: Optional[list] = None,
                                num_series: Optional[int] = None) -> list:
-        if chart_type in ('bar', 'horizontalBar'):
+        if chart_type in ('bar', 'horizontalBar', 'column'):
             if num_series and num_series <= 1:
                 return ['#B68A35'] * num_items
             bar_colors = ['#B68A35', '#E5E5E5']
@@ -490,13 +490,16 @@ Highcharts.chart('pie-chart', {{
         series     = chart_data.get('series', [])
         provided   = chart_data.get('colors', [])
 
+        # Chart.js v3 uses 'bar' for vertical bar charts; normalize 'column'
+        js_type = 'bar' if chart_type == 'column' else chart_type
+
         # For RTL bar charts reverse axes
         if rtl and chart_type not in ('pie', 'doughnut'):
             categories = list(reversed(categories))
             series = [{'name': s['name'], 'data': list(reversed(s['data']))} for s in series]
 
         # Build datasets
-        if chart_type in ('bar', 'horizontalBar'):
+        if chart_type in ('bar', 'horizontalBar', 'column'):
             colors = self._get_colors_for_chart(chart_type, len(series),
                                                 provided or None, num_series=len(series))
             datasets = []
@@ -547,7 +550,7 @@ document.addEventListener('DOMContentLoaded', function() {{
     var ctx = document.getElementById('{chart_id}');
     if (!ctx) return;
     new Chart(ctx, {{
-      type: '{chart_type}',
+      type: '{js_type}',
       data: {{
         labels: {categories_json},
         datasets: {datasets_json}

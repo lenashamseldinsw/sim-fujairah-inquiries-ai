@@ -25,7 +25,7 @@ from collections import defaultdict
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage2_rules import SUB_CLASSIFICATIONS as _SUB_CLASSIFICATIONS
 from .generate_customer_journey_section import _build_friction_rows
-from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows
+from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows, _ROOT_CAUSE_LABELS
 from .generate_digital_transformation_section import (
     _build_faq_rows_for_transform,
     _build_notification_rows,
@@ -1104,6 +1104,38 @@ class JSONReportBuilder:
                         )
 
         root_cause_table_rows = dg_raw["root_cause_table"]
+
+        # SOURCE: state.journey_map (post-reconciliation) — same source as _build_root_cause_rows().
+        # Override LLM-supplied counts in root_cause_table with the authoritative grouped totals.
+        # The LLM may hallucinate or reuse stale pre-reconciliation counts.
+        if self.state.journey_map:
+            rc_totals_auth: dict = defaultdict(int)
+            for f in self.state.journey_map:
+                rc_totals_auth[f.root_cause_category] += f.case_count
+
+            # Combined label→category mapping covering both label sets:
+            # _ROOT_CAUSE_LABELS (what LLM is given via _build_root_cause_rows) AND
+            # _root_cause_label() aliases (what the LLM sometimes returns instead).
+            label_to_category: dict = {v: k for k, v in _ROOT_CAUSE_LABELS.items()}
+            label_to_category.update({
+                'غياب معلومات من الدليل':             'missing_info',
+                'معلومات موجودة لكنها صعبة الوصول':   'inaccessible_info',
+                'غياب الإشعار الاستباقي':              'no_proactive_notification',
+                'خلل تقني في المنصة':                 'platform_bug',
+                'تعقيد إجراءات السياسة':              'policy_complexity',
+            })
+
+            for row in root_cause_table_rows:
+                label = (row.get("السبب الجذري", "") or "").strip()
+                cat = label_to_category.get(label)
+                if cat and cat in rc_totals_auth:
+                    auth_total = rc_totals_auth[cat]
+                    row["الحالات"] = str(auth_total)
+                    example = row.get("مثال على التحدي", "")
+                    if example and " حالة — " in example:
+                        suffix = example.split(" حالة — ", 1)[1]
+                        row["مثال على التحدي"] = f"{auth_total} حالة — {suffix}"
+
         section_body = dg_raw["section_body"]
 
         gap_table_dict = {
