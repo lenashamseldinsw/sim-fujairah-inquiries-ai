@@ -466,6 +466,49 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     state.report_sections_ar = {}
 
     # ──────────────────────────────────────────────────────────────────────────────────
+    # PRE-WAVE: Correct proactive_notification_case_count deterministically
+    # ──────────────────────────────────────────────────────────────────────────────────
+    # state.proactive_notification_case_count is LLM-supplied from Stage 4 and unreliable.
+    # The authoritative count is the sum of case_count from gap_table rows where
+    # proactive_notification_opportunity=True — the same calculation used by
+    # generate_digital_gaps_section.py locally.
+    if state.gap_table:
+        deterministic_proactive_count = sum(
+            g.case_count for g in state.gap_table
+            if g.proactive_notification_opportunity
+        )
+        if deterministic_proactive_count != state.proactive_notification_case_count:
+            print(
+                f"[GenSections] Correcting proactive_notification_case_count: "
+                f"LLM={state.proactive_notification_case_count} → "
+                f"deterministic={deterministic_proactive_count} (from gap_table)"
+            )
+        state.proactive_notification_case_count = deterministic_proactive_count
+
+    # Re-reconcile notification_opportunities against the corrected count.
+    # _reconcile_counts() in stage4 already did this, but used the wrong cap.
+    if state.notification_opportunities and state.proactive_notification_case_count > 0:
+        llm_total = sum(
+            n.get('cases_eliminated', 0) for n in state.notification_opportunities
+            if isinstance(n.get('cases_eliminated'), int)
+        )
+        if llm_total > 0:
+            corrected = []
+            for n in state.notification_opportunities:
+                llm_count = n.get('cases_eliminated', 0)
+                if not isinstance(llm_count, int):
+                    corrected.append(n)
+                    continue
+                scaled = round(llm_count / llm_total * state.proactive_notification_case_count)
+                scaled = max(1, scaled) if llm_count > 0 else 0
+                corrected.append({**n, 'cases_eliminated': scaled})
+            state.notification_opportunities = corrected
+            print(
+                f"[GenSections] Re-reconciled notification_opportunities: "
+                f"LLM total={llm_total} → corrected to {state.proactive_notification_case_count}"
+            )
+
+    # ──────────────────────────────────────────────────────────────────────────────────
     # WAVE 1: 7 independent sections — run in parallel
     # ──────────────────────────────────────────────────────────────────────────────────
     print("[GenSections] WAVE 1: Starting 7 parallel section generations...")
