@@ -142,23 +142,48 @@ def _build_rich_distribution_rows(
     corrected_dist: Dict[str, int],
     original_dist: Dict[str, int],
     total_cases: int,
+    sub_category_counts: Optional[Dict[str, int]] = None,
 ) -> List[Dict[str, str]]:
     """
     Build the distribution table rows for complaints version.
-    For complaints, this focuses on the single type (شكوى) breakdown.
+    Uses نوع الشكوى (complaint sub-category) with 6 rows, one per sub-category.
+    ISSUE 1 FIX: Schema now matches sample with proper complaint type breakdown.
     """
-    rows = []
-    complaint_count = corrected_dist.get("شكوى", 0)
-    original_complaint_count = original_dist.get("شكوى", 0)
-    pct = f"{complaint_count / total_cases * 100:.1f}%" if total_cases else "0%"
+    if sub_category_counts is None:
+        sub_category_counts = {}
 
-    rows.append({
-        "نوع التواصل": "شكوى",
-        "العدد": str(complaint_count),
-        "النسبة": pct,
-        "تغيُّر التصنيف": _delta_label(complaint_count, original_complaint_count),
-        "قابلية التحويل الرقمي": "معالجة متخصصة موثقة رقمياً",
-    })
+    rows = []
+
+    # Use the 6 complaint sub-categories in the same order as Excel sheets
+    categories = [
+        'شكاوى مكررة (مرفوضة)',
+        'شكاوى بلا تصنيف خدمي ("أخرى")',
+        'شكاوى على الخدمات المرورية',
+        'شكاوى أمنية وجنائية',
+        'شكاوى شهادات وتصاريح',
+        'شكاوى خارج الاختصاص والأخرى',
+    ]
+
+    digital_readiness_map = {
+        'شكاوى مكررة (مرفوضة)': 'نظام تصفية آلي — لتجنب الازدواجية',
+        'شكاوى بلا تصنيف خدمي ("أخرى")': 'إعادة تصنيف ذكي — بتحليل النصوص',
+        'شكاوى على الخدمات المرورية': 'بوابة مرورية متكاملة — تقديم وتتبع أونلاين',
+        'شكاوى أمنية وجنائية': 'نموذج إبلاغ آمن — مع التشفير والخصوصية',
+        'شكاوى شهادات وتصاريح': 'نظام طلبات موحد — متكامل مع قاعدة البيانات',
+        'شكاوى خارج الاختصاص والأخرى': 'نموذج تحويل ذكي — مع إعادة التوجيه التلقائية',
+    }
+
+    for category in categories:
+        count = sub_category_counts.get(category, 0)
+        pct = f"{count / total_cases * 100:.1f}%" if total_cases > 0 else "0%"
+
+        rows.append({
+            "نوع الشكوى": category,
+            "العدد": str(count),
+            "النسبة": pct,
+            "الوصف": digital_readiness_map.get(category, ""),
+        })
+
     return rows
 
 
@@ -340,7 +365,25 @@ class JSONReportBuilder:
         return rebuilt
 
     def build_metadata(self) -> Dict[str, Any]:
-        """Build document metadata (complaints version)."""
+        """Build document metadata (complaints version).
+        ISSUE 2 FIX: Include total_complaints, digital_channel_rate, zero_rejection_rate
+        for build_report_ar._extract_cover_stats() to read.
+        """
+        all_classified = self.state.all_classified or []
+        total = len(all_classified)
+
+        # Calculate digital channel rate from case_channel
+        digital_channels = {'app', 'web', 'website', 'application'}
+        digital_count = sum(
+            1 for c in all_classified
+            if c.case_channel and c.case_channel.strip().lower() in digital_channels
+        )
+        digital_channel_rate = f"{digital_count / total * 100:.1f}%" if total > 0 else "0%"
+
+        # Check if zero rejection (all cases accepted)
+        rejected_count = sum(1 for c in all_classified if c.sla_color == 'مرفوضة')
+        zero_rejection_rate = rejected_count == 0
+
         return {
             "extraction_version": 1,
             "document_name": f"تقرير تحليل شكاوى المتعاملين — {convert_month_year_to_arabic(self.state.month_year) or 'Q1 2026'}",
@@ -350,10 +393,13 @@ class JSONReportBuilder:
                 "author": "AI Analysis Pipeline",
                 "created": datetime.now().isoformat(),
                 "modified": datetime.now().isoformat(),
-                "total_paragraphs": len(self.state.all_classified),
+                "total_paragraphs": len(all_classified),
                 "total_tables": len(self.state.gap_table) + 3,
                 "total_cases": self.state.total_cases,
                 "closed_cases_count": self.state.closed_cases_count,
+                "total_complaints": total,
+                "digital_channel_rate": digital_channel_rate,
+                "zero_rejection_rate": zero_rejection_rate,
             }
         }
 
@@ -372,7 +418,7 @@ class JSONReportBuilder:
         categories = _SUB_CLASSIFICATIONS
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "توزيع الشكاوى حسب الفئة الفرعية",
             "categories": categories,
             "series": [
@@ -423,7 +469,7 @@ class JSONReportBuilder:
         values = [float(v) for v in counts.values.tolist()]
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "توزيع الشكاوى على الخدمات",
             "categories": categories,
             "series": [
@@ -773,16 +819,23 @@ class JSONReportBuilder:
         ]
 
         # 3.1 sub-category distribution
+        # ISSUE 1 FIX: Build subcategory counts from all_classified
+        sub_category_counts = defaultdict(int)
+        for case in all_classified:
+            sub = case.sub_classification or "شكاوى بلا تصنيف خدمي (\"أخرى\")"
+            sub_category_counts[sub] += 1
+
         intro_paragraph = wm_raw["intro_paragraph"]
 
         dist_rows = wm_raw.get("distribution_table") or _build_rich_distribution_rows(
-            corrected_dist, original_dist, total_cases
+            corrected_dist, original_dist, total_cases, sub_category_counts
         )
+        # ISSUE 1 FIX: Use نوع الشكوى column with الوصف instead of نوع التواصل
         dist_table = {
-            "columns": ["نوع التواصل", "العدد", "النسبة", "تغيُّر التصنيف", "قابلية التحويل الرقمي"],
+            "columns": ["نوع الشكوى", "العدد", "النسبة", "الوصف"],
             "rows": dist_rows,
             "row_count": len(dist_rows),
-            "col_count": 5,
+            "col_count": 4,
             "original_index": self.next_table_index(),
         }
         subsection_31 = {
@@ -1527,11 +1580,28 @@ class JSONReportBuilder:
         if conclusion_section:
             sections.append(conclusion_section)
 
-        # Charts
+        # ISSUE 3 FIX: Include 4 top-level charts alongside sections
         charts = []
-        chart = self.build_classification_chart()
-        if chart:
-            charts.append(chart)
+
+        # 1. Classification chart (complaint sub-category distribution)
+        classification_chart = self.build_classification_chart()
+        if classification_chart:
+            charts.append(classification_chart)
+
+        # 2. Service distribution chart
+        service_chart = self.build_service_distribution_chart()
+        if service_chart:
+            charts.append(service_chart)
+
+        # 3. Resolution status chart
+        resolution_chart = self.build_resolution_status_chart()
+        if resolution_chart:
+            charts.append(resolution_chart)
+
+        # 4. Severity chart
+        severity_chart = self.build_severity_chart()
+        if severity_chart:
+            charts.append(severity_chart)
 
         report["charts"] = charts
         report["sections"] = sections
