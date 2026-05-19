@@ -1229,16 +1229,37 @@ def show_inquiries_page(lang):
         </div>
         """, unsafe_allow_html=True)
 
-        report = process_file([st.session_state.uploaded_file], flow_type='inquiries', lang=lang)
+        try:
+            report = process_file([st.session_state.uploaded_file], flow_type='inquiries', lang=lang)
 
-        if report:
-            st.session_state.report_data = report
+            if report:
+                st.session_state.report_data = report
+                st.session_state.processing = False
+                st.session_state.completed = True
+                st.session_state.analysis_error = None
+                st.rerun()
+            else:
+                st.session_state.processing = False
+                st.session_state.analysis_error = "Analysis failed: Unknown error"
+                st.rerun()
+        except Exception as e:
+            print(f"[UI] Error during inquiries processing: {str(e)}")
+            import traceback
+            traceback.print_exc()
             st.session_state.processing = False
-            st.session_state.completed = True
+            st.session_state.analysis_error = f"Error: {str(e)}"
             st.rerun()
-        else:
+
+    if st.session_state.get('analysis_error'):
+        st.error(f"❌ {tx['success_title_inq']}: {st.session_state.analysis_error}")
+        if st.button(tx['btn_reset'], key='reset_inq_error', use_container_width=True):
+            st.session_state.uploaded_file = None
             st.session_state.processing = False
+            st.session_state.completed = False
+            st.session_state.report_data = None
+            st.session_state.analysis_error = None
             st.rerun()
+        return
 
     if st.session_state.completed and st.session_state.get('report_data'):
         st.markdown(f"""
@@ -1337,16 +1358,37 @@ def show_complaints_page(lang):
         </div>
         """, unsafe_allow_html=True)
 
-        report = process_file([st.session_state.uploaded_file], flow_type='complaints', lang=lang)
+        try:
+            report = process_file([st.session_state.uploaded_file], flow_type='complaints', lang=lang)
 
-        if report:
-            st.session_state.report_data = report
+            if report:
+                st.session_state.report_data = report
+                st.session_state.processing = False
+                st.session_state.completed = True
+                st.session_state.analysis_error = None
+                st.rerun()
+            else:
+                st.session_state.processing = False
+                st.session_state.analysis_error = "Analysis failed: Unknown error"
+                st.rerun()
+        except Exception as e:
+            print(f"[UI] Error during complaints processing: {str(e)}")
+            import traceback
+            traceback.print_exc()
             st.session_state.processing = False
-            st.session_state.completed = True
+            st.session_state.analysis_error = f"Error: {str(e)}"
             st.rerun()
-        else:
+
+    if st.session_state.get('analysis_error'):
+        st.error(f"❌ {tx['success_title_cmp']}: {st.session_state.analysis_error}")
+        if st.button(tx['btn_reset'], key='reset_cmp_error', use_container_width=True):
+            st.session_state.uploaded_file = None
             st.session_state.processing = False
+            st.session_state.completed = False
+            st.session_state.report_data = None
+            st.session_state.analysis_error = None
             st.rerun()
+        return
 
     if st.session_state.completed and st.session_state.get('report_data'):
         st.markdown(f"""
