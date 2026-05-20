@@ -376,7 +376,7 @@ class DynamicReportDisplay:
                                num_items: int,
                                provided_colors: Optional[list] = None,
                                num_series: Optional[int] = None) -> list:
-        if chart_type in ('bar', 'horizontalBar'):
+        if chart_type in ('bar', 'horizontalBar', 'column'):
             if num_series and num_series <= 1:
                 return ['#B68A35'] * num_items
             bar_colors = ['#B68A35', '#E5E5E5']

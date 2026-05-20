@@ -375,11 +375,11 @@ class JSONReportBuilder:
                     "data": [float(actual_counts.get(c, 0)) for c in categories]
                 },
                 {
-                    "name": "التصنيف الأصلي",   # series 1 → colors[1] = grey ✓
+                    "name": "التصنيف الأصلي",   # series 1 → colors[1] = light grey ✓
                     "data": [float(original_counts.get(c, 0)) for c in categories]
                 }
             ],
-            "colors": ["#B68A35", "#999999"]
+            "colors": ["#B68A35", "#E5E5E5"]
         }
 
     # ------------------------------------------------------------------
@@ -458,7 +458,7 @@ class JSONReportBuilder:
                     "data": [float(on_time), float(off_time)],
                 }
             ],
-            "colors": ["#B68A35", "#999999"],
+            "colors": ["#B68A35", "#E5E5E5"],
         }
 
     def build_severity_chart(self) -> Optional[Dict[str, Any]]:

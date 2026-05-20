@@ -21,16 +21,19 @@ def display_report_tabs(
         period: The period folder name (e.g. '2025', 'Q1_2026'). If None, uses root folder.
     """
     try:
-        report_data = st.session_state.get('report_data')
+        # Use flow-specific session state keys
+        state_key = f'{flow_type}_report_data'
+        report_data = st.session_state.get(state_key)
 
         if report_data:
-            # Determine cache dir based on flow_type
+            # Determine cache dir and flow path based on flow_type
+            real_dir = Path(__file__).parent
             if flow_type == 'complaints':
-                cache_dir = str(Path(__file__).parent / "complaints-output" / "cache")
-                flow_path = Path(__file__).parent / "complaints-flow" / "analysis" / "__init__.py"
+                cache_dir = str(real_dir / "complaints-flow" / "output" / "cache")
+                flow_path = real_dir / "complaints-flow" / "analysis" / "__init__.py"
             else:
-                cache_dir = str(Path(__file__).parent / "inquiries-output" / "cache")
-                flow_path = Path(__file__).parent / "inquiries-flow" / "analysis" / "__init__.py"
+                cache_dir = str(real_dir / "inquiries-flow" / "output" / "cache")
+                flow_path = real_dir / "inquiries-flow" / "analysis" / "__init__.py"
 
             # Load the appropriate flow's analysis module
             spec = importlib.util.spec_from_file_location(f"_{flow_type}_analysis", flow_path)
