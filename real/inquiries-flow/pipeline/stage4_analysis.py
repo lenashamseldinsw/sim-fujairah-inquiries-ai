@@ -256,17 +256,64 @@ ANALYSIS INSTRUCTIONS:
    - Include top_level and sub_classification
 
 5. NOTIFICATION OPPORTUNITIES - Where proactive messaging helps
-   - Status Follow-up cases: send automatic status updates
-   - Information gaps: send helpful tips before customer asks
-   - Annual processes: send calendar reminders
 
-   For proactive_notification_case_count: go through each case individually and count
-   those where the customer's contact could have been fully prevented by a single
-   proactive notification at the moment of service action (e.g., attaching the fine
-   vehicle photo to the fine notification, sending a delivery tracking link when a
-   document is dispatched, sending a status update when a case is processed). Do NOT
-   count cases that require a human decision, system correction, policy review, or
-   any back-and-forth interaction — those cannot be eliminated by notification alone.
+   DEFINITION — "proactive notification" means a single automated SMS or email sent
+   at the moment of a service action that would have given the customer all the
+   information they needed, so they never had to contact support at all.
+
+   ELIGIBLE buckets — count a case ONLY if it falls into one of these three:
+
+   A. WRONG VEHICLE IMAGE IN FINE NOTIFICATION
+      The fine notification was sent but showed the wrong vehicle photo or plate.
+      Adding the correct vehicle image to the notification SMS would have allowed
+      the customer to verify instantly — no call needed.
+      Sub-classification: "اعتراض على مخالفة مرورية" with السبب containing
+      "صورة المركبة في الإشعار تُظهر مركبة مختلفة".
+
+   B. NON-DELIVERY OF A DOCUMENT OR SERVICE ALREADY PROCESSED
+      The service was completed on the police side (licence printed, ownership
+      issued, payment confirmed) but the customer never received it or a tracking
+      link. An SMS with a delivery/tracking reference at dispatch would have
+      prevented all follow-up.
+      Sub-classifications: "شكوى عن عدم استلام الخدمة" where السبب contains
+      "شكوى عدم استقبال وثيقة أو خدمة", or "شكوى عن عدم استلام الخدمة" where
+      payment was taken but service not delivered.
+
+   C. PROCESSING DELAY WITH NO STATUS UPDATE
+      The customer submitted a request and received zero automated updates, so they
+      called to ask "what is happening with my case?" An automated milestone SMS
+      (submitted → under review → approved/rejected) would have eliminated the call.
+      Sub-classification: "شكوى عن تأخر المعالجة" / "شكوى على تأخر المعالجة".
+
+   INELIGIBLE — do NOT count, regardless of how the case reads:
+
+   ✗ "اعتراض صريح على مخالفة مرورية" — the citizen contests the fine's validity.
+     A notification cannot un-issue a fine or decide its legitimacy. Requires human
+     adjudication. NOT proactive-notification-preventable.
+
+   ✗ "اعتراض على مخالفة صحيحة (من الحل)" — fine confirmed correct in resolution.
+     Notification of a correctly-issued fine would not have prevented contact.
+
+   ✗ "خلل تقني / عطل في النظام" — platform bug (failed payment, duplicate charge,
+     system error). A notification cannot fix a broken system. Requires engineering.
+
+   ✗ "طلب تعديل أو تحديث بيانات" — data correction request. Requires staff with
+     system write access. A read-only notification cannot correct data.
+
+   ✗ "بلاغ أمني أو مروري" — security or traffic incident report. Customer is
+     reporting an event, not following up on a service. Cannot be pre-empted.
+
+   ✗ Any case where the resolution shows the customer needed a human decision,
+     a system fix, a policy review, or physical action (مراجعة / تدقيق / إجراء).
+
+   For proactive_notification_case_count: go through each case individually.
+   Apply the ELIGIBLE/INELIGIBLE rules above. Count each case at most once.
+   Count only cases that clearly match bucket A, B, or C above.
+   When in doubt, do NOT count — under-counting is safer than over-counting.
+
+   Also set root_cause_category = "no_proactive_notification" ONLY for journey_map
+   friction points that match buckets A, B, or C above. All other friction points
+   must use: platform_bug, missing_info, inaccessible_info, or policy_complexity.
 
 CRITICAL: All output must be in Arabic only. This includes:
   - Table cell content (topics, descriptions, recommendations)
@@ -868,6 +915,57 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         # Parse authoritative proactive notification case count
         if 'proactive_notification_case_count' in analysis:
             state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
+
+        # Validate proactive_notification_case_count against ground truth from journey_map.
+        # Only journey_map entries whose sub_classification falls within the three
+        # eligible notification buckets (wrong vehicle image, non-delivery, processing
+        # delay) are counted — all other root_cause_category="no_proactive_notification"
+        # entries are treated as mislabelled and silently excluded from the count.
+        _PROACTIVE_ELIGIBLE_SUBS = {
+            # Bucket A — wrong vehicle image in fine notification
+            "اعتراض على مخالفة مرورية",
+            # Bucket B — non-delivery of completed service
+            "شكوى عن عدم استلام الخدمة",
+            # Bucket C — processing delay with no status update
+            "شكوى على تأخر المعالجة",
+            "شكوى عن تأخر المعالجة",
+        }
+        proactive_friction_count = sum(
+            f.case_count for f in state.journey_map
+            if f.root_cause_category == "no_proactive_notification"
+            and (f.sub_classification or "") in _PROACTIVE_ELIGIBLE_SUBS
+        )
+        # Log any journey_map entries that claimed no_proactive_notification but
+        # were rejected by the allowlist so they can be reviewed.
+        rejected = [
+            f for f in state.journey_map
+            if f.root_cause_category == "no_proactive_notification"
+            and (f.sub_classification or "") not in _PROACTIVE_ELIGIBLE_SUBS
+        ]
+        if rejected:
+            print(
+                f"[Stage4] ALLOWLIST: {len(rejected)} journey_map entry(ies) claimed "
+                f"no_proactive_notification but sub_classification not in eligible set — excluded:"
+            )
+            for r in rejected:
+                print(f"  sub_classification={r.sub_classification!r}, "
+                      f"friction={r.friction_point_ar or r.friction_point!r}, "
+                      f"case_count={r.case_count}")
+
+        if proactive_friction_count > 0 and proactive_friction_count != state.proactive_notification_case_count:
+            print(
+                f"[Stage4] VALIDATION: proactive_notification_case_count discrepancy detected:\n"
+                f"  LLM returned: {state.proactive_notification_case_count}\n"
+                f"  Allowlist-filtered ground truth: {proactive_friction_count}\n"
+                f"  → Using allowlist-filtered count"
+            )
+            state.proactive_notification_case_count = proactive_friction_count
+        elif proactive_friction_count == 0 and state.proactive_notification_case_count > 0:
+            print(
+                f"[Stage4] VALIDATION: no eligible no_proactive_notification entries found "
+                f"in journey_map after allowlist filter. LLM count={state.proactive_notification_case_count} "
+                f"retained (journey_map may be incomplete — will be re-checked in Stage 5)."
+            )
 
         # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
         print("[Stage4] Reconciling case counts with authoritative data from all_classified...")

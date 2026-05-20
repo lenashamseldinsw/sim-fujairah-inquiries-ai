@@ -15,9 +15,10 @@ Guidebook is chunked and embedded at startup (chromadb, in-memory).
 
 import json
 import anthropic
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from collections import defaultdict
 from .state import PipelineState, PatternCluster, JourneyFriction, FAQCandidate
+from .json_utils import extract_methodology_context
 
 
 JOURNEY_MAP_ONLY_TOOL = {
@@ -40,7 +41,16 @@ JOURNEY_MAP_ONLY_TOOL = {
                         "friction_point_ar": {"type": "string"},
                         "root_cause_category": {
                             "type": "string",
-                            "enum": ["missing_info", "inaccessible_info", "no_proactive_notification", "platform_bug", "policy_complexity"]
+                            "enum": [
+                                "missing_info",
+                                "inaccessible_info",
+                                "no_proactive_notification",
+                                "platform_bug",
+                                "policy_complexity",
+                                "wrong_channel_used",
+                                "service_delivery_failure",
+                                "processing_delay"
+                            ]
                         },
                         "case_count": {"type": "integer"}
                     },
@@ -88,7 +98,19 @@ ANALYSIS_TOOL = {
                         "cluster_ar": {"type": "string"},
                         "friction_point": {"type": "string"},
                         "friction_point_ar": {"type": "string"},
-                        "root_cause_category": {"type": "string", "enum": ["missing_info", "inaccessible_info", "no_proactive_notification", "platform_bug", "policy_complexity"]},
+                        "root_cause_category": {
+                            "type": "string",
+                            "enum": [
+                                "missing_info",
+                                "inaccessible_info",
+                                "no_proactive_notification",
+                                "platform_bug",
+                                "policy_complexity",
+                                "wrong_channel_used",
+                                "service_delivery_failure",
+                                "processing_delay"
+                            ]
+                        },
                         "case_count": {"type": "integer"}
                     }
                 }
@@ -151,10 +173,38 @@ ANALYSIS_TOOL = {
 }
 
 
-def build_analysis_system_prompt() -> str:
-    """Build system prompt for analysis with two-level taxonomy."""
-    return """You are an expert business analyst for government customer service.
-Analyze customer inquiries and complaints to extract insights grouped by two-level classification.
+def build_analysis_system_prompt(methodology_context: Optional[Dict[str, Any]] = None) -> str:
+    """Build system prompt for analysis with two-level taxonomy and complaints-specific disambiguation.
+
+    Args:
+        methodology_context: Optional extracted methodology sections for additional context
+    """
+    methodology_header = ""
+    if methodology_context:
+        # Build compact Arabic text block with methodology context
+        methodology_header = "### السياق: منهجية إدارة الشكاوى الرسمية (الإصدار 4.0)\n\n"
+
+        # Add receiving channels
+        if methodology_context.get("5_1_receiving_channels"):
+            channels = methodology_context["5_1_receiving_channels"].get("channels", [])
+            if channels:
+                methodology_header += "**القنوات الرسمية المعتمدة:**\n"
+                methodology_header += "، ".join(channels) + "\n\n"
+
+        # Add registration 24h rule
+        if methodology_context.get("5_2_registration"):
+            methodology_header += "**مبدأ التواصل الفوري:** يجب التواصل مع المتعامل خلال 24 ساعة من استلام الشكوى للاستيضاح عن المعلومات الناقصة.\n\n"
+
+        # Add escalation rules
+        if methodology_context.get("5_4_processing"):
+            methodology_header += "**قواعد التصعيد:** يتم تصعيد الشكوى إلى مدير المركز في حال عدم القدرة على الحل في الوقت المحدد.\n\n"
+
+        # Add proactive response
+        if methodology_context.get("5_8_proactive_response"):
+            methodology_header += "**المبدأ الاستباقي:** يجب متابعة وحصر جميع الشكاوى واتخاذ حلول استباقية لمنع تكرارها.\n\n"
+
+    return methodology_header + """You are an expert business analyst for government customer service, specializing in complaint analysis.
+Analyze customer complaints to extract insights grouped by two-level classification.
 
 ANALYSIS INSTRUCTIONS:
 
@@ -165,72 +215,86 @@ ANALYSIS INSTRUCTIONS:
    - Return both top_level and sub_classification for each pattern
 
 2. JOURNEY MAP - Friction points customers experience
-   - What causes customers to contact Fujairah Police?
+   - What causes customers to lodge complaints with Fujairah Police?
    - Map each friction point to a specific sub_classification
    - CRITICAL: sub_classification MUST be copied EXACTLY as it appears in the
      "=== top_level > sub_classification ===" section headers provided in the input.
      Do NOT paraphrase, translate, or invent sub_classification values.
      If a friction point spans multiple sub_classifications, pick the single best match.
-   - What's the root cause? (missing info, inaccessible info, no proactive notification, platform bug, policy complexity)
+   - What's the root cause? (missing_info, inaccessible_info, no_proactive_notification,
+     platform_bug, policy_complexity, wrong_channel_used, service_delivery_failure, processing_delay)
    - How many cases per friction point?
    - Include top_level and sub_classification in each entry
 
-   CRITICAL DISAMBIGUATION — Traffic Fine Friction Points:
-   When cases show a citizen disputing a fine because "the photo shows a different vehicle"
-   or "the vehicle in the photo is not mine", the friction point is NOT "missing vehicle photo
-   in fine notification". The notification EXISTS — the problem is the photo shows the WRONG vehicle.
-   Correct friction_point_ar: "صورة المركبة في إشعار المخالفة تُظهر مركبة مختلفة"
-   Correct root_cause_category: "platform_bug" (radar plate-matching system error)
-   Do NOT classify this as "no_proactive_notification" — the notification was sent; the data is wrong.
+   COMPLAINTS PIPELINE — CRITICAL DISAMBIGUATION:
 
-   FRICTION POINT DISAMBIGUATION RULES:
+   1. WRONG CHANNEL USED (wrong_channel_used):
+      If a بلاغ (complaint) was submitted via the wrong channel (e.g., via inquiries channel
+      instead of the dedicated complaints platform, or through an inappropriate method), the
+      friction point is the channel miscommunication itself.
+      - friction_point_ar: "تقديم البلاغ عبر القناة الخاطئة"
+      - root_cause_category: "wrong_channel_used"
+      This indicates a communication or awareness gap about complaint routing.
 
-   1. "صورة المركبة تُظهر مركبة مختلفة / مخالفة على متعامل لم يكن في الفجيرة":
-      ONLY include cases where the citizen explicitly states:
-      (a) the photo shows a different vehicle/plate, OR
-      (b) they were physically absent from Fujairah on the date of the fine.
-      Do NOT include cases where the citizen merely disputes the fine amount,
-      requests removal of a fine confirmed non-existent, or asks about a fine
-      procedure — those belong to other friction groups or are standalone طلب cases.
+   2. TRAFFIC FINE DISPUTES - DISTINGUISH TYPES:
+      Fine-related complaints come in three distinct categories. Use context to classify correctly:
+      a) Disputed validity (citizen disputes the fine itself, questions radar accuracy, etc.)
+      b) Photo mismatch (citizen states "the photo shows a different vehicle/plate" OR
+         "I was not in Fujairah on that date")
+      c) Appeal mechanism (citizen is attempting to formally contest or appeal the fine)
+      Do NOT conflate these — each has different root causes and friction points.
 
-   2. "عدم وضوح حالة طلب تجديد الرخصة / تسجيل المركبة":
-      ONLY include cases where the citizen submitted a renewal or registration
-      request previously and is following up because they received NO status update.
-      Do NOT include cases where the citizen is asking about requirements,
-      making a first-time request, or following up on a fine-related matter.
+   3. MISCONCEPTIONS IN FINE COMPLAINTS:
+      Citizens may believe fines can be appealed/cancelled because they don't understand the
+      process or lack confidence in its fairness. If the complaint shows skepticism about the
+      fine process but no evidence of actual delivery failure, the friction is policy confusion.
+      - friction_point_ar: "عدم وضوح آلية الاعتراض على المخالفات"
+      - root_cause_category: "policy_complexity"
 
-   3. "اعتراض على صحة المخالفة — غياب قناة رقمية":
-      ONLY include cases where the citizen is formally contesting the fine's
-      validity AND references the lack of a digital appeal channel.
-      Do NOT include cases that are mere inquiries about a fine, or cases where
-      the fine was confirmed non-existent in the resolution.
+   4. REPEATED COMPLAINTS (مكررة pattern):
+      If a complaint references an earlier complaint or case that was not resolved to the
+      citizen's satisfaction, and this is a follow-up, the friction point is lack of
+      proactive resolution follow-up.
+      - friction_point_ar: "عدم المتابعة الاستباقية بعد تقديم بلاغ سابق"
+      - root_cause_category: "no_proactive_notification"
+      This indicates the system failed to proactively communicate closure/status.
 
-   FREQUENCY COUNTING RULE (reinforced):
-   Count each case exactly once. A case can only belong to ONE friction cluster.
-   If a case has features matching multiple clusters, assign it to the cluster
-   that best describes the PRIMARY friction experienced.
+   5. UNRESOLVED حفظ البلاغ (FILE PRESERVATION):
+      If a citizen complains that a بلاغ was "حفظ" (filed/preserved) without follow-up or
+      notification, the friction is absence of proactive status updates.
+      - friction_point_ar: "حفظ البلاغ بدون إخطار الشاكي بالحالة"
+      - root_cause_category: "no_proactive_notification"
+      Customer did not receive ANY update after filing.
 
-   CASE-LEVEL COUNTING — HOW TO DERIVE case_count:
-   The section headers show the TOTAL cases per sub_classification group (e.g. "(8 cases)").
-   These group totals are NOT the case_count for a friction point.
+   6. OUT-OF-JURISDICTION CASES:
+      If a complaint involves a matter clearly outside Fujairah Police authority (e.g., civil
+      disputes, federal matters, or issues belonging to other emirates), the friction is
+      policy/scope clarity.
+      - friction_point_ar: "عدم وضوح نطاق الاختصاص والسلطات"
+      - root_cause_category: "policy_complexity"
+      Do NOT classify as service_delivery_failure — this is a scope issue, not a failure.
 
-   case_count = the number of individual cases whose description OR resolution text
-   contains explicit evidence of this specific friction point's qualifying criteria
-   (defined in the disambiguation rules above).
+   FRICTION POINT COUNTING RULES:
+
+   Each case belongs to exactly ONE friction cluster. When a case has multiple potential
+   friction points, assign it to the PRIMARY one that best describes why the customer
+   filed the complaint.
+
+   case_count = the number of individual cases whose description OR resolution text contains
+   explicit evidence of this specific friction point (using the disambiguation rules above).
 
    To count correctly:
-   1. Read each case in the relevant group(s) individually.
-   2. Ask: does THIS case's text explicitly demonstrate the friction?
-      - For wrong-vehicle / absent-from-Fujairah: only count if the case text says
-        "صورة المخالفة تُظهر سيارة أخرى" OR "لم أكن في الفجيرة" (or equivalent).
-        Do NOT count cases that merely dispute a fine without this specific evidence.
-      - For licence renewal / no status update: only count if the citizen previously
-        submitted a request and is following up because they received NO update.
-        Do NOT count first-time requests or requirement inquiries.
+   1. Read each case individually.
+   2. Ask: does THIS case's text clearly demonstrate the friction?
+      - For wrong_channel_used: does complaint say it was submitted wrongly or in wrong place?
+      - For fine disputes: is the core complaint about validity, photo mismatch, or appeal?
+      - For مكررة: does the complaint reference an earlier unresolved case?
+      - For حفظ without notification: was the بلاغ filed but citizen received no updates?
+      - For out-of-jurisdiction: is the issue clearly outside Fujairah's scope?
    3. case_count = sum of cases that pass step 2.
 
    Do NOT use the group header total as case_count.
-   When in doubt about a case, do NOT count it.
+   When in doubt, do NOT count the case.
    Under-counting is always safer than over-counting.
 
 3. FAQs - Questions answered repeatedly in the resolution
@@ -256,64 +320,17 @@ ANALYSIS INSTRUCTIONS:
    - Include top_level and sub_classification
 
 5. NOTIFICATION OPPORTUNITIES - Where proactive messaging helps
+   - Status Follow-up cases: send automatic status updates
+   - Information gaps: send helpful tips before customer complains
+   - Policy clarifications: proactively explain appeal processes
 
-   DEFINITION — "proactive notification" means a single automated SMS or email sent
-   at the moment of a service action that would have given the customer all the
-   information they needed, so they never had to contact support at all.
-
-   ELIGIBLE buckets — count a case ONLY if it falls into one of these three:
-
-   A. WRONG VEHICLE IMAGE IN FINE NOTIFICATION
-      The fine notification was sent but showed the wrong vehicle photo or plate.
-      Adding the correct vehicle image to the notification SMS would have allowed
-      the customer to verify instantly — no call needed.
-      Sub-classification: "اعتراض على مخالفة مرورية" with السبب containing
-      "صورة المركبة في الإشعار تُظهر مركبة مختلفة".
-
-   B. NON-DELIVERY OF A DOCUMENT OR SERVICE ALREADY PROCESSED
-      The service was completed on the police side (licence printed, ownership
-      issued, payment confirmed) but the customer never received it or a tracking
-      link. An SMS with a delivery/tracking reference at dispatch would have
-      prevented all follow-up.
-      Sub-classifications: "شكوى عن عدم استلام الخدمة" where السبب contains
-      "شكوى عدم استقبال وثيقة أو خدمة", or "شكوى عن عدم استلام الخدمة" where
-      payment was taken but service not delivered.
-
-   C. PROCESSING DELAY WITH NO STATUS UPDATE
-      The customer submitted a request and received zero automated updates, so they
-      called to ask "what is happening with my case?" An automated milestone SMS
-      (submitted → under review → approved/rejected) would have eliminated the call.
-      Sub-classification: "شكوى عن تأخر المعالجة" / "شكوى على تأخر المعالجة".
-
-   INELIGIBLE — do NOT count, regardless of how the case reads:
-
-   ✗ "اعتراض صريح على مخالفة مرورية" — the citizen contests the fine's validity.
-     A notification cannot un-issue a fine or decide its legitimacy. Requires human
-     adjudication. NOT proactive-notification-preventable.
-
-   ✗ "اعتراض على مخالفة صحيحة (من الحل)" — fine confirmed correct in resolution.
-     Notification of a correctly-issued fine would not have prevented contact.
-
-   ✗ "خلل تقني / عطل في النظام" — platform bug (failed payment, duplicate charge,
-     system error). A notification cannot fix a broken system. Requires engineering.
-
-   ✗ "طلب تعديل أو تحديث بيانات" — data correction request. Requires staff with
-     system write access. A read-only notification cannot correct data.
-
-   ✗ "بلاغ أمني أو مروري" — security or traffic incident report. Customer is
-     reporting an event, not following up on a service. Cannot be pre-empted.
-
-   ✗ Any case where the resolution shows the customer needed a human decision,
-     a system fix, a policy review, or physical action (مراجعة / تدقيق / إجراء).
-
-   For proactive_notification_case_count: go through each case individually.
-   Apply the ELIGIBLE/INELIGIBLE rules above. Count each case at most once.
-   Count only cases that clearly match bucket A, B, or C above.
-   When in doubt, do NOT count — under-counting is safer than over-counting.
-
-   Also set root_cause_category = "no_proactive_notification" ONLY for journey_map
-   friction points that match buckets A, B, or C above. All other friction points
-   must use: platform_bug, missing_info, inaccessible_info, or policy_complexity.
+   For proactive_notification_case_count: go through each case individually and count
+   those where the customer's complaint could have been fully prevented by a single
+   proactive notification at the moment of service action (e.g., sending appeal process
+   information with a fine, notifying of complaint receipt and estimated timeline,
+   sending proactive updates on complaint status). Do NOT count cases that require a
+   human decision, system correction, policy review, or any back-and-forth interaction
+   — those cannot be eliminated by notification alone.
 
 CRITICAL: All output must be in Arabic only. This includes:
   - Table cell content (topics, descriptions, recommendations)
@@ -323,25 +340,6 @@ CRITICAL: All output must be in Arabic only. This includes:
 Only exceptions: Proper nouns such as 'MOI', 'SMS', 'OTP', 'UAE PASS' which remain in Latin script as universal brand names.
 Be specific with example case IDs and counts.
 """
-
-
-def _overlap_ratio(text_a: str, text_b: str, min_word_len: int = 3) -> float:
-    """
-    Compute word overlap ratio between two Arabic strings.
-    Returns the proportion of words in text_a that also appear in text_b.
-    Words shorter than min_word_len are ignored (prepositions, particles, etc.).
-    Returns 0.0 if text_a has no qualifying words.
-    """
-    def words(text):
-        return set(w for w in (text or "").strip().split() if len(w) >= min_word_len)
-
-    words_a = words(text_a)
-    words_b = words(text_b)
-
-    if not words_a:
-        return 0.0
-
-    return len(words_a & words_b) / len(words_a)
 
 
 def _reconcile_counts(
@@ -394,45 +392,11 @@ def _reconcile_counts(
         actual_count = actual_counts.get(friction.sub_classification)
 
         if actual_count is not None:
-            # Count cases that match BOTH sub_classification AND classification_reason.
-            # classification_reason is set deterministically by Stage 2 rules, and
-            # best-effort by Stage 3 LLM — making it a reliable friction-point-level filter.
-            friction_label = (
-                friction.friction_point_ar or
-                friction.friction_point or
-                friction.cluster_ar or
-                friction.cluster or ""
-            ).strip()
-
-            OVERLAP_THRESHOLD = 0.5  # at least 50% of friction_label words must appear in classification_reason
-
-            if friction_label:
-                reason_matched = sum(
-                    1 for case in all_classified
-                    if case.sub_classification == friction.sub_classification
-                    and _overlap_ratio(friction_label, case.classification_reason) >= OVERLAP_THRESHOLD
-                )
-            else:
-                reason_matched = 0
-
+            # Exact sub_classification match — cap and deduct from budget
+            # to prevent two friction points from double-counting the same cases
             remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
-
-            if reason_matched > 0:
-                # Use reason-level count, capped at remaining budget to prevent double-counting
-                reconciled_count = min(reason_matched, remaining_budget)
-            else:
-                # No classification_reason match (e.g. Stage 3 free-text reason doesn't match
-                # friction_point_ar exactly) — fall back to full remaining budget as before
-                reconciled_count = remaining_budget
-                print(
-                    f"[Stage4] FALLBACK: no classification_reason match for friction "
-                    f"'{friction_label}' in sub_classification '{friction.sub_classification}'. "
-                    f"Using full remaining budget ({remaining_budget})."
-                )
-
-            sub_classification_budget[friction.sub_classification] = max(
-                0, remaining_budget - reconciled_count
-            )
+            reconciled_count = remaining_budget
+            sub_classification_budget[friction.sub_classification] = 0
         else:
             # No exact match — LLM returned an approximate or merged sub_classification.
             # Try word-overlap against actual_counts keys to find the closest match.
@@ -602,7 +566,7 @@ def _retry_faq_only(
     reduce cognitive load on the model. Runs up to 2 additional attempts.
     """
     system_prompt = (
-        "You are an expert business analyst for government customer service. "
+        "You are an expert business analyst for government customer service, specializing in complaint analysis. "
         "Your ONLY task is to identify the most common questions customers asked and the answers "
         "they received, based on the case descriptions and resolutions provided. "
         "For every sub-classification group provided, return at least one FAQ. "
@@ -611,7 +575,7 @@ def _retry_faq_only(
     )
 
     base_user_content = (
-        "Extract FAQ candidates from these customer service cases.\n"
+        "Extract FAQ candidates from these customer complaint cases.\n"
         "Return at least one FAQ per sub-classification group.\n\n"
         + cases_text
     )
@@ -688,18 +652,19 @@ def _retry_journey_map_only(
     Runs up to 2 additional attempts.
     """
     system_prompt = (
-        "You are an expert business analyst for government customer service. "
-        "Your ONLY task is to identify the friction points that caused customers to contact "
-        "Fujairah Police — i.e., the reasons behind each enquiry group. "
+        "You are an expert business analyst for government customer service, specializing in complaint analysis. "
+        "Your ONLY task is to identify the friction points that caused customers to file complaints "
+        "with Fujairah Police — i.e., the reasons behind each complaint group. "
         "For every sub-classification group provided, return at least one friction point. "
         "All text (cluster_ar, friction_point_ar) MUST be in Arabic. "
         "root_cause_category must be one of: missing_info, inaccessible_info, "
-        "no_proactive_notification, platform_bug, policy_complexity. "
+        "no_proactive_notification, platform_bug, policy_complexity, wrong_channel_used, "
+        "service_delivery_failure, processing_delay. "
         "case_count must not exceed the group size shown in the input."
     )
 
     base_user_content = (
-        "Identify the customer journey friction points for these case groups.\n"
+        "Identify the customer journey friction points for these complaint groups.\n"
         "Return at least one friction point per sub-classification group.\n\n"
         + cases_text
     )
@@ -710,7 +675,7 @@ def _retry_journey_map_only(
             if attempt == 1
             else (
                 "\n\nYour previous response returned an empty journey_map. "
-                "Every group listed above has a reason customers contacted support — "
+                "Every group listed above has a reason customers filed a complaint — "
                 "identify it. Return at least one friction point per group."
             )
         )
@@ -786,6 +751,21 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
 
     client = anthropic.Anthropic(api_key=api_key)
 
+    # Extract methodology context if present
+    methodology_context = None
+    if state.complaints_methodology:
+        methodology_context = extract_methodology_context(
+            state.complaints_methodology,
+            [
+                "5_procedures.5_1_receiving_channels",
+                "5_procedures.5_2_registration",
+                "5_procedures.5_4_processing",
+                "5_procedures.5_8_proactive_response"
+            ]
+        )
+        if any(methodology_context.values()):
+            print("[Stage4] Loaded methodology context for LLM prompt")
+
     # Aggregate cases by (top_level, sub_classification) tuple for structured analysis
     groups = defaultdict(list)
     for case in state.all_classified:
@@ -813,7 +793,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             cases_text += f"  Description: {case.description[:150]}\n"
             cases_text += f"  Resolution: {case.resolution_response[:150]}\n"
 
-    base_user_content = f"Analyze these customer service cases grouped by two-level classification:\n{cases_text}"
+    base_user_content = f"Analyze these customer complaint cases grouped by two-level classification:\n{cases_text}"
 
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
@@ -825,7 +805,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                 base_user_content
                 + "\n\nIMPORTANT: Your previous response returned an empty journey_map. "
                 "Every real customer service dataset has friction points — reasons customers "
-                "had to contact support that could have been prevented. Look carefully at the "
+                "filed complaints that could have been prevented. Look carefully at the "
                 "case descriptions and identify at least one friction point per sub-classification "
                 "group. Do NOT return an empty journey_map array."
             )
@@ -915,57 +895,6 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         # Parse authoritative proactive notification case count
         if 'proactive_notification_case_count' in analysis:
             state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
-
-        # Validate proactive_notification_case_count against ground truth from journey_map.
-        # Only journey_map entries whose sub_classification falls within the three
-        # eligible notification buckets (wrong vehicle image, non-delivery, processing
-        # delay) are counted — all other root_cause_category="no_proactive_notification"
-        # entries are treated as mislabelled and silently excluded from the count.
-        _PROACTIVE_ELIGIBLE_SUBS = {
-            # Bucket A — wrong vehicle image in fine notification
-            "اعتراض على مخالفة مرورية",
-            # Bucket B — non-delivery of completed service
-            "شكوى عن عدم استلام الخدمة",
-            # Bucket C — processing delay with no status update
-            "شكوى على تأخر المعالجة",
-            "شكوى عن تأخر المعالجة",
-        }
-        proactive_friction_count = sum(
-            f.case_count for f in state.journey_map
-            if f.root_cause_category == "no_proactive_notification"
-            and (f.sub_classification or "") in _PROACTIVE_ELIGIBLE_SUBS
-        )
-        # Log any journey_map entries that claimed no_proactive_notification but
-        # were rejected by the allowlist so they can be reviewed.
-        rejected = [
-            f for f in state.journey_map
-            if f.root_cause_category == "no_proactive_notification"
-            and (f.sub_classification or "") not in _PROACTIVE_ELIGIBLE_SUBS
-        ]
-        if rejected:
-            print(
-                f"[Stage4] ALLOWLIST: {len(rejected)} journey_map entry(ies) claimed "
-                f"no_proactive_notification but sub_classification not in eligible set — excluded:"
-            )
-            for r in rejected:
-                print(f"  sub_classification={r.sub_classification!r}, "
-                      f"friction={r.friction_point_ar or r.friction_point!r}, "
-                      f"case_count={r.case_count}")
-
-        if proactive_friction_count > 0 and proactive_friction_count != state.proactive_notification_case_count:
-            print(
-                f"[Stage4] VALIDATION: proactive_notification_case_count discrepancy detected:\n"
-                f"  LLM returned: {state.proactive_notification_case_count}\n"
-                f"  Allowlist-filtered ground truth: {proactive_friction_count}\n"
-                f"  → Using allowlist-filtered count"
-            )
-            state.proactive_notification_case_count = proactive_friction_count
-        elif proactive_friction_count == 0 and state.proactive_notification_case_count > 0:
-            print(
-                f"[Stage4] VALIDATION: no eligible no_proactive_notification entries found "
-                f"in journey_map after allowlist filter. LLM count={state.proactive_notification_case_count} "
-                f"retained (journey_map may be incomplete — will be re-checked in Stage 5)."
-            )
 
         # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
         print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
