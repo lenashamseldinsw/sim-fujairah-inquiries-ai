@@ -360,6 +360,14 @@ def generate_digital_gaps_section(
     friction_digital_context_pct = _friction_digital_context_pct(state)
     gap_rows           = _build_gap_rows(state)
     root_cause_rows    = _build_root_cause_rows(state)
+    # Sum of case counts across ALL root cause categories — used to clarify
+    # that any total cited in section 5.2 is cumulative, not sub-type-specific.
+    total_rc_cases = sum(
+        int(r["مثال على التحدي"].split()[0])
+        for r in root_cause_rows
+        if r.get("مثال على التحدي", "").split()
+        and r["مثال على التحدي"].split()[0].isdigit()
+    )
     gap_context        = _build_gap_prompt_context(state)
     root_cause_context = _build_root_cause_prompt_context(state, root_cause_rows)
 
@@ -447,8 +455,12 @@ def generate_digital_gaps_section(
         )
         + f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
         + f'     citing «{top_gap_name}» as the largest ({top_gap_count} cases). Use « » (angle brackets), never double quotes, around topic names.\n'
-        + proactive_instruction +
-        '\n'
+        + proactive_instruction
+        + f'   - When referencing the total of {total_rc_cases} cases in the root causes table:\n'
+        + f'     Clarify explicitly that this is the cumulative total across ALL root cause\n'
+        + f'     sub-types in the table (خطأ تقني + ضعف الإشعار الاستباقي + تعقيد السياسات + غيرها).\n'
+        + f'     Do NOT imply it refers only to the specific platform failures mentioned in section 5.1.\n'
+        + '\n'
         'B. "وضع التطبيق / الموقع الحالي" for EVERY row in pre_computed_gap_table\n'
         '   - Use guidebook_excerpt + guidebook_status from gap_context.\n'
         '   - Describe what currently exists in the app/website AND what is missing.\n'

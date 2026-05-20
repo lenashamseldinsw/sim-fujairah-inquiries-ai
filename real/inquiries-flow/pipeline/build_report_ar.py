@@ -81,7 +81,6 @@ def _find_subsection(sections, id_fragment: str):
 def _extract_cover_stats(data: dict):
     """Derive headline KPIs for the cover page from JSON content."""
     complaint_pct = ""
-    ontime_pct = "98%"  # fallback
 
     # Task 2 Fix: Read closed_cases_count from metadata (set by stage6_json_report build_metadata).
     # This is the count of rows where تاريخ_إغلاق_الطلب is non-empty in the input file,
@@ -107,15 +106,25 @@ def _extract_cover_stats(data: dict):
                 if row.get("نوع التواصل") == "شكوى":
                     complaint_pct = row.get("النسبة", "")
 
-    # Section النتائج الرئيسية: find the green / positive finding (98% on-time)
-    sec_findings = _find_subsection(data["sections"], "النتائج_الرئيسية")
-    if sec_findings:
-        for table in sec_findings.get("tables", []):
-            for row in table.get("rows", []):
-                if "🟢" in row.get("مستوى الأهمية", ""):
-                    disc = row.get("الاكتشاف", "")
-                    if "98%" in disc:
-                        ontime_pct = "98%"
+    # Read SLA rate directly from metadata — no hardcoded fallback
+    sla_rate_pct = data.get("metadata", {}).get("sla_rate_pct", None)
+    if sla_rate_pct is not None:
+        ontime_pct = f"{sla_rate_pct}%"
+    else:
+        # Fallback: parse from 🟢 finding text
+        ontime_pct = ""
+        sec_findings = _find_subsection(data["sections"], "النتائج_الرئيسية")
+        if sec_findings:
+            for table in sec_findings.get("tables", []):
+                for row in table.get("rows", []):
+                    if "🟢" in row.get("مستوى الأهمية", ""):
+                        disc = row.get("الاكتشاف", "")
+                        import re
+                        m = re.search(r'(\d+(?:\.\d+)?%)', disc)
+                        if m:
+                            ontime_pct = m.group(1)
+        if not ontime_pct:
+            ontime_pct = "—"
 
     return closed_cases_count, complaint_pct, ontime_pct
 
@@ -271,6 +280,8 @@ def _render_chart(builder: WordBuilder, chart: dict):
             CHART_STYLE,
             series_colors=[c.lstrip("#") for c in colors],
         )
+    if chart_type == "bar":
+        chart_type = "column"
 
     builder.add_chart(
         chart_data,

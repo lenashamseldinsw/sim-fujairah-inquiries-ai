@@ -485,6 +485,34 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
             )
         state.proactive_notification_case_count = deterministic_proactive_count
 
+        # Restrict proactive_notification_opportunity to only gap rows whose
+        # sub_classification matches a journey_map friction with
+        # root_cause_category == 'no_proactive_notification'.
+        # Prevents Stage 5 from over-flagging gap rows for platform_bug or
+        # other root causes that are not actually notification-resolvable.
+        proactive_sub_classes = {
+            f.sub_classification
+            for f in (state.journey_map or [])
+            if f.root_cause_category == 'no_proactive_notification'
+            and f.sub_classification
+        }
+
+        if proactive_sub_classes:
+            for gap in state.gap_table:
+                if gap.proactive_notification_opportunity:
+                    if gap.sub_classification not in proactive_sub_classes:
+                        gap.proactive_notification_opportunity = False
+
+            # Recompute after restriction
+            state.proactive_notification_case_count = sum(
+                g.case_count for g in state.gap_table
+                if g.proactive_notification_opportunity
+            )
+            print(
+                f"[GenSections] After proactive sub_classification restriction: "
+                f"proactive_notification_case_count={state.proactive_notification_case_count}"
+            )
+
     # Re-reconcile notification_opportunities against the corrected count.
     # _reconcile_counts() in stage4 already did this, but used the wrong cap.
     if state.notification_opportunities and state.proactive_notification_case_count > 0:
@@ -496,12 +524,22 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
             corrected = []
             for n in state.notification_opportunities:
                 llm_count = n.get('cases_eliminated', 0)
-                if not isinstance(llm_count, int):
-                    corrected.append(n)
+                if not isinstance(llm_count, int) or llm_count == 0:
+                    corrected.append({**n, 'cases_eliminated': 0} if isinstance(llm_count, int) else n)
                     continue
                 scaled = round(llm_count / llm_total * state.proactive_notification_case_count)
-                scaled = max(1, scaled) if llm_count > 0 else 0
+                # Do NOT apply max(1, scaled) — that inflates totals when there are many rows
                 corrected.append({**n, 'cases_eliminated': scaled})
+
+            # Final clamp: if rounding caused sum to exceed target, trim the last non-zero row
+            scaled_total = sum(n.get('cases_eliminated', 0) for n in corrected)
+            overflow = scaled_total - state.proactive_notification_case_count
+            if overflow > 0:
+                for n in reversed(corrected):
+                    if n.get('cases_eliminated', 0) > 0:
+                        n['cases_eliminated'] = max(0, n['cases_eliminated'] - overflow)
+                        break
+
             state.notification_opportunities = corrected
             print(
                 f"[GenSections] Re-reconciled notification_opportunities: "
@@ -881,18 +919,27 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         dominant_type_count = distribution.get(dominant_type, 0)
         dominant_type_pct = (dominant_type_count / total_cases * 100) if total_cases > 0 else 0
 
-        # Extract complaint subcategories from patterns
+        # Build complaint_subcategories deterministically from all_classified.
+        # state.patterns uses LLM-generated sub_theme groupings which may merge
+        # distinct sub_classifications (e.g. PCC + driving license under one label),
+        # inflating counts. Ground-truth grouping is by sub_classification field.
         complaint_subcategories = []
-        if state.patterns:
-            complaint_patterns = [p for p in state.patterns if 'شكوى' in (p.cluster_ar or p.cluster)]
-            complaint_patterns.sort(key=lambda x: x.case_count, reverse=True)
-            for pattern in complaint_patterns[:10]:
-                pct = (pattern.case_count / dominant_type_count * 100) if dominant_type_count > 0 else 0
-                complaint_subcategories.append({
-                    'name': pattern.sub_theme_ar or pattern.sub_theme,
-                    'count': pattern.case_count,
-                    'pct_of_complaints': pct
-                })
+        complaint_sub_counts: dict = {}
+        for case in all_classified:
+            if case.top_level == 'شكوى' and case.sub_classification:
+                complaint_sub_counts[case.sub_classification] = (
+                    complaint_sub_counts.get(case.sub_classification, 0) + 1
+                )
+        complaint_sub_sorted = sorted(
+            complaint_sub_counts.items(), key=lambda x: x[1], reverse=True
+        )
+        for sub_class, count in complaint_sub_sorted[:10]:
+            pct = (count / dominant_type_count * 100) if dominant_type_count > 0 else 0
+            complaint_subcategories.append({
+                'name': sub_class,
+                'count': count,
+                'pct_of_complaints': pct
+            })
 
         # Extract friction points
         friction_points = []
@@ -932,7 +979,10 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
 
         # FIX: Pre-compute findings table deterministically from state before LLM call
         # Avoids LLM inventing ambiguous case-count titles
-        friction_count = len(state.journey_map or [])
+        # Exclude zero-case friction points — a friction with case_count=0 is a gap
+        # recommendation, not an observed friction. The LLM validation rule uses this
+        # number as the upper bound for valid finding headlines.
+        friction_count = sum(1 for f in (state.journey_map or []) if f.case_count > 0)
 
         # Authoritative per-root-cause totals from the full journey_map (not the first-10 slice).
         # Passed to _build_pre_computed_findings so row 4 uses the correct grouped case count.
@@ -1671,7 +1721,8 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
             raise ValueError("guidebook_topics not set - Stage 5 must complete successfully first")
         guidebook_topics_str = ', '.join(state.guidebook_topics[:5])  # Limit to 5 topics
         if len(state.guidebook_topics) > 5:
-            guidebook_topics_str += f", and {len(state.guidebook_topics) - 5} more"
+            remaining = len(state.guidebook_topics) - 5
+            guidebook_topics_str += f"، و{remaining} موضوعاً آخر"
 
         # Compute pattern distribution by top_level type
         patterns_by_type = {}

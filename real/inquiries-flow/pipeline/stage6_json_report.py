@@ -330,6 +330,10 @@ class JSONReportBuilder:
 
     def build_metadata(self) -> Dict[str, Any]:
         """Build document metadata."""
+        sla_closed = sum(1 for c in self.state.all_classified if c.sla_color == 'نعم')
+        total = self.state.total_cases or 1
+        sla_rate_pct = round(sla_closed / total * 100, 1)
+
         return {
             "extraction_version": 1,
             "document_name": f"تقرير تحليل استفسارات المتعاملين — {convert_month_year_to_arabic(self.state.month_year) or 'Q1 2026'}",
@@ -343,6 +347,8 @@ class JSONReportBuilder:
                 "total_tables": len(self.state.gap_table) + 3,
                 "total_cases": self.state.total_cases,
                 "closed_cases_count": self.state.closed_cases_count,
+                "sla_closed": sla_closed,
+                "sla_rate_pct": sla_rate_pct,
             }
         }
 
