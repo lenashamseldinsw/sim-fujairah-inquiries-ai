@@ -439,7 +439,7 @@ def run_stage5(
 
                 # Build list of distinct sub_classifications and their total case counts from all_classified
                 sub_to_count: Dict[str, int] = {}
-                for case in all_classified:
+                for case in state.all_classified:
                     if case.sub_classification:
                         sub_to_count[case.sub_classification] = sub_to_count.get(case.sub_classification, 0) + 1
 
