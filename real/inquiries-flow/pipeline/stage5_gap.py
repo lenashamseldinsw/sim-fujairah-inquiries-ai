@@ -437,40 +437,55 @@ def run_stage5(
                 for case in state.all_classified:
                     actual_sub_counts[case.sub_classification] += 1
 
-                # Bridge: journey_map cluster text → set of sub_classifications it covers.
-                # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
-                cluster_to_subs: dict = defaultdict(set)
-                for friction in state.journey_map:
-                    if not friction.sub_classification:
-                        continue
-                    # Index by every available text field so gap topic matching has maximum coverage
-                    for text_field in [
-                        friction.cluster_ar,
-                        friction.cluster,
-                        friction.friction_point_ar,
-                        friction.friction_point,
-                    ]:
-                        key = (text_field or "").strip().lower()
-                        if key:
-                            cluster_to_subs[key].add(friction.sub_classification)
+                # Build list of distinct sub_classifications and their total case counts from all_classified
+                sub_to_count: Dict[str, int] = {}
+                for case in all_classified:
+                    if case.sub_classification:
+                        sub_to_count[case.sub_classification] = sub_to_count.get(case.sub_classification, 0) + 1
 
-                # Re-derive each gap row's case_count by summing actual counts of all
-                # sub_classifications whose journey_map cluster overlaps with the gap topic.
+                # Assign each sub_classification to its BEST matching gap (avoid overlapping assignment)
+                # This prevents double-counting when multiple gaps have overlapping topics
+                sub_to_gap: Dict[str, str] = {}  # sub_classification → gap topic
+                gap_to_subs: Dict[str, set] = defaultdict(set)
+
                 for gap in state.gap_table:
                     topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
-                    matched_subs: set = set()
 
-                    for cluster_key, subs in cluster_to_subs.items():
-                        if cluster_key in topic_lower or topic_lower in cluster_key:
-                            matched_subs.update(subs)
+                    for sub in sub_to_count.keys():
+                        if sub in sub_to_gap:  # Already assigned to a gap
+                            continue
 
-                    if matched_subs:
-                        reconciled = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
+                        # Check if sub_classification appears in any journey_map entry with this gap's topic
+                        matched = False
+                        for friction in state.journey_map:
+                            if friction.sub_classification != sub:
+                                continue
+                            # Match if any friction text field contains or is contained in the gap topic
+                            for text_field in [friction.cluster_ar, friction.cluster, friction.friction_point_ar, friction.friction_point]:
+                                if not text_field:
+                                    continue
+                                field_lower = text_field.strip().lower()
+                                # Use longest match to prefer more specific gaps
+                                if field_lower in topic_lower or (field_lower and topic_lower in field_lower):
+                                    sub_to_gap[sub] = gap.topic_ar or gap.topic
+                                    gap_to_subs[gap.topic_ar or gap.topic].add(sub)
+                                    matched = True
+                                    break
+                            if matched:
+                                break
+
+                # Re-derive each gap row's case_count from assigned sub_classifications
+                for gap in state.gap_table:
+                    gap_label = gap.topic_ar or gap.topic
+                    assigned_subs = gap_to_subs.get(gap_label, set())
+
+                    if assigned_subs:
+                        reconciled = sum(sub_to_count.get(s, 0) for s in assigned_subs)
                         if reconciled > 0 and reconciled != gap.case_count:
                             print(
                                 f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
                                 f"{gap.case_count} → {reconciled} "
-                                f"(subs: {matched_subs})"
+                                f"(assigned subs: {assigned_subs})"
                             )
                             gap.case_count = reconciled
 
@@ -511,5 +526,18 @@ def run_stage5(
 
     if not state.gap_table:
         print(f"[Stage5] WARNING: gap_table is empty after all {MAX_ATTEMPTS} LLM attempts — tool call may have failed or guidebook content unavailable")
+
+    # INVARIANT CHECK: Verify proactive_notification_case_count against gap table
+    if state.gap_table and state.proactive_notification_case_count:
+        proactive_gaps = [g for g in state.gap_table if g.proactive_notification_opportunity]
+        proactive_from_gaps = sum(g.case_count for g in proactive_gaps)
+        if proactive_from_gaps != state.proactive_notification_case_count:
+            print(
+                f"[Stage5] INVARIANT VIOLATION: proactive notification case count mismatch:\n"
+                f"  state.proactive_notification_case_count: {state.proactive_notification_case_count}\n"
+                f"  Sum of proactive-flagged gap case_counts: {proactive_from_gaps}\n"
+                f"  DISCREPANCY: {abs(proactive_from_gaps - state.proactive_notification_case_count)} cases\n"
+                f"  This indicates a reconciliation error in Stage 4 or Stage 5."
+            )
 
     return state

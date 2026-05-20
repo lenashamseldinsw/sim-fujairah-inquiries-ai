@@ -869,6 +869,21 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         if 'proactive_notification_case_count' in analysis:
             state.proactive_notification_case_count = int(analysis['proactive_notification_case_count'])
 
+        # Validate proactive_notification_case_count against ground truth from journey_map
+        # Recount cases where root_cause_category is "no_proactive_notification" (the preventable category)
+        proactive_friction_count = sum(
+            f.case_count for f in state.journey_map
+            if f.root_cause_category == "no_proactive_notification"
+        )
+        if proactive_friction_count > 0 and proactive_friction_count != state.proactive_notification_case_count:
+            print(
+                f"[Stage4] VALIDATION: proactive_notification_case_count discrepancy detected:\n"
+                f"  LLM returned: {state.proactive_notification_case_count}\n"
+                f"  Ground truth (from no_proactive_notification friction): {proactive_friction_count}\n"
+                f"  → Using ground truth count instead of LLM count"
+            )
+            state.proactive_notification_case_count = proactive_friction_count
+
         # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
         print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
         state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(

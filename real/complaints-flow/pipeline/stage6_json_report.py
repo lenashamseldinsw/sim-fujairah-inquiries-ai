@@ -419,7 +419,7 @@ class JSONReportBuilder:
 
         return {
             "type": "bar",
-            "title": "توزيع الشكاوى حسب الفئة الفرعية",
+            "title": "تصنيف أنواع الشكاوى",
             "categories": categories,
             "series": [
                 {
@@ -427,7 +427,8 @@ class JSONReportBuilder:
                     "data": [float(subcategory_counts.get(c, 0)) for c in categories]
                 }
             ],
-            "colors": ["#B68A35"]
+            "colors": ["#B68A35"],
+            "orientation": "vertical"
         }
 
     # ------------------------------------------------------------------
@@ -435,6 +436,14 @@ class JSONReportBuilder:
     # ------------------------------------------------------------------
 
     _SEVERITY_DISPLAY_MAP: Dict[str, str] = {
+        'طلب روتينى': 'شكوى عادية',
+        'طلب روتيني': 'شكوى عادية',
+        'روتينى': 'شكوى عادية',
+        'روتيني': 'شكوى عادية',
+        'طلب حرج': 'شكوى عاجلة',
+        'حرج': 'شكوى عاجلة',
+        'طلب معقد': 'شكوى معقدة',
+        'معقد': 'شكوى معقدة',
         'شكوى روتينية': 'شكوى عادية',
         'شكوى روتيني': 'شكوى عادية',
         'شكوى حرجة': 'شكوى عاجلة',
@@ -479,6 +488,7 @@ class JSONReportBuilder:
                 }
             ],
             "colors": ["#B68A35"],
+            "orientation": "vertical"
         }
 
     def build_resolution_status_chart(self) -> Optional[Dict[str, Any]]:
@@ -512,45 +522,83 @@ class JSONReportBuilder:
     def build_severity_chart(self) -> Optional[Dict[str, Any]]:
         """Pie chart — severity distribution of complaints (شدة الطلب column)."""
         if self.state.raw_df is None:
+            print("[build_severity_chart] raw_df is None, skipping")
             return None
 
         df = self.state.raw_df
         col = next(
-            (c for c in ['شدة الطلب', 'شدة_الطلب'] if c in df.columns),
+            (c for c in ['شدة الطلب', 'شدة_الطلب', 'Severity'] if c in df.columns),
             None,
         )
         if col is None:
+            print(f"[build_severity_chart] No severity column found. Available columns: {df.columns.tolist()}")
             return None
 
         counts: Dict[str, int] = defaultdict(int)
+        non_empty_count = 0
         for val in df[col].dropna().astype(str):
             val = val.strip()
             if not val:
                 continue
+            non_empty_count += 1
             mapped = self._SEVERITY_DISPLAY_MAP.get(val, val)
             counts[mapped] += 1
 
         if not counts:
+            print(f"[build_severity_chart] No valid severity data found. Total non-empty: {non_empty_count}")
             return None
 
         categories = [s for s in self._SEVERITY_ORDER if counts.get(s, 0) > 0]
+        if not categories:
+            print(f"[build_severity_chart] No severity categories matched. Raw counts: {dict(counts)}")
+            return None
+
         values = [float(counts[s]) for s in categories]
         colors = [
             self._SEVERITY_COLORS[self._SEVERITY_ORDER.index(s)]
             for s in categories
         ]
 
+        print(f"[build_severity_chart] Built pie chart with categories: {categories}, counts: {[counts[s] for s in categories]}")
         return {
             "type": "pie",
-            "title": "درجة خطورة الشكوى",
+            "title": "شدة الطلب",
             "categories": categories,
             "series": [
                 {
-                    "name": "درجة الخطورة",
+                    "name": "شدة الطلب",
                     "data": values,
                 }
             ],
             "colors": colors,
+        }
+
+    def build_sla_closure_chart(self) -> Optional[Dict[str, Any]]:
+        """Pie chart — SLA closure on time (whether case closed within specified SLA time)."""
+        if not self.state.all_classified:
+            return None
+
+        on_time = sum(
+            1 for c in self.state.all_classified
+            if str(c.sla_closed_on_time).strip() == 'نعم'
+        )
+        total = len(self.state.all_classified)
+        if total == 0:
+            return None
+
+        late = total - on_time
+
+        return {
+            "type": "pie",
+            "title": "إغلاق الطلب خلال الوقت المحدد",
+            "categories": ["ضمن الوقت المحدد", "خارج الوقت المحدد"],
+            "series": [
+                {
+                    "name": "إغلاق الطلب",
+                    "data": [float(on_time), float(late)],
+                }
+            ],
+            "colors": ["#B68A35", "#999999"],
         }
 
     def build_executive_summary_section(self, lang: str = "ar") -> Dict[str, Any]:
@@ -811,10 +859,10 @@ class JSONReportBuilder:
 
         # Additional 3.1 charts
         service_chart = self.build_service_distribution_chart()
-        resolution_chart = self.build_resolution_status_chart()
+        sla_closure_chart = self.build_sla_closure_chart()
         severity_chart = self.build_severity_chart()
         charts_31 = [
-            c for c in [classification_chart, service_chart, resolution_chart, severity_chart]
+            c for c in [classification_chart, service_chart, severity_chart, sla_closure_chart]
             if c is not None
         ]
 

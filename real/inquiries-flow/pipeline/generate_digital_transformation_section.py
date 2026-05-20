@@ -349,9 +349,12 @@ def _total_notif_cases(notif_rows: List[Dict[str, str]], state: PipelineState) -
     """
     Compute total eliminatable cases from notification rows for section body headline.
 
-    Sums cases_eliminated from notification_opportunities if available;
-    otherwise sums proactive-flagged gap case counts from gap_table.
+    Prefers the authoritative proactive_notification_case_count from Stage 4.
+    Falls back to summing cases_eliminated from notification_opportunities if that's unavailable.
     """
+    if state.proactive_notification_case_count:
+        return state.proactive_notification_case_count
+
     if state.notification_opportunities:
         return sum(
             n.get("cases_eliminated", 0) for n in state.notification_opportunities
