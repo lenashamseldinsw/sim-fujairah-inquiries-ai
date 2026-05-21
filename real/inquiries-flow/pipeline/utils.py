@@ -135,12 +135,13 @@ def arabic_case_count(n) -> str:
     Arabic rules:
       n == 0          → "لا حالات"
       n == 1          → "حالة واحدة"
-      2 <= n <= 10    → "{n} حالات"   (plural)
+      n == 2          → "حالتان"       (dual)
+      3 <= n <= 10    → "{n} حالات"   (plural)
       n > 10          → "{n} حالة"    (singular — Arabic grammar for 11+)
-      n is "4+" etc.  → "{n} حالات"   (treat as plural)
+      n is "4+" etc.  → "{n} حالة"    (open-ended takes singular)
     """
     if isinstance(n, str) and '+' in n:
-        return f"{n} حالات"
+        return f"{n} حالة"
     try:
         n = int(n)
     except (ValueError, TypeError):
@@ -149,7 +150,9 @@ def arabic_case_count(n) -> str:
         return "لا حالات"
     if n == 1:
         return "حالة واحدة"
-    if 2 <= n <= 10:
+    if n == 2:
+        return "حالتان"
+    if 3 <= n <= 10:
         return f"{n} حالات"
     return f"{n} حالة"
 

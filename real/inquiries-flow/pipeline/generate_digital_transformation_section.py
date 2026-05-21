@@ -220,7 +220,9 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
                 "نوع الإشعار":    notif_type,
                 "الحالات المُلغاة": (
                     f"{cases} حالة" if isinstance(cases, int) and cases == 1
-                    else f"{cases} حالات" if isinstance(cases, int) and cases < 10
+                    else "حالتان" if isinstance(cases, int) and cases == 2
+                    else f"{cases} حالات" if isinstance(cases, int) and 3 <= cases <= 10
+                    else f"{cases} حالة" if isinstance(cases, int) and cases > 10
                     else f"{cases}+ حالة"
                 ),
                 "القناة":          channel,
@@ -270,8 +272,9 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
         channel = _RC_NOTIFICATION_CHANNEL.get(cat, "SMS / إشعار التطبيق")
         cases_str = (
             f"{total_count} حالة" if total_count == 1
-            else f"{total_count} حالات" if total_count < 10
-            else f"{total_count}+ حالة"
+            else "حالتان" if total_count == 2
+            else f"{total_count} حالات" if 3 <= total_count <= 10
+            else f"{total_count} حالة"
         )
         rows.append({
             "نوع الإشعار":    notif_type,

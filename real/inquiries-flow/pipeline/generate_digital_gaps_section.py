@@ -211,7 +211,7 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     for i, (cat, total_count) in enumerate(sorted_rc, 1):
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
         best_count, example_text = rc_best_friction.get(cat, (0, ""))
-        example_cell = f"{total_count} حالة — {example_text}" if example_text else str(total_count)
+        example_cell = f"{best_count} حالة — {example_text}" if example_text else str(total_count)
         rows.append({
             "#":               str(i),
             "السبب الجذري":    label,

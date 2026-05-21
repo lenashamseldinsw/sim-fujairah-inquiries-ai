@@ -137,6 +137,26 @@ def classify_case(case_row: dict) -> Tuple[str, str, str, float]:
     has_english_dispute = any(k in title.lower() for k in disputed_fine_signals_en)
     fine_also_mentioned = has_fine or any(k in title.lower() for k in ['fine', 'violation', 'ticket', 'مخالفة', 'مخالفه'])
     if (has_arabic_dispute or has_english_dispute) and fine_also_mentioned:
+        # Resolution-based override: if الحل confirms the fine was not found in Fujairah,
+        # this is definitively a plate-mismatch complaint regardless of explicit request language.
+        # Covers cases like 240216 where customer says "أرجو إزالتها" (matches explicit_request_signals)
+        # but resolution confirms عدم وجود مخالفة — same outcome as the other plate-mismatch cases.
+        resolution_norm = normalize_arabic(case_row.get('الحل', '') or '')
+        plate_mismatch_resolutions = [
+            'عدم وجود مخالفة مرتكبة في امارة الفجيرة',
+            'عدم وجود مخالفة مرتكبة في إمارة الفجيرة',
+            'لا توجد مخالفة تابعة لامارة الفجيرة',
+            'لا توجد مخالفات تابعة لامارة الفجيرة',
+            'تبين عدم وجود مخالفة',
+        ]
+        resolution_confirms_plate_mismatch = any(
+            normalize_arabic(r) in resolution_norm
+            for r in plate_mismatch_resolutions
+        )
+        if resolution_confirms_plate_mismatch:
+            return 'شكوى', 'شكوى عن مخالفة مشكوك فيها', \
+                   'صورة المركبة في الإشعار تُظهر مركبة مختلفة — خطأ في مطابقة اللوحات', 0.90
+
         explicit_request_signals = [
             'أطلب', 'اطلب', 'أرجو', 'ارجو',
             'طلب تعديل', 'تعديل بيانات',

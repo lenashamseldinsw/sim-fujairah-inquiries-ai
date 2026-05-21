@@ -825,7 +825,7 @@ class JSONReportBuilder:
             "title_en": "3.4  Service Requests and Inquiries",
             "level": 2,
             "content": (
-                f"أبرز الطلبات المقدَّمة ({request_count} حالات — {request_pct:.1f}%):"
+                f"أبرز الطلبات المقدَّمة ({request_count} حالة — {request_pct:.1f}%):"
                 if request_rows
                 else "لم تُسجَّل أي طلبات خدمة مباشرة في هذه الفترة — اقتصر العبء على الشكاوى والاستفسارات."
             ),
@@ -851,7 +851,7 @@ class JSONReportBuilder:
         subsection_35 = {
             "id": self.next_section_id("35_أبرز_الاستفسارات" if lang == "ar" else "35_inquiries"),
             "title": (
-                f"3.5  أبرز الاستفسارات المتكررة ({inquiry_count} حالات — {inquiry_pct:.1f}%) — وهي الفئة الأكثر قابليةً للتحويل إلى خدمة ذاتية رقمية كاملة"
+                f"3.5  أبرز الاستفسارات المتكررة ({inquiry_count} حالة — {inquiry_pct:.1f}%) — وهي الفئة الأكثر قابليةً للتحويل إلى خدمة ذاتية رقمية كاملة"
                 if inquiry_rows
                 else "3.5  الاستفسارات المتكررة"
             ),
