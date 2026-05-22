@@ -153,8 +153,13 @@ ANALYSIS_TOOL = {
                         "notification_type": {"type": "string"},
                         "cases_eliminated": {"type": "integer"},
                         "channel": {"type": "string"},
-                        "content_summary": {"type": "string"}
-                    }
+                        "content_summary": {"type": "string"},
+                        "expected_impact": {
+                            "type": "string",
+                            "description": "Brief description of the expected business outcome (e.g., reduction in repeat complaints, improved citizen satisfaction). Must be grounded in the actual case analysis, not invented."
+                        }
+                    },
+                    "required": ["notification_type", "cases_eliminated", "channel", "content_summary", "expected_impact"]
                 }
             },
             "proactive_notification_case_count": {
@@ -323,6 +328,23 @@ ANALYSIS INSTRUCTIONS:
    - Status Follow-up cases: send automatic status updates
    - Information gaps: send helpful tips before customer complains
    - Policy clarifications: proactively explain appeal processes
+
+   For each notification opportunity:
+   - notification_type: Brief type name (e.g., "إشعار فوري استلام" = immediate receipt notification)
+   - cases_eliminated: Integer count of cases THIS specific notification would prevent
+   - channel: Delivery method (e.g., "SMS + Push", "بريد إلكتروني + SMS", "رسالة تطبيق")
+   - content_summary: Describe what information the notification includes and when it's sent.
+     Examples: "إشعار عند كل تغيير + قيد المعالجة / مرفوض + السبب"
+               "تنبية قبل انتهاء 30 يوم + معلومات الاستئناف مباشر + رابط مباشر للتحديث"
+     Be specific about: WHEN it's sent (عند, قبل, عند كل, فور) and WHAT info it contains.
+     Ground in actual case patterns from the data, not invented scenarios.
+   - expected_impact: GROUNDED business outcome based on case analysis
+     * Ground expected_impact in ACTUAL MEASURABLE impacts from the cases (e.g., if cases complained
+       about lack of receipt confirmation, expected_impact should reflect "تقليص جوهري في شكاوى
+       المتعاملين المكررة عند عدم تلقي الإشعار")
+     * Do NOT invent percentage reductions unless explicitly shown in cases
+     * Keep it factual and tied to the case evidence
+     * Examples: "تقليص جوهري", "تقليل اصطدامات المتابعة", "إلغاء استفسارات ابتدائية"
 
    For proactive_notification_case_count: go through each case individually and count
    those where the customer's complaint could have been fully prevented by a single
@@ -516,6 +538,8 @@ def _reconcile_counts(
         # Scale proportionally, then round to int, minimum 1 if original > 0
         scaled = round(llm_count / llm_total * max_proactive_cases)
         scaled = max(1, scaled) if llm_count > 0 else 0
+        # Preserve all fields (notification_type, channel, content_summary, expected_impact)
+        # Only reconcile cases_eliminated against authoritative proactive_case_count
         reconciled_notifications.append({**n, "cases_eliminated": scaled})
 
     print(
@@ -539,13 +563,14 @@ FAQ_ONLY_TOOL = {
                 "items": {
                     "type": "object",
                     "properties": {
+                        "top_level": {"type": "string", "description": "Official complaint category (e.g., 'شكوى', 'استفسار', 'طلب')"},
                         "question": {"type": "string", "description": "Question in English"},
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
                         "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"}
                     },
-                    "required": ["question", "question_ar", "answer", "answer_ar", "frequency"]
+                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency"]
                 }
             }
         },
@@ -627,6 +652,7 @@ def _retry_faq_only(
                 answer_ar=f.get("answer_ar", ""),
                 frequency=f.get("frequency", 0),
                 validation_status="PENDING",
+                top_level=f.get("top_level", ""),
             )
             for f in raw_items
         ]
@@ -877,7 +903,8 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                     answer=f.get('answer', ''),
                     answer_ar=f.get('answer_ar', ''),
                     frequency=f.get('frequency', 0),
-                    validation_status='PENDING'
+                    validation_status='PENDING',
+                    top_level=f.get('top_level', '')
                 )
                 for f in analysis.get('faq_candidates', [])
             ]

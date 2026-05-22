@@ -77,6 +77,7 @@ class FAQCandidate(BaseModel):
     validation_status: str  # OK | CONFLICT
     question_ar: Optional[str] = None
     answer_ar: Optional[str] = None
+    top_level: Optional[str] = None  # Official complaint category (e.g., 'شكوى', 'استفسار', 'طلب')
 
 
 class GapRow(BaseModel):

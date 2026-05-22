@@ -53,6 +53,7 @@ import anthropic
 
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response, extract_methodology_context
+from .utils import normalize_arabic
 
 
 # ==============================================================================
@@ -63,15 +64,15 @@ from .json_utils import parse_json_response, extract_methodology_context
 def _digital_readiness_complaint(complaint_subtype: str) -> str:
     """
     Digital deflection potential label for a complaint sub-type (Arabic).
-    Complaints version — only one top-level category (شكوى).
+    Complaints version — maps from complaint sub-categories to transformation readiness.
     """
     mapping = {
-        "مخالفة مرورية": "بوابة شكاوى — تتبع بلاغ في التطبيق",
-        "مشكلة في ترخيص": "بوابة شكاوى — طلب استفسار في التطبيق",
-        "شكوى عن الخدمة": "بوابة شكاوى — نموذج تقييم في التطبيق",
-        "بلاغ أمني": "بوابة الأمن العام — تطبيق التبليغ الموحد",
-        "طلب معلومات": "روبوت محادثة / أسئلة شائعة / الموقع الإلكتروني",
-        "أخرى": "حالة حسب النوع الفرعي المحدد",
+        'شكاوى مكررة (مرفوضة)': 'نظام تصفية آلي — لتجنب الازدواجية',
+        'شكاوى بلا تصنيف خدمي ("أخرى")': 'إعادة تصنيف ذكي — بتحليل النصوص',
+        'شكاوى على الخدمات المرورية': 'بوابة مرورية متكاملة — تقديم وتتبع أونلاين',
+        'شكاوى أمنية وجنائية': 'نموذج إبلاغ آمن — مع التشفير والخصوصية',
+        'شكاوى شهادات وتصاريح': 'نظام طلبات موحد — متكامل مع قاعدة البيانات',
+        'شكاوى خارج الاختصاص والأخرى': 'نموذج تحويل ذكي — مع إعادة التوجيه التلقائية',
     }
     return mapping.get(complaint_subtype, "—")
 
@@ -90,13 +91,17 @@ def _build_channel_rows(
         total_cases: Total number of cases
         official_channels: Optional list of official channel names from methodology
     """
-    # Define digital channels (use official channels if provided, otherwise use defaults)
-    # Channels like "تطبيق", "موقع الكتروني", "بريد إلكتروني" are considered digital
+    # Use normalize_arabic() so matches don't fail because of hamza variants
+    # (إلكتروني vs الكترونى) or ى vs ي. The raw data in this dataset uses
+    # "موقع الكترونى" — without normalization, substring matches against "إلكترون" fail.
+    digital_keywords_normalized = {normalize_arabic(k) for k in
+                                   ("تطبيق", "موقع", "إلكتروني", "ويتس", "بريد إلكتروني", "بوابة إلكترونية")}
     if official_channels:
-        digital_keywords = {"تطبيق", "موقع", "إلكترون", "ويتس", "تطبيق ذكي"}
-        digital_channels = {ch for ch in official_channels if any(kw in ch for kw in digital_keywords)}
+        digital_channels = {ch for ch in official_channels
+                            if any(kw in normalize_arabic(ch) for kw in digital_keywords_normalized)}
     else:
-        digital_channels = {"تطبيق", "بريد إلكتروني", "بوابة إلكترونية", "موقع", "ويتس آب"}
+        digital_channels = {ch for ch in channel_dist.keys()
+                            if any(kw in normalize_arabic(ch) for kw in digital_keywords_normalized)}
 
     # Channel description mapping
     channel_descriptions = {
@@ -129,107 +134,110 @@ def _build_channel_rows(
 
 
 def _build_resolution_analysis_rows(
-    resolution_response_data: List[str],
+    all_classified: List,
     total_cases: int,
 ) -> List[Dict[str, str]]:
     """
-    Build resolution analysis table from resolution_response field.
-    Counts by الحالة value: تم الموافقة على الحل, طلب منجز, طلب مرفوض
-    Also counts duplicates from "مكرر" mentions.
+    Build resolution analysis table from real fields on each CaseRow.
+
+    Our dataset has no closure-status column. We bucket on:
+      - date_closed presence    → "مغلقة" vs "قيد المعالجة"
+      - sub_classification      → officially-rejected count (duplicates)
+      - "مكرر" in resolution_response → data-quality observation
 
     Row schema: نوع الإغلاق | العدد | النسبة | الوصف
     """
-    resolution_counts = defaultdict(int)
-    duplicate_count = 0
+    closed_count = 0
+    open_count = 0
+    rejected_count = 0
+    mukarrar_mentions = 0
 
-    for response in (resolution_response_data or []):
-        if not response or not isinstance(response, str):
-            continue
-
-        response_lower = response.strip()
-
-        # Count by status
-        if "تم الموافقة على الحل" in response_lower:
-            resolution_counts["تم الموافقة على الحل"] += 1
-        elif "طلب منجز" in response_lower:
-            resolution_counts["طلب منجز"] += 1
-        elif "طلب مرفوض" in response_lower:
-            resolution_counts["طلب مرفوض"] += 1
+    for case in (all_classified or []):
+        # Closure status from date_closed
+        date_closed = getattr(case, 'date_closed', None)
+        if date_closed and str(date_closed).strip():
+            closed_count += 1
         else:
-            resolution_counts["قيد المعالجة"] += 1
+            open_count += 1
 
-        # Count duplicates
-        if "مكرر" in response_lower:
-            duplicate_count += 1
+        # Officially rejected = classified as duplicate
+        sub = getattr(case, 'sub_classification', None) or ''
+        if 'مكررة' in sub or 'مرفوضة' in sub:
+            rejected_count += 1
 
-    # Calculate rejection rate
-    total_resolved = sum(resolution_counts.values()) or 1
-    rejection_count = resolution_counts.get("طلب مرفوض", 0)
-    rejection_rate = rejection_count / total_resolved * 100 if total_resolved else 0
+        # "مكرر" in resolution text — for data-quality observation only
+        resp = getattr(case, 'resolution_response', None) or ''
+        if 'مكرر' in resp:
+            mukarrar_mentions += 1
 
-    # Description mapping for resolution statuses
-    status_descriptions = {
-        "تم الموافقة على الحل": "الشكاوى التي تمت الموافقة على حلها من قبل الجهات المختصة",
-        "طلب منجز": "الشكاوى المنجزة والمغلقة بنجاح بعد معالجة كاملة",
-        "طلب مرفوض": "الشكاوى المرفوضة لأسباب إجرائية أو لعدم استيفاء الشروط",
-        "قيد المعالجة": "الشكاوى التي لا تزال قيد المعالجة والفحص",
-    }
+    def pct(n: int) -> str:
+        return f"{n / total_cases * 100:.1f}%" if total_cases else "0%"
 
-    # Build rows
     rows = []
-    row_order = ["تم الموافقة على الحل", "طلب منجز", "طلب مرفوض", "قيد المعالجة"]
-    for status in row_order:
-        count = resolution_counts.get(status, 0)
-        if count == 0:
-            continue
-        pct = f"{count / total_resolved * 100:.1f}%" if total_resolved else "0%"
-
-        # Use predefined description
-        description = status_descriptions.get(
-            status,
-            f"الشكاوى ذات حالة المعالجة: {status}"
-        )
-
+    if closed_count:
         rows.append({
-            "نوع الإغلاق": status,
-            "العدد": str(count),
-            "النسبة": pct,
-            "الوصف": description,
+            "نوع الإغلاق": "مغلقة (لها تاريخ إغلاق)",
+            "العدد": str(closed_count),
+            "النسبة": pct(closed_count),
+            "الوصف": "الشكاوى التي تم إغلاقها وتسجيل تاريخ إغلاق لها في النظام",
         })
+    if open_count:
+        rows.append({
+            "نوع الإغلاق": "قيد المعالجة (بدون تاريخ إغلاق)",
+            "العدد": str(open_count),
+            "النسبة": pct(open_count),
+            "الوصف": "الشكاوى التي لا تزال مفتوحة ولم يُسجَّل لها تاريخ إغلاق بعد",
+        })
+    if rejected_count:
+        rows.append({
+            "نوع الإغلاق": "مُصنَّفة كمكررة/مرفوضة",
+            "العدد": str(rejected_count),
+            "النسبة": pct(rejected_count),
+            "الوصف": "الشكاوى المُصنَّفة رسمياً كمكررة في حقل نوع_الشكوى",
+        })
+    # Always include the mukarrar observation row (even if 0) so the paragraph
+    # builder can read it via row_map without a KeyError.
+    rows.append({
+        "نوع الإغلاق": "مكرر (في نص الحل)",
+        "العدد": str(mukarrar_mentions),
+        "النسبة": pct(mukarrar_mentions),
+        "الوصف": "عدد الحالات التي ورد فيها لفظ «مكرر» داخل نص الحل (مؤشر جودة بيانات)",
+    })
 
     return rows
 
 
 def _build_resolution_paragraph(resolution_rows: list, total_cases: int) -> str:
     """
-    Convert resolution analysis rows into the single bold paragraph required by
-    report_structure.md section 3.3.
-
-    The spec says: "ENTIRE SECTION IS ONE BOLD PARAGRAPH. Not a table."
-    Format: counts and percentages embedded in flowing Arabic prose.
+    One bold paragraph for section 3.3, grounded in fields we actually have:
+    closure (from date_closed) + official rejection (from sub_classification)
+    + a separate data-quality observation about "مكرر" mentions in resolution text.
     """
-    # Index rows by نوع الإغلاق value for reliable lookup
     row_map = {r["نوع الإغلاق"]: r for r in resolution_rows}
 
-    approved   = row_map.get("تم الموافقة على الحل", {})
-    completed  = row_map.get("طلب منجز",              {})
-    rejected   = row_map.get("طلب مرفوض",             {})
-    duplicate  = row_map.get("مكرر (غير رسمي)",       {})  # informal duplicates row
+    closed   = row_map.get("مغلقة (لها تاريخ إغلاق)",          {})
+    opened   = row_map.get("قيد المعالجة (بدون تاريخ إغلاق)", {})
+    rejected = row_map.get("مُصنَّفة كمكررة/مرفوضة",            {})
+    mukarrar = row_map.get("مكرر (في نص الحل)",                {})
 
-    approved_count  = approved.get("العدد",  "0")
-    approved_pct    = approved.get("النسبة", "0%")
-    completed_count = completed.get("العدد",  "0")
-    completed_pct   = completed.get("النسبة", "0%")
-    rejected_count  = rejected.get("العدد",  "0")
-    rejected_pct    = rejected.get("النسبة", "0%")
-    dup_count       = duplicate.get("العدد", "0")
+    closed_count   = closed.get("العدد",   "0")
+    closed_pct     = closed.get("النسبة", "0%")
+    open_count     = opened.get("العدد",   "0")
+    open_pct       = opened.get("النسبة", "0%")
+    rejected_count = rejected.get("العدد", "0")
+    rejected_pct   = rejected.get("النسبة", "0%")
+    mukarrar_count = mukarrar.get("العدد", "0")
 
+    # Frame "مكرر" mentions as data-quality observation, not as "hidden duplicates"
+    # beyond what's classified. In practice these usually overlap with the
+    # already-rejected set; the value is signal-redundancy, not hidden volume.
     para = (
-        f"أُغلقت {approved_count} شكوى ({approved_pct}) بـ«تم الموافقة على الحل»، "
-        f"و{completed_count} شكوى ({completed_pct}) بـ«طلب منجز» — "
-        f"في مقابل معدل رفض بلغ {rejected_count} حالة ({rejected_pct}). "
-        f"ورُصدت {dup_count} حالة تحمل كلمة «مكرر» في نص الحل دون أن تُصنَّف رسمياً كمرفوضة، "
-        f"مما يُشير إلى أن التكرار الفعلي أعلى من المُسجَّل رسمياً."
+        f"أُغلقت {closed_count} شكوى ({closed_pct}) — بتاريخ إغلاق مُسجَّل — "
+        f"بينما لا تزال {open_count} شكوى ({open_pct}) قيد المعالجة دون تاريخ إغلاق. "
+        f"من إجمالي الحالات، صُنِّفت {rejected_count} حالة ({rejected_pct}) رسمياً "
+        f"ضمن فئة «شكاوى مكررة (مرفوضة)». "
+        f"كما ورد لفظ «مكرر» داخل نص الحل في {mukarrar_count} حالة، "
+        f"وهو مؤشر جودة بيانات يُؤكد التصنيف الرسمي للتكرار."
     )
     return para
 
@@ -333,31 +341,27 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         channel_dist = state.channel_distribution or {}
         channel_rows = _build_channel_rows(channel_dist, total_cases, official_channels)
 
-        # Extract resolution data from all_classified
-        resolution_responses = [case.resolution_response for case in all_classified if case.resolution_response]
-        resolution_rows = _build_resolution_analysis_rows(resolution_responses, total_cases)
+        # Pass the full CaseRow objects — we now bucket on date_closed and
+        # sub_classification, not just on resolution-text matching.
+        resolution_rows = _build_resolution_analysis_rows(all_classified, total_cases)
 
         # Department distribution
         dept_dist = state.department_distribution or {}
         department_rows = _build_department_distribution_rows(dept_dist, total_cases)
 
-        # Calculate channel stats for LLM context
-        if official_channels:
-            digital_keywords = {"تطبيق", "موقع", "إلكترون", "ويتس", "تطبيق ذكي"}
-            official_digital = {ch for ch in official_channels if any(kw in ch for kw in digital_keywords)}
-            digital_channel_count = sum(
-                count for channel, count in channel_dist.items()
-                if channel in official_digital
-            )
-        else:
-            digital_channel_count = sum(
-                count for channel, count in channel_dist.items()
-                if channel in {"تطبيق", "بريد إلكتروني", "بوابة إلكترونية", "موقع", "ويتس آب"}
-            )
-        digital_channel_rate = digital_channel_count / total_cases * 100 if total_cases else 0
+        # Use the digital-channel rate pre-computed in stage1_validator (the canonical source).
+        # The previous local recomputation matched against "إلكترون" (with hamza), but the
+        # raw data uses "الكترونى" (no hamza, ى not ي) — so the local match was always 0%.
+        digital_channel_rate = state.digital_channel_rate
 
-        # Rejection rate for context
-        rejection_count = len([c for c in all_classified if "طلب مرفوض" in (c.resolution_response or "")])
+        # "Rejection" in this dataset = officially classified as duplicate/rejected.
+        # The previous version searched resolution_response for "طلب مرفوض" which is
+        # never present (الحل is free-text narrative, not a status code) → always 0%.
+        rejection_count = len([
+            c for c in all_classified
+            if 'مكررة' in (getattr(c, 'sub_classification', '') or '')
+            or 'مرفوضة' in (getattr(c, 'sub_classification', '') or '')
+        ])
         rejection_rate = rejection_count / total_cases * 100 if total_cases else 0
 
         # Serialize pre-computed tables
@@ -402,9 +406,11 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '\n'
             'B. channel_insight (subsection 3.2 lead-in) — KEY: use this exact field name\n'
             '1-2 sentences, formal Arabic. Must:\n'
-            f'  - Note that {digital_channel_rate:.1f}% of complaints arrived via digital channels.\n'
-            '  - Highlight the shift toward self-service and app-based submissions.\n'
-            '  - End with a colon (":") — the table follows immediately.\n'
+            f'  - Reference that {digital_channel_rate:.1f}% of complaints arrived via digital channels (تطبيق الهاتف and موقع إلكتروني).\n'
+            '  - Reference individual percentages ONLY from the pre_computed_channel_distribution table below.\n'
+            '  - Do NOT invent percentages. Do NOT contradict the {digital_channel_rate:.1f}% figure.\n'
+            '  - The detailed breakdown table shows all channels — reference those exact numbers only.\n'
+            '  - End with a colon (":") — the channel distribution table follows immediately.\n'
             '\n'
             'C. resolution_intro (subsection 3.3 lead-in) — KEY: use this exact field name\n'
             '1-2 sentences, formal Arabic describing how complaints are resolved:\n'
@@ -422,6 +428,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '    RIGHT: "مواطنون وسائقون يعترضون على مخالفات مرورية يرون أنها غير مستحقة أو صدرت بالخطأ"\n'
             '  Do NOT add or change any numbers.\n'
             'For complaints_table: rename "النسبة" -> "النسبة من الشكاوى" and add "الوصف".\n'
+            'NOTE: قابلية التحويل الرقمي will be added automatically after parsing.\n'
             '\n'
             'OUTPUT — single JSON object, no markdown, no extra keys\n'
             '\n'
@@ -475,6 +482,12 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         result["resolution_table"] = resolution_rows  # kept for audit/downstream use only
         result["department_table"] = department_rows
         result["channel_table"] = channel_rows
+
+        # Add digital transformation capability to complaints_table rows
+        complaints_table = result.get("complaints_table", [])
+        for row in complaints_table:
+            complaint_type = row.get("الفئة الفرعية", "أخرى")
+            row["قابلية التحويل الرقمي"] = _digital_readiness_complaint(complaint_type)
 
         # VALIDATION: Verify all sub-classifications are present in returned complaints_table
         def validate_and_fix_complaints_table(table_rows, expected_rows):

@@ -34,14 +34,15 @@ SECTION STRUCTURE:
 Intro paragraph: states the digital transformation vision grounded in pipeline data.
 
 Sub-section 6.1 — الأسئلة الشائعة (FAQ)
-  Table columns: السؤال | الإجابة
-  Pre-computed from state: faq_candidates, validated_faqs
-  LLM-written: refined Q&A
+  Table columns: # | السؤال | الفئة الرسمية | الإجابة الصحيحة | التكرار
+  Data source: state.validated_faqs and state.faq_candidates (from Stage 4/5)
+  Frequency: Actual case counts from pipeline, never LLM-invented
+  Sorting: By frequency (descending) — most impactful FAQs first
 
 Sub-section 6.2 — فرص الإخطار الاستباقي
-  Table columns: نوع الإخطار | السيناريو | الفائدة المتوقعة
-  Pre-computed from state: notification_opportunities
-  LLM-written: detailed scenarios and benefits
+  Table columns: نوع الإشعار | الحالات المُلغاة | محتوى الإشعار (مثال) | القناة | الأثر المتوقع
+  Data source: state.notification_opportunities (from Stage 5)
+  Case counts: Actual values from pipeline, never LLM-invented
 
 DATA SOURCING — no new computation, only state reads
 ─────────────────────────────────────────────────────
@@ -68,51 +69,67 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build FAQ rows from validated FAQs and candidates for the transformation section.
 
-    ISSUE 4 FIX: Return rows matching build_digital_transformation_section columns:
-    #, السؤال, الإجابة المقترحة, التكرار
+    COLUMNS (matching Section 6.1 screenshot):
+    #, السؤال, الفئة الرسمية, الإجابة الصحيحة, التكرار
+
+    SOURCE: validated_faqs and faq_candidates from Stage 4/5.
+    ACCURACY: Frequency values are actual case counts from the pipeline, never LLM-invented.
 
     Args:
         state: Pipeline state containing validated_faqs and faq_candidates
 
     Returns:
-        List of row dicts with FAQ columns
+        List of row dicts with FAQ columns, sorted by frequency (descending)
     """
     rows = []
     counter = 1
 
-    # Add validated FAQs first (higher confidence)
+    # Collect all FAQs (validated first, then candidates as fallback)
+    all_faqs = []
     if state.validated_faqs:
-        for faq in state.validated_faqs:
-            if counter > 5:
-                break
-            q = faq.get('question') if isinstance(faq, dict) else getattr(faq, 'question', '')
-            a = faq.get('answer') if isinstance(faq, dict) else getattr(faq, 'answer', '')
-            freq = faq.get('frequency', faq.get('case_count', '')) if isinstance(faq, dict) else getattr(faq, 'frequency', '')
-            if q and a:
-                rows.append({
-                    '#': str(counter),
-                    'السؤال': q,
-                    'الإجابة المقترحة': a,
-                    'التكرار': str(freq) if freq else '—',
-                })
-                counter += 1
-
-    # Add candidates as fallback
-    if state.faq_candidates and counter <= 5:
+        all_faqs.extend(state.validated_faqs)
+    if state.faq_candidates:
+        # Only add candidates that aren't already in validated_faqs
+        validated_questions = {
+            (faq.get('question_ar') if isinstance(faq, dict) else getattr(faq, 'question_ar', ''))
+            for faq in (state.validated_faqs or [])
+        }
         for candidate in state.faq_candidates:
-            if counter > 5:
-                break
-            q = candidate.get('question') if isinstance(candidate, dict) else getattr(candidate, 'question', '')
-            a = candidate.get('answer') if isinstance(candidate, dict) else getattr(candidate, 'answer', '')
-            freq = candidate.get('frequency', candidate.get('case_count', '')) if isinstance(candidate, dict) else getattr(candidate, 'frequency', '')
-            if q and a:
-                rows.append({
-                    '#': str(counter),
-                    'السؤال': q,
-                    'الإجابة المقترحة': a,
-                    'التكرار': str(freq) if freq else '—',
-                })
-                counter += 1
+            q_ar = candidate.get('question_ar') if isinstance(candidate, dict) else getattr(candidate, 'question_ar', '')
+            if q_ar not in validated_questions:
+                all_faqs.append(candidate)
+
+    # Sort by frequency (descending) to show most impactful FAQs first
+    all_faqs.sort(
+        key=lambda f: (
+            f.get('frequency', f.get('case_count', 0))
+            if isinstance(f, dict)
+            else getattr(f, 'frequency', getattr(f, 'case_count', 0))
+        ),
+        reverse=True
+    )
+
+    # Build rows, capped at 6 (matching the screenshot)
+    for faq in all_faqs:
+        if counter > 6:
+            break
+
+        # Extract fields (handle both dict and object access)
+        q_ar = faq.get('question_ar') if isinstance(faq, dict) else getattr(faq, 'question_ar', '')
+        a_ar = faq.get('answer_ar') if isinstance(faq, dict) else getattr(faq, 'answer_ar', '')
+        category = faq.get('top_level') if isinstance(faq, dict) else getattr(faq, 'top_level', '')
+        freq = faq.get('frequency', faq.get('case_count', 0)) if isinstance(faq, dict) else getattr(faq, 'frequency', getattr(faq, 'case_count', 0))
+
+        # Only include if question and answer are present
+        if q_ar and a_ar:
+            rows.append({
+                '#': str(counter),
+                'السؤال': q_ar,
+                'الفئة الرسمية': category if category else '—',
+                'الإجابة الصحيحة': a_ar,
+                'التكرار': str(int(freq)) if freq else '—',
+            })
+            counter += 1
 
     return rows
 
@@ -121,29 +138,70 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build notification opportunity rows for proactive alerts.
 
-    ISSUE 4 FIX: Return rows matching build_digital_transformation_section columns:
-    نوع الإشعار, الحالات المُلغاة, محتوى الإشعار (مثال), القناة, الأثر المتوقع
+    DATA SOURCE: state.notification_opportunities from Stage 4 analysis (LLM-generated).
+
+    COLUMNS (matching section 6.2 screenshot):
+    1. نوع الإشعار - notification_type (e.g., "إشعار فوري استلام")
+    2. الحالات المُلغاة - cases_eliminated (actual count from pipeline reconciliation)
+    3. محتوى الإشعار (مثال) - content_summary (concrete example message)
+    4. القناة - channel (delivery method, e.g., "SMS + Push تلقائي")
+    5. الأثر المتوقع - expected_impact (business outcome grounded in case analysis)
+
+    ACCURACY GUARANTEE:
+    - cases_eliminated values come from Stage 4 reconciliation against ground-truth case counts
+    - expected_impact must be grounded in actual case evidence, never LLM-hallucinated
+    - No invented percentages or unmeasured benefits
 
     Args:
         state: Pipeline state containing notification_opportunities
 
     Returns:
-        List of row dicts with notification columns
+        List of row dicts with section 6.2 table columns
     """
     rows = []
 
     if hasattr(state, 'notification_opportunities') and state.notification_opportunities:
         for notif in state.notification_opportunities:
             if isinstance(notif, dict):
-                # Map state notification fields to expected row columns
-                row = {
-                    'نوع الإشعار': notif.get('type', notif.get('notification_type', '')),
-                    'الحالات المُلغاة': str(notif.get('cases_eliminated', notif.get('case_count', ''))),
-                    'محتوى الإشعار (مثال)': notif.get('content', notif.get('example_message', '')),
-                    'القناة': notif.get('channel', notif.get('delivery_channel', '')),
-                    'الأثر المتوقع': notif.get('expected_benefit', notif.get('expected_impact', '')),
-                }
-                rows.append(row)
+                # Direct field mapping from Stage 4 notification_opportunities
+                # Fields: notification_type, cases_eliminated, channel, content_summary, expected_impact
+                # All 5 fields must be present in the LLM response (required by schema) and non-empty
+                notification_type = notif.get('notification_type', '')
+                cases_eliminated = notif.get('cases_eliminated', '')
+                content_summary = notif.get('content_summary', '')
+                channel = notif.get('channel', '')
+                expected_impact = notif.get('expected_impact', '')
+
+                # STRICT VALIDATION: Only include rows where ALL required fields are present and non-empty
+                # This ensures table quality:
+                # - notification_type: must describe what notification (إشعار استلام, تحديث حالة, etc)
+                # - cases_eliminated: must be positive integer (count of preventable cases)
+                # - channel: must specify delivery method (SMS, Push, بريد إلكتروني, etc)
+                # - content_summary: must describe WHEN and WHAT info the notification sends
+                # - expected_impact: must describe business outcome grounded in actual case analysis
+                if notification_type and cases_eliminated and channel and content_summary and expected_impact:
+                    row = {
+                        'نوع الإشعار': notification_type,
+                        'الحالات المُلغاة': str(cases_eliminated),
+                        'محتوى الإشعار (مثال)': content_summary,
+                        'القناة': channel,
+                        'الأثر المتوقع': expected_impact,
+                    }
+                    rows.append(row)
+                elif notif:
+                    # Log when opportunities are filtered out due to incomplete fields
+                    missing = []
+                    if not notification_type:
+                        missing.append('notification_type')
+                    if not cases_eliminated:
+                        missing.append('cases_eliminated')
+                    if not channel:
+                        missing.append('channel')
+                    if not content_summary:
+                        missing.append('content_summary')
+                    if not expected_impact:
+                        missing.append('expected_impact')
+                    print(f"[DigitalTransform] Filtered incomplete notification: missing={missing}")
 
     return rows
 

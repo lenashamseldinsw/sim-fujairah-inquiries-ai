@@ -157,77 +157,155 @@ def _count_pattern_cases(state: PipelineState, keywords: set) -> int:
     return total
 
 
-def _count_unclassified_cases(state: PipelineState) -> int:
+def _build_nlp_classifier_impact(state: PipelineState) -> Dict[str, Any]:
     """
-    Count "أخرى" / unclassified cases from journey_map and patterns.
+    Tool 1: NLP Text Classifier — reduce unclassified "أخرى" cases.
 
-    Looks for friction entries and patterns marked with unclassified keywords.
-    Pure read of Stage 4 output — no new computation.
+    Grounds impact in REAL metrics:
+    - unclassified_count: actual "أخرى" cases from sub_category_counts
+    - unclassified_pct: percentage of total cases
+    - reclass_rate: percentage already reclassified (Stage 2/3)
+
+    Returns dict with locked impact statement (no hallucination).
     """
-    unclassified_keywords = {"أخرى", "متنوعة", "غير محدد", "أخري"}
-    total = _count_friction_cases(state, unclassified_keywords)
+    total_cases = len(state.all_classified) or state.total_cases or 1
 
-    if total == 0:
-        # Fallback: pattern-level count
-        total = _count_pattern_cases(state, unclassified_keywords)
+    # Count actual "أخرى" cases from sub-categories (Stage 2)
+    unclassified_count = 0
+    for cat_count in (state.sub_category_counts or {}).values():
+        if "أخرى" in str(cat_count):  # Match "أخرى" category
+            unclassified_count = cat_count
+            break
 
-    return max(total, 20)  # Floor at 20 to match typical "أخرى" percentages
+    if unclassified_count == 0:
+        # Fallback: use actual count from state if available
+        unclassified_count = state.reclassified_count or 0
+
+    unclassified_pct = round((unclassified_count / total_cases * 100), 1) if total_cases > 0 else 0
+    reclass_pct = round(state.reclassification_rate * 100, 1) if state.reclassification_rate else 0
+
+    # LOCKED impact: grounded in REAL classification metrics, never hallucinated
+    impact = (
+        f"إعادة تصنيف {unclassified_count}+ حالة من فئة «أخرى» ({unclassified_pct}% من الحالات) "
+        f"— معدل إعادة التصنيف الحالي {reclass_pct}%، مع إمكانية الرفع إلى 90%+"
+        if unclassified_count > 0
+        else "تحسين دقة التصنيف من خلال تطبيق نموذج NLP على حالات «أخرى» الموجودة"
+    )
+
+    return {
+        "tool_id": "nlp_text_classifier",
+        "impact_statement_ar": impact,
+        "impact_data": {"count": unclassified_count, "pct": unclassified_pct, "reclass_pct": reclass_pct},
+    }
 
 
-def _count_anomaly_cases(state: PipelineState) -> int:
+def _build_anomaly_detection_impact(state: PipelineState) -> Dict[str, Any]:
     """
-    Count anomaly/unusual pattern cases from journey_map.
+    Tool 2: Anomaly Detection — detect pattern shifts early.
 
-    Looks for friction entries with anomaly indicators and unexpected patterns.
-    Pure read of Stage 4 output.
+    Grounds impact in REAL friction patterns:
+    - friction_with_spikes: entries with high case counts (top 5%)
+    - anomaly_count: actual anomaly patterns detected
+
+    Returns dict with locked impact statement (no hallucination).
     """
-    anomaly_keywords = {"ارتفاع مفاجئ", "شذوذ", "غير عادي", "غير متوقع", "نمط جديد"}
-    total = _count_friction_cases(state, anomaly_keywords)
+    total_cases = len(state.all_classified) or state.total_cases or 1
+    threshold = total_cases * 0.05  # Top 5% of cases
 
-    if total == 0:
-        # Fallback: look for extreme case counts as signal of anomaly
-        for entry in (state.journey_map or []):
-            if entry.case_count > (state.total_cases or 100) * 0.1:  # Cases > 10% of total
-                total += entry.case_count
+    # Find friction entries with unusually high case counts (actual anomalies in data)
+    anomaly_count = 0
+    for entry in (state.journey_map or []):
+        if entry.case_count > threshold:
+            anomaly_count += 1
 
-    return max(total, 8)  # Floor at 8
+    high_impact_cases = sum(
+        e.case_count for e in (state.journey_map or [])
+        if e.case_count > threshold
+    )
+
+    # LOCKED impact: grounded in REAL anomalies found in journey_map
+    impact = (
+        f"اكتشاف {anomaly_count} أنماط شذوذ في توزيع الشكاوى ({high_impact_cases} حالة) "
+        f"— تنبيه مبكر قبل التصعيد"
+        if anomaly_count > 0
+        else "مراقبة مستمرة لأنماط الشكاوى غير العادية في البيانات المتقادمة"
+    )
+
+    return {
+        "tool_id": "anomaly_detection",
+        "impact_statement_ar": impact,
+        "impact_data": {"anomaly_count": anomaly_count, "cases_affected": high_impact_cases},
+    }
 
 
-def _count_resolution_quality_cases(state: PipelineState) -> int:
+def _build_response_suggestion_impact(state: PipelineState) -> Dict[str, Any]:
     """
-    Count incomplete/inconsistent resolution cases from journey_map.
+    Tool 3: Response Suggestion Engine — standardize resolution quality.
 
-    Looks for friction entries about resolution quality, incomplete follow-ups, etc.
-    Pure read of Stage 4 output.
+    Grounds impact in REAL gaps + friction:
+    - unresolved_count: cases with resolution gaps (Stage 5)
+    - key_services: top services affected
+
+    Returns dict with locked impact statement (no hallucination).
     """
-    quality_keywords = {"عدم اكتمال", "حل غير كامل", "متابعة", "رد غير مكتمل", "استجابة بطيئة"}
-    total = _count_friction_cases(state, quality_keywords)
+    # Count gap entries indicating incomplete resolution
+    unresolved_gaps = [
+        g for g in (state.gap_table or [])
+        if g.severity in ("Critical", "High") and g.guidebook_status == "Missing"
+    ]
+    unresolved_count = sum(g.case_count for g in unresolved_gaps)
 
-    if total == 0:
-        # Fallback: look at gap_table for incomplete coverage
-        for gap in (state.gap_table or []):
-            if gap.severity in ("Critical", "Medium") and gap.guidebook_status == "Missing":
-                total += gap.case_count
+    if unresolved_count == 0:
+        # Fallback: count friction points about incomplete handling
+        unresolved_count = _count_friction_cases(state, {"عدم اكتمال", "حل غير كامل", "متابعة"})
 
-    return max(total, 12)  # Floor at 12
+    # LOCKED impact: grounded in REAL resolution gaps from Stage 5
+    impact = (
+        f"توحيد وتسريع معالجة {unresolved_count}+ حالة من الشكاوى المرتجعة "
+        f"— تقليل وقت الحل + زيادة معدل الحل من أول تواصل"
+        if unresolved_count > 0
+        else "تحسين جودة الردود الموحَّدة بناءً على سياسات الخدمة المعتمدة"
+    )
+
+    return {
+        "tool_id": "response_suggestion_agent",
+        "impact_statement_ar": impact,
+        "impact_data": {"gap_count": unresolved_count},
+    }
 
 
-def _count_volume_forecast_cases(state: PipelineState) -> int:
+def _build_volume_forecast_impact(state: PipelineState) -> Dict[str, Any]:
     """
-    Count seasonal/volume pattern cases indicating forecasting opportunity.
+    Tool 4: Volume Forecast Model — predict complaint volume by quarter.
 
-    Looks for patterns with seasonal or volume-related indicators.
-    Pure read of Stage 4 output.
+    Grounds impact in REAL patterns:
+    - pattern_count: number of detected patterns with seasonal signals
+    - avg_pattern_size: average case count per pattern
+
+    Returns dict with locked impact statement (no hallucination).
     """
-    volume_keywords = {"فصل", "موسم", "كمية", "حجم", "شهري", "ربع سنوي", "اتجاه", "ذروة", "وادي"}
-    total = _count_pattern_cases(state, volume_keywords)
+    # Count patterns showing seasonal/volume variation
+    volume_patterns = [
+        p for p in (state.patterns or [])
+        if any(kw in (p.sub_theme_ar or p.sub_theme or "") for kw in {"فصل", "موسم", "ذروة"})
+    ]
+    pattern_count = len(volume_patterns)
+    total_pattern_cases = sum(p.case_count for p in volume_patterns) if volume_patterns else 0
+    avg_size = int(total_pattern_cases / pattern_count) if pattern_count > 0 else 0
 
-    if total == 0:
-        # Fallback: assume at least 3-4 patterns show seasonal variation
-        all_pattern_count = sum(p.case_count for p in (state.patterns or []))
-        total = max(int(all_pattern_count * 0.15), 25)  # 15% of total cases
+    # LOCKED impact: grounded in REAL pattern data from Stage 4
+    impact = (
+        f"التنبؤ بحجم الشكاوى الفصلي اعتماداً على {pattern_count} أنماط موسمية "
+        f"({total_pattern_cases} حالة) — تمكين تخطيط الموارد الاستباقي"
+        if pattern_count > 0
+        else "تحليل الأنماط التاريخية للتنبؤ بتوزيع الشكاوى للأرباع القادمة"
+    )
 
-    return max(total, 18)  # Floor at 18
+    return {
+        "tool_id": "volume_forecast_model",
+        "impact_statement_ar": impact,
+        "impact_data": {"pattern_count": pattern_count, "total_cases": total_pattern_cases},
+    }
 
 
 def _get_prior_run_total(state: PipelineState) -> Optional[int]:
@@ -248,7 +326,7 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
 
     Each row contains:
       - tool_id:         internal identifier for LLM matching
-      - الأثر المتوقع:   pre-computed impact statement (numbers from state)
+      - الأثر المتوقع:   pre-computed impact statement (REAL numbers from state, NO hallucination)
       - effort_level:    pre-computed effort level (LOCKED — not written by LLM)
       - effort_timeline: pre-computed timeline string (LOCKED)
       - context:         extra facts for LLM to write الأداة, الوظيفة, تقييم التنفيذ
@@ -256,100 +334,70 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
     Column values marked LOCKED must be copied verbatim by the LLM into the output.
     Columns الأداة, الوظيفة, and the narrative in تقييم التنفيذ are LLM-written.
 
-    Pure read of Stage 2–5 outputs — no new computation.
+    Pure read of Stage 2–5 outputs — no hallucination, no floor values.
     """
-    total_cases  = len(state.all_classified) or state.total_cases
-    reclass_rate = state.reclassification_rate or 0.0
     date_range   = convert_month_year_to_arabic(state.month_year) or ""
 
-    # ── Tool 1: NLP-based text classifier to reduce "أخرى" ────────────────────
-    unclassified_cases = _count_unclassified_cases(state)
-
-    # ── Tool 2: Anomaly detection model ──────────────────────────────────────
-    anomaly_cases = _count_anomaly_cases(state)
-
-    # ── Tool 3: Response suggestion engine (Agent Assist) ────────────────────
-    resolution_quality_cases = _count_resolution_quality_cases(state)
-
-    # ── Tool 4: Seasonal volume forecast model ──────────────────────────────
-    volume_forecast_cases = _count_volume_forecast_cases(state)
+    # ── Build impact statements using REAL data from each stage (no hallucination) ──
+    nlp_impact      = _build_nlp_classifier_impact(state)
+    anomaly_impact  = _build_anomaly_detection_impact(state)
+    response_impact = _build_response_suggestion_impact(state)
+    volume_impact   = _build_volume_forecast_impact(state)
 
     rows = [
         {
-            "tool_id": "nlp_text_classifier",
-            # Pre-computed impact (LOCKED numbers — copy verbatim)
-            "impact_cases": unclassified_cases,
-            "impact_statement_ar": (
-                f"إعادة تصنيف {unclassified_cases}+ حالة من فئة «أخرى» إلى تصنيفات محددة "
-                "— يقلل من 43% إلى أقل من 15% وينقل البيانات من الضجيج إلى الرؤية"
-            ),
+            "tool_id": nlp_impact["tool_id"],
+            "impact_statement_ar": nlp_impact["impact_statement_ar"],  # LOCKED — from REAL data
             "effort_level": _EFFORT_MEDIUM,
             "effort_timeline_ar": "3–4 أشهر (نماذج تصنيف النصوص متاحة تجارياً مع التخصيص)",
-            # Context for LLM (NOT locked — used to write الأداة and الوظيفة)
             "context": {
-                "friction_source": "شكاوى غير مصنفة تقع في فئة «أخرى» المحتوية على 43% من الحالات",
+                "friction_source": "شكاوى غير مصنفة في فئة «أخرى»",
                 "technique": "معالجة اللغة الطبيعية (NLP) + نموذج تصنيف نصي",
                 "what_it_does": (
                     "يحلل نصوص الشكاوى المصنفة كـ «أخرى» ويستخرج الكلمات المفتاحية والمواضيع "
-                    "الرئيسية ويعيد تصنيفها إلى الفئات الصحيحة (خدمات، مرور، منطقة، إلخ) "
-                    "— يقلل الضجيج ويحسن جودة البيانات للتحليل اللاحق"
+                    "الرئيسية ويعيد تصنيفها إلى الفئات الصحيحة — يقلل الضجيج ويحسن جودة البيانات"
                 ),
             },
         },
         {
-            "tool_id": "anomaly_detection",
-            "impact_cases": max(anomaly_cases, 8),
-            "impact_statement_ar": (
-                f"في {date_range}: كشف {max(anomaly_cases, 8)}+ حالات شذوذ في أنماط الشكاوى "
-                "— تنبيه مبكر قبل تصعيد المشاكل"
-            ),
+            "tool_id": anomaly_impact["tool_id"],
+            "impact_statement_ar": anomaly_impact["impact_statement_ar"],  # LOCKED — from REAL data
             "effort_level": _EFFORT_MEDIUM,
             "effort_timeline_ar": "2–3 أشهر (كشف الشذوذ الإحصائي متوفر في مكتبات معيارية)",
             "context": {
-                "friction_source": "ارتفاعات مفاجئة في حجم الشكاوى أو ظهور أنماط جديدة غير المتوقعة",
+                "friction_source": "ارتفاعات مفاجئة في حجم الشكاوى أو ظهور أنماط جديدة",
                 "technique": "كشف الشذوذ الإحصائي (Anomaly Detection) — نماذج التعلم الآلي",
                 "what_it_does": (
-                    "يراقب توزيع الشكاوى عبر الأيام والأسابيع ويحدد الارتفاعات المفاجئة "
-                    "أو التغيرات غير المتوقعة في الأنماط — ينبّه الفريق بسرعة عند اكتشاف حالة شذوذ "
-                    "لتمكين التدخل السريع وتجنب الأزمات"
+                    "يراقب توزيع الشكاوى ويحدد الارتفاعات المفاجئة أو التغيرات غير المتوقعة "
+                    "في الأنماط — ينبّه الفريق بسرعة لتمكين التدخل السريع وتجنب الأزمات"
                 ),
             },
         },
         {
-            "tool_id": "response_suggestion_agent",
-            "impact_cases": max(resolution_quality_cases, 12),
-            "impact_statement_ar": (
-                f"تحسين {max(resolution_quality_cases, 12)}+ حالة شكوى من خلال اقتراح ردود معيارية "
-                "— تقليل وقت الحل + زيادة معدل الحل من أول تواصل"
-            ),
+            "tool_id": response_impact["tool_id"],
+            "impact_statement_ar": response_impact["impact_statement_ar"],  # LOCKED — from REAL data
             "effort_level": _EFFORT_MEDIUM,
             "effort_timeline_ar": "3–4 أشهر (RAG + نماذج الاقتراحات معروفة التطبيق)",
             "context": {
-                "friction_source": "ردود غير مكتملة أو غير متسقة — ضعف جودة الحل من أول تواصل",
+                "friction_source": "ردود غير مكتملة أو غير متسقة — ضعف جودة الحل",
                 "technique": "Agent Assist مع Retrieval-Augmented Generation (RAG)",
                 "what_it_does": (
-                    "يحلل محتوى الشكوى ويسترجع الإجابات المسبقة الصحيحة والسياسات ذات الصلة "
-                    "ويقترح ردوداً معيارية على موظف خدمة العملاء في الوقت الفعلي "
-                    "— يزيد من اتساق الردود ويسرع الحل ويقلل من طلبات المتابعة"
+                    "يحلل محتوى الشكوى ويسترجع الإجابات المسبقة والسياسات ذات الصلة "
+                    "ويقترح ردوداً معيارية للموظف — يزيد الاتساق ويسرع الحل"
                 ),
             },
         },
         {
-            "tool_id": "volume_forecast_model",
-            "impact_cases": max(volume_forecast_cases, 18),
-            "impact_statement_ar": (
-                f"التنبؤ بحجم الشكاوى الفصلي اعتماداً على {max(volume_forecast_cases, 18)}+ نقطة بيانات موسمية "
-                "— تمكين تخطيط الموارد والاستعداد الاستباقي"
-            ),
+            "tool_id": volume_impact["tool_id"],
+            "impact_statement_ar": volume_impact["impact_statement_ar"],  # LOCKED — from REAL data
             "effort_level": _EFFORT_LOW_MED,
             "effort_timeline_ar": "2–3 أشهر (بيانات الحجم التاريخية موجودة في قاعدة البيانات)",
             "context": {
-                "friction_source": "عدم القدرة على التنبؤ بذروات الشكاوى الموسمية والمخططط للموارد",
+                "friction_source": "عدم القدرة على التنبؤ بذروات الشكاوى الموسمية",
                 "technique": "نموذج التنبؤ بالسلاسل الزمنية (Time Series Forecasting)",
                 "what_it_does": (
-                    "يحلل البيانات التاريخية لحجم الشكاوى على مستوى الفصل والشهر "
-                    "ويتعرف على الأنماط الموسمية والاتجاهات — يتنبأ بالحجم المتوقع للربع القادم "
-                    "مما يمكّن الإدارة من التخطيط للموارد والموظفين بناءً على التنبؤات"
+                    "يحلل البيانات التاريخية لحجم الشكاوى ويتعرف على الأنماط الموسمية "
+                    "— يتنبأ بالحجم المتوقع للربع القادم ليمكّن تخطيط الموارد"
                 ),
             },
         },

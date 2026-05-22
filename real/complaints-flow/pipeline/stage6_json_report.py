@@ -41,7 +41,7 @@ from .generate_digital_transformation_section import (
 from .generate_ai_use_cases_section import _build_ai_tool_rows
 from .generate_improvement_roadmap_section import _build_display_roadmap_rows
 from .generate_conclusion_section import build_conclusion_section_for_json
-from .utils import calculate_similarity
+from .utils import calculate_similarity, normalize_arabic
 
 
 # ==============================================================================
@@ -147,7 +147,16 @@ def _build_rich_distribution_rows(
     """
     Build the distribution table rows for complaints version.
     Uses نوع الشكوى (complaint sub-category) with 6 rows, one per sub-category.
-    ISSUE 1 FIX: Schema now matches sample with proper complaint type breakdown.
+
+    Each row includes:
+    - نوع الشكوى: Category name
+    - العدد: Actual count from sub_category_counts (from stage 4 pipeline)
+    - النسبة: Calculated percentage
+    - الوصف: Description of category characteristics
+    - قابلية التحويل الرقمي: Digital transformation recommendation
+
+    Both الوصف and digital capability are non-LLM generated standard descriptions
+    to ensure consistency and prevent hallucination.
     """
     if sub_category_counts is None:
         sub_category_counts = {}
@@ -164,6 +173,17 @@ def _build_rich_distribution_rows(
         'شكاوى خارج الاختصاص والأخرى',
     ]
 
+    # Descriptions of what each category represents
+    category_description_map = {
+        'شكاوى مكررة (مرفوضة)': 'طلبات مرفوضة — طلبات متكررة أو لا تستوفي المعايير',
+        'شكاوى بلا تصنيف خدمي ("أخرى")': 'متنوعة — لا تندرج ضمن التصنيفات المحددة',
+        'شكاوى على الخدمات المرورية': 'خدمات مرورية — تسجيل بلاغات، معاملات رخص وملكيات',
+        'شكاوى أمنية وجنائية': 'بلاغات أمنية — جنائية وموروية وحالات اجتماعية',
+        'شكاوى شهادات وتصاريح': 'شهادات وتصاريح — شهادة السيرة والسلوك وترخيص الأسلحة',
+        'شكاوى خارج الاختصاص والأخرى': 'خارج الاختصاص — تتعلق بجهات أخرى أو إمارات أخرى',
+    }
+
+    # Digital transformation recommendations for each category
     digital_readiness_map = {
         'شكاوى مكررة (مرفوضة)': 'نظام تصفية آلي — لتجنب الازدواجية',
         'شكاوى بلا تصنيف خدمي ("أخرى")': 'إعادة تصنيف ذكي — بتحليل النصوص',
@@ -181,7 +201,8 @@ def _build_rich_distribution_rows(
             "نوع الشكوى": category,
             "العدد": str(count),
             "النسبة": pct,
-            "الوصف": digital_readiness_map.get(category, ""),
+            "الوصف": category_description_map.get(category, ""),
+            "قابلية التحويل الرقمي": digital_readiness_map.get(category, ""),
         })
 
     return rows
@@ -372,11 +393,15 @@ class JSONReportBuilder:
         all_classified = self.state.all_classified or []
         total = len(all_classified)
 
-        # Calculate digital channel rate from case_channel
-        digital_channels = {'app', 'web', 'website', 'application'}
+        # Calculate digital channel rate from case_channel (phone app + website)
+        # Use normalized matching to handle diacritic variants
+        DIGITAL_KEYWORDS = {normalize_arabic(kw) for kw in ['تطبيق', 'موقع']}
         digital_count = sum(
             1 for c in all_classified
-            if c.case_channel and c.case_channel.strip().lower() in digital_channels
+            if c.case_channel and any(
+                kw in normalize_arabic(str(c.case_channel))
+                for kw in DIGITAL_KEYWORDS
+            )
         )
         digital_channel_rate = f"{digital_count / total * 100:.1f}%" if total > 0 else "0%"
 
@@ -418,7 +443,7 @@ class JSONReportBuilder:
         categories = _SUB_CLASSIFICATIONS
 
         return {
-            "type": "bar",
+            "type": "column",
             "title": "تصنيف أنواع الشكاوى",
             "categories": categories,
             "series": [
@@ -478,7 +503,7 @@ class JSONReportBuilder:
         values = [float(v) for v in counts.values.tolist()]
 
         return {
-            "type": "bar",
+            "type": "column",
             "title": "توزيع الشكاوى على الخدمات",
             "categories": categories,
             "series": [
@@ -755,23 +780,119 @@ class JSONReportBuilder:
             "original_index": self.next_table_index()
         }
 
+    def _extract_rejection_reason(self, case: CaseRow) -> str:
+        """
+        Extract rejection reason from case data.
+        Maps sub_classification and case details to human-readable rejection reasons.
+        Returns the reason category for table grouping. Called only on rejected cases.
+        """
+        sub = case.sub_classification or ""
+        res = case.resolution_response or ""
+        res_lower = res.lower()
+
+        # Check sub_classification for explicit rejection reasons
+        if "مكررة" in sub or "مكرر" in res:
+            return "شكوى مكررة"
+
+        if "بلا تصنيف" in sub or "أخرى" in sub:
+            if "قناة" in res or "channel" in res_lower:
+                return "بلاغ في قناة خاطئة"
+            return "أخرى"
+
+        if "خارج الاختصاص" in sub:
+            return "خارج اختصاص شرطة الفجيرة"
+
+        # Fallback: analyze resolution_response for rejection clues
+        # (all rejected cases should have a reason in their metadata)
+        if "مكرر" in res or "مكررة" in res:
+            return "شكوى مكررة"
+        if "قناة" in res or "channel" in res_lower:
+            return "بلاغ في قناة خاطئة"
+        if "اختصاص" in res:
+            return "خارج اختصاص شرطة الفجيرة"
+        if "انسحب" in res or "تعذر" in res:
+            return "انسحب المشتكي / تعذر التواصل"
+        if "نظام" in res or "عطل" in res or "خلل" in res:
+            return "عطل في النظام"
+        if "تنظيم" in res or "إداري" in res or "داخلي" in res:
+            return "تنظيم وظيفي داخلي"
+
+        return "أخرى"
+
+    def _build_rejection_reasons_table(self) -> Dict[str, Any]:
+        """
+        Build rejection reasons breakdown table for Section 3.3.
+        Analyzes only REJECTED cases (sla_color != 'نعم') and counts rejection reasons dynamically.
+        Returns table dict with columns: سبب الرفض, العدد, % من المرفوضات, التشخيص
+        """
+        all_classified = self.state.all_classified or []
+
+        # Filter for rejected cases only (sla_color != 'نعم')
+        rejected_cases = [
+            c for c in all_classified
+            if str(c.sla_color).strip() != 'نعم'
+        ]
+
+        # Count rejection reasons
+        rejection_counts = defaultdict(int)
+        rejection_descriptions = {
+            "شكوى مكررة": "طلبات متطابقة أو متشابهة جداً سبق استقبالها ومعالجتها",
+            "بلاغ في قناة خاطئة": "بلاغات مقدمة عبر قنوات غير معتمدة أو غير صحيحة",
+            "تنظيم وظيفي داخلي": "شكاوى تتعلق بتنظيم داخلي لا تندرج تحت شكاوى المتعاملين",
+            "خارج اختصاص شرطة الفجيرة": "شكاوى خارج نطاق اختصاص شرطة الفجيرة",
+            "عطل في النظام": "شكاوى لم تُستقبل بسبب خلل تقني في النظام",
+            "انسحب المشتكي / تعذر التواصل": "انسحب المشتكي أو تعذر التواصل معه",
+            "أخرى": "أسباب أخرى غير محددة",
+        }
+
+        for case in rejected_cases:
+            reason = self._extract_rejection_reason(case)
+            if reason:  # Only count non-empty reasons
+                rejection_counts[reason] += 1
+
+        # Build table rows sorted by count (descending)
+        total_rejections = sum(rejection_counts.values()) or 1
+        rows = []
+
+        for reason in sorted(rejection_counts.keys(), key=lambda r: rejection_counts[r], reverse=True):
+            count = rejection_counts[reason]
+            pct = f"{count/total_rejections*100:.1f}%"
+            diagnosis = rejection_descriptions.get(reason, "—")
+
+            rows.append({
+                "سبب الرفض": reason,
+                "العدد": str(count),
+                "% من المرفوضات": pct,
+                "التشخيص": diagnosis,
+            })
+
+        return {
+            "columns": ["سبب الرفض", "العدد", "% من المرفوضات", "التشخيص"],
+            "rows": rows,
+            "row_count": len(rows),
+            "col_count": 4,
+            "original_index": self.next_table_index(),
+        }
+
     def _build_resolution_analysis_subsection(self, wm_raw: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Build Section 3.3 — Resolution Analysis.
+        Build Section 3.3 — Resolution Analysis with rejection reasons table.
 
-        Spec requirement: ENTIRE SECTION IS ONE BOLD PARAGRAPH. Not a table.
-        Content comes from resolution_paragraph in workload_map raw_data.
+        Changed from: Single bold paragraph (spec requirement)
+        To: Intro paragraph + rejection reasons breakdown table
         """
-        # Section 3.3 — single bold paragraph (spec requirement)
+        # Section 3.3 — intro paragraph + rejection reasons table
         resolution_data = wm_raw.get("resolution_paragraph") or ""
+
+        # Build the rejection reasons table
+        rejection_table = self._build_rejection_reasons_table()
 
         return {
             "id": self.next_section_id("33_تحليل_المعالجة"),
             "title": "3.3  تحليل معالجة الشكاوى — الموافقة والرفض والإنجاز",
             "level": 2,
             "content": resolution_data,
-            "content_bold": True,  # Mark this as bold per spec
-            "tables": [],  # No table — entire section is one bold paragraph
+            "tables": [rejection_table] if rejection_table.get("rows") else [],
             "charts": [],
         }
 
@@ -779,9 +900,16 @@ class JSONReportBuilder:
         """
         Build Section 3.4 — Department Distribution.
         Built from state.department_distribution (computed in stage1).
+        Shows dominant complaint type for each department.
         """
         all_classified = self.state.all_classified or []
         total = len(all_classified) or 1
+
+        # Build lookup: department → list of cases in that department
+        dept_cases = defaultdict(list)
+        for case in all_classified:
+            if case.admin:
+                dept_cases[case.admin].append(case)
 
         rows = []
         if self.state.department_distribution:
@@ -791,17 +919,27 @@ class JSONReportBuilder:
                 reverse=True
             ):
                 pct = f'{count/total*100:.1f}%'
-                # Determine significance
-                significance = 'رئيسية' if count > total*0.3 else 'ثانوية' if count > total*0.1 else 'صغيرة'
+
+                # Find dominant complaint type for this department
+                cases_in_dept = dept_cases.get(dept, [])
+                dominant_complaint = "—"
+                if cases_in_dept:
+                    complaint_counts = Counter(
+                        case.sub_classification or "أخرى"
+                        for case in cases_in_dept
+                    )
+                    if complaint_counts:
+                        dominant_complaint = complaint_counts.most_common(1)[0][0]
+
                 rows.append({
-                    'الإدارة العامة': dept,
+                    'الإدارة': dept,
                     'العدد': str(count),
                     'النسبة': pct,
-                    'الدلالة': significance
+                    'نوع الشكاوى الغالب': dominant_complaint
                 })
 
         department_table = {
-            'columns': ['الإدارة العامة', 'العدد', 'النسبة', 'الدلالة'],
+            'columns': ['الإدارة', 'العدد', 'النسبة', 'نوع الشكاوى الغالب'],
             'rows': rows,
             'row_count': len(rows),
             'col_count': 4,
@@ -875,15 +1013,16 @@ class JSONReportBuilder:
 
         intro_paragraph = wm_raw["intro_paragraph"]
 
-        dist_rows = wm_raw.get("distribution_table") or _build_rich_distribution_rows(
+        dist_rows = wm_raw.get("complaints_table") or _build_rich_distribution_rows(
             corrected_dist, original_dist, total_cases, sub_category_counts
         )
         # ISSUE 1 FIX: Use نوع الشكوى column with الوصف instead of نوع التواصل
+        # Added قابلية التحويل الرقمي column for digital transformation readiness
         dist_table = {
-            "columns": ["نوع الشكوى", "العدد", "النسبة", "الوصف"],
+            "columns": ["نوع الشكوى", "العدد", "النسبة", "الوصف", "قابلية التحويل الرقمي"],
             "rows": dist_rows,
             "row_count": len(dist_rows),
-            "col_count": 4,
+            "col_count": 5,
             "original_index": self.next_table_index(),
         }
         subsection_31 = {
@@ -1089,21 +1228,13 @@ class JSONReportBuilder:
 
         # Validate required columns in gap_table
         for idx, row in enumerate(dg_raw["gap_table"]):
-            if "الشدّة" not in row or not row["الشدّة"].strip():
-                raise RuntimeError(
-                    f"[JSONReportBuilder] gap_table row {idx} missing 'الشدّة'. "
-                    f"LLM must copy severity emoji from pre_computed_gap_table."
-                )
-            if "وضع استقبال الشكاوى والمعالجة" not in row or not row["وضع استقبال الشكاوى والمعالجة"].strip():
-                raise RuntimeError(
-                    f"[JSONReportBuilder] gap_table row {idx} missing 'وضع استقبال الشكاوى والمعالجة'. "
-                    f"LLM must provide this column with current state and missing actions."
-                )
-            if "التوصية" not in row or not row["التوصية"].strip():
-                raise RuntimeError(
-                    f"[JSONReportBuilder] gap_table row {idx} missing 'التوصية'. "
-                    f"LLM must provide a recommendation for each gap."
-                )
+            required_cols = ["الخدمة", "الشكاوى", "القناة الرسمية في دليل الخدمات", "نوع الفجوة", "التوصية"]
+            for col in required_cols:
+                if col not in row or not str(row[col]).strip():
+                    raise RuntimeError(
+                        f"[JSONReportBuilder] gap_table row {idx} missing '{col}'. "
+                        f"Expected all columns: {required_cols}"
+                    )
 
         # Validate required columns in root_cause_table
         for idx, row in enumerate(dg_raw["root_cause_table"]):
@@ -1118,20 +1249,18 @@ class JSONReportBuilder:
         # ── Build table dicts ────────────────────────────────────────────────────
         gap_table_rows = dg_raw["gap_table"]
 
-        # SOURCE: state.gap_table — post-reconciliation
-        # Override case counts from LLM with authoritative values from state.gap_table.
-        # The LLM was called with pre-reconciliation counts; we sync them here.
+        # NOTE: Case counts in gap_table_rows are already pre-computed from state.gap_table
+        # and locked (not modified by LLM). This sync logic is a safety check only.
         if self.state.gap_table:
             gap_lookup = {(g.topic_ar or g.topic or "").strip(): g for g in self.state.gap_table}
             for row in gap_table_rows:
-                topic = (row.get("الموضوع", "") or "").strip()
+                topic = (row.get("الخدمة", "") or "").strip()
                 if topic in gap_lookup:
-                    # Exact match found
+                    # Exact match found — verify case count is correct
                     gap = gap_lookup[topic]
-                    row["الحالات"] = str(gap.case_count)
+                    row["الشكاوى"] = str(gap.case_count)
                 else:
                     # Fallback: use similarity-based matching
-                    # Find the gap_lookup entry with highest similarity score
                     best_match = None
                     best_score = 0.0
 
@@ -1144,29 +1273,27 @@ class JSONReportBuilder:
 
                     # Apply similarity match only if score exceeds threshold
                     if best_score >= 0.5 and best_match:
-                        row["الحالات"] = str(best_match.case_count)
+                        row["الشكاوى"] = str(best_match.case_count)
                         print(
                             f"[JSONReportBuilder] INFO: Gap topic '{topic[:50]}...' "
-                            f"matched via similarity ({best_score:.2f}) to state.gap_table. "
-                            f"Case count updated."
+                            f"matched via similarity ({best_score:.2f}) to state.gap_table."
                         )
                     else:
-                        # No match above threshold; keep LLM-supplied count and warn
+                        # No match above threshold; keep pre-computed count
                         print(
-                            f"[JSONReportBuilder] WARNING: Gap topic '{topic}' "
-                            f"not found in state.gap_table (best similarity={best_score:.2f}, threshold=0.5). "
-                            f"Using LLM-supplied case count. "
-                            f"This may indicate a mismatch between LLM and state gap definitions."
+                            f"[JSONReportBuilder] INFO: Gap topic '{topic}' "
+                            f"not found in state.gap_table (best similarity={best_score:.2f}). "
+                            f"Using pre-computed case count."
                         )
 
         root_cause_table_rows = dg_raw["root_cause_table"]
         section_body = dg_raw["section_body"]
 
         gap_table_dict = {
-            "columns": ["الموضوع", "الحالات", "الشدّة", "وضع استقبال الشكاوى والمعالجة", "نوع الفجوة", "التوصية"],
+            "columns": ["الخدمة", "الشكاوى", "القناة الرسمية في دليل الخدمات", "نوع الفجوة", "التوصية"],
             "rows":    gap_table_rows,
             "row_count": len(gap_table_rows),
-            "col_count": 6,
+            "col_count": 5,
             "original_index": self.next_table_index(),
         }
 
@@ -1282,11 +1409,13 @@ class JSONReportBuilder:
         )
 
         # ── FAQ table dict ────────────────────────────────────────────────────
+        # COLUMNS (matching Section 6.1 screenshot):
+        # #, السؤال, الفئة الرسمية, الإجابة الصحيحة, التكرار
         faq_table_dict = {
-            "columns":        ["#", "السؤال", "الإجابة المقترحة", "التكرار"],
+            "columns":        ["#", "السؤال", "الفئة الرسمية", "الإجابة الصحيحة", "التكرار"],
             "rows":           faq_rows,
             "row_count":      len(faq_rows),
-            "col_count":      4,
+            "col_count":      5,
             "original_index": self.next_table_index(),
             "caption":        faq_intro,
         }
@@ -1413,7 +1542,7 @@ class JSONReportBuilder:
 
         # ── Use Cases table dict ──────────────────────────────────────────────
         use_cases_table_dict = {
-            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية"), "تقييم التنفيذ"],
+            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع", "تقييم التنفيذ"],
             "rows":           display_rows,
             "row_count":      len(display_rows),
             "col_count":      4,

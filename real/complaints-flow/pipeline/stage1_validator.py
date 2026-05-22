@@ -14,6 +14,7 @@ import pandera as pa
 from pandera import Column, Index, Check, DataFrameSchema
 from typing import Tuple, Dict, Any
 from .state import PipelineState
+from .utils import normalize_arabic
 
 
 def _sanitize_for_json(obj):
@@ -371,12 +372,20 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
         channel_counts = df_normalized['قناة_تقديم_الخدمة'].str.strip().value_counts()
         state.channel_distribution = _sanitize_for_json(channel_counts.to_dict())
 
-    # 2. Digital channel rate (تطبيق الهاتف + موقع إلكتروني + NCRM = digital)
-    DIGITAL_CHANNELS = ['تطبيق الهاتف', 'موقع الكترونى', 'NCRM']
+    # 2. Digital channel rate (تطبيق الهاتف + موقع إلكتروني = digital)
+    # Use normalized matching to handle diacritic and spelling variants
+    # Digital channels: phone app (تطبيق) and website (موقع)
+    DIGITAL_KEYWORDS = {
+        normalize_arabic(kw)
+        for kw in ['تطبيق', 'موقع']
+    }
     if 'قناة_تقديم_الخدمة' in df_normalized.columns:
-        digital_count = sum(
-            state.channel_distribution.get(c, 0) for c in DIGITAL_CHANNELS
-        )
+        digital_count = 0
+        for channel, count in state.channel_distribution.items():
+            # Normalize both the channel name and keywords for comparison
+            normalized_channel = normalize_arabic(channel)
+            if any(kw in normalized_channel for kw in DIGITAL_KEYWORDS):
+                digital_count += count
         state.digital_channel_rate = round(
             digital_count / state.total_cases * 100, 1
         ) if state.total_cases else 0.0

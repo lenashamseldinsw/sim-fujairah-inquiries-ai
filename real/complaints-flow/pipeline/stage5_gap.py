@@ -39,7 +39,8 @@ GAP_ANALYSIS_TOOL = {
                         "topic_ar": {"type": "string"},
                         "case_count": {"type": "integer"},
                         "guidebook_status": {"type": "string", "enum": ["Covered", "Partially Covered", "Missing"]},
-                        "guidebook_excerpt": {"type": "string", "description": "Relevant text snippet from guidebook"},
+                        "guidebook_excerpt": {"type": "string", "description": "Relevant text snippet from guidebook (English)"},
+                        "guidebook_excerpt_ar": {"type": "string", "description": "Relevant text snippet from guidebook (Arabic)"},
                         "coverage_percentage": {"type": "number", "description": "0-100: what % of the issue is addressed by guidebook"},
                         "guidebook_match_confidence": {"type": "number", "description": "0.0-1.0: confidence that guidebook content matches the issue"},
                         "proactive_notification_opportunity": {
@@ -291,7 +292,8 @@ For each major friction topic, provide:
 - topic_ar: Arabic name of the gap topic
 - case_count: FROM LOCKED CASE COUNTS TABLE ABOVE (copy verbatim, do NOT alter)
 - guidebook_status: "Covered" (full coverage), "Partially Covered", or "Missing"
-- guidebook_excerpt: The actual relevant text from the guidebook (if applicable)
+- guidebook_excerpt: The actual relevant text from the guidebook (if applicable) — English text
+- guidebook_excerpt_ar: The actual relevant text from the guidebook (if applicable) — Arabic text (translate excerpt into Arabic if needed)
 - coverage_percentage: 0-100 score of how much the guidebook addresses this issue
 - clarity_assessment: "plain_language", "bureaucratic", or "unclear"
 - format_assessment: "step_by_step", "wall_of_text", or "mixed"

@@ -256,6 +256,15 @@ def _build_chart_xml(chart: _PendingChart) -> bytes:
             vpt.set("idx", str(vi))
             etree.SubElement(vpt, _c("v")).text = str(v)
 
+        # Data labels for pie charts: show values on slices
+        if style.show_data_labels:
+            dLbls = etree.SubElement(ser_el, _c("dLbls"))
+            etree.SubElement(dLbls, _c("showVal")).set("val", "1")
+            etree.SubElement(dLbls, _c("showCatName")).set("val", "0")
+            etree.SubElement(dLbls, _c("showSerName")).set("val", "0")
+            etree.SubElement(dLbls, _c("showPercent")).set("val", "0")
+            etree.SubElement(dLbls, _c("dLblPos")).set("val", "bestFit")
+
     else:
         # Series — reference layout: series in columns (B, C, ...), categories in rows (A2:AN+1)
         for ser_idx, ser in enumerate(series_list):

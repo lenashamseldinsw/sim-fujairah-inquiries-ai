@@ -259,6 +259,35 @@ def generate_customer_journey_section(
         top_friction_count  = top_friction.case_count
         top_friction_pct    = round(top_friction_count / total_cases * 100, 1)
 
+        # Pre-compute the dominant journey stage from state.journey_map.
+        # We do NOT invent a stage when the field is missing — the section_body
+        # prompt branches on whether `dominant_stage` is None.
+        stage_totals: Dict[str, int] = {}
+        for f in state.journey_map:
+            stage = getattr(f, 'journey_stage_ar', None) or getattr(f, 'journey_stage', None)
+            if not stage:
+                continue
+            stage_totals[stage] = stage_totals.get(stage, 0) + f.case_count
+
+        if stage_totals:
+            dominant_stage = max(stage_totals.items(), key=lambda kv: kv[1])[0]
+            dominant_stage_cases = stage_totals[dominant_stage]
+            dominant_stage_share = round(
+                dominant_stage_cases / sum(stage_totals.values()) * 100, 1
+            )
+        else:
+            dominant_stage = None
+            dominant_stage_cases = 0
+            dominant_stage_share = 0.0
+
+        # Compute the share of friction-affected cases relative to total_cases.
+        # The section_body uses this to decide whether to claim friction "drives
+        # most complaints" or just "explains a meaningful portion" of them.
+        friction_total_cases = sum(f.case_count for f in state.journey_map)
+        friction_share_of_total = round(
+            friction_total_cases / total_cases * 100, 1
+        ) if total_cases else 0.0
+
         # Serialize for prompt
         friction_rows_json   = json.dumps(friction_rows,   ensure_ascii=False, indent=2)
         quick_win_json        = json.dumps(quick_win,       ensure_ascii=False) if quick_win else "null"
@@ -278,6 +307,10 @@ def generate_customer_journey_section(
             f'top_friction_point:  "{top_friction_point}"\n'
             f'top_friction_count:  {top_friction_count}\n'
             f'top_friction_pct:    "{top_friction_pct}%"\n'
+            f'friction_total_cases:    {friction_total_cases}  (sum of case_count across all friction points)\n'
+            f'friction_share_of_total: "{friction_share_of_total}%"  (share of total complaints touched by any friction)\n'
+            f'dominant_journey_stage:  {json.dumps(dominant_stage, ensure_ascii=False) if dominant_stage else "null"}\n'
+            f'dominant_stage_share:    "{dominant_stage_share}%"  (share of friction cases concentrated in dominant_stage)\n'
             f'quick_win:           {quick_win_json}\n'
             f'\n'
             'friction_context (join of Stage 4 journey_map + Stage 5 gap intelligence — use guidebook_recommendation to inform الإجراء التحسيني):\n'
@@ -291,15 +324,55 @@ def generate_customer_journey_section(
             'YOUR TASK — write ONLY the two items below\n'
             '─────────────────────────────────────────────\n'
             '\n'
-            'A. section_body (the section\'s opening narrative paragraph)\n'
-            '2–3 sentences, formal Arabic. Must:\n'
-            f'  - Open: "يكشف التحليل المعمّق للبيانات النصية غير المهيكلة عن {friction_count} نقاط احتكاك'
-            f' رئيسية في رحلة المتعامل مع الشكاوى، كل منها ينتج عن سبب جذري محدد قابل للمعالجة:"\n'
-            f'  - Highlight the top friction: "النقطة الأكثر حدة هي {top_friction_point} التي تؤثر على {top_friction_count} حالة ({top_friction_pct}% من الإجمالي)."\n'
-            '  - If quick_win is not null, add a sentence about the quick_win impact.\n'
-            '  - End the paragraph with a colon (":") — the friction table follows immediately.\n'
-            '  - CRITICAL: Use the EXACT injected values for top_friction_point, top_friction_count, and top_friction_pct.\n'
-            '    Do NOT extract these from friction_context array or recalculate from data.\n'
+            'A. section_body (the section opening narrative paragraph)\n'
+            '2–3 short sentences, formal Arabic, observational tone. Do NOT list per-friction\n'
+            'percentages, do NOT crown a single "النقطة الأكثر حدة", do NOT mention quick_win.\n'
+            'Those details belong in the table that follows, not in the opener.\n'
+            '\n'
+            'STRUCTURAL TEMPLATE (the SHAPE to follow, not phrases to copy):\n'
+            '\n'
+            '  Sentence 1 — Source-and-scope. Name the source (unstructured text in تفاصيل الطلب\n'
+            '  and نصوص القرار / الحل) and give exactly ONE quantitative claim: the friction_count.\n'
+            '  Frame what the friction count means USING the injected friction_share_of_total:\n'
+            '    - If friction_share_of_total >= 60%: it is fair to say friction drives the\n'
+            '      majority/bulk of complaint volume.\n'
+            '    - If friction_share_of_total is 30%–59%: say friction explains a substantial\n'
+            '      portion of complaints — do NOT claim "majority" or "bulk".\n'
+            '    - If friction_share_of_total < 30%: say friction recurs across a meaningful\n'
+            '      subset of complaints — do NOT claim it dominates.\n'
+            '    Choose the framing that matches the injected number. Never overstate.\n'
+            '\n'
+            '  Sentence 2 — Concentration. If dominant_journey_stage is NOT null, observe that\n'
+            '  most friction concentrates at that stage. Name the stage verbatim from the\n'
+            '  injected value. Do NOT print dominant_stage_share as a number — the qualitative\n'
+            '  observation is the point. If dominant_journey_stage IS null, OMIT this sentence\n'
+            '  entirely and write only Sentences 1 and 3.\n'
+            '\n'
+            '  Sentence 3 — Citizen-experience observation. One short sentence describing what\n'
+            '  the customer experiences at that stage (or, if dominant_journey_stage is null,\n'
+            '  what the citizen experiences across the journey in general). NO numbers,\n'
+            '  NO percentages, NO friction-point names. Write fresh prose grounded in the\n'
+            '  pre_computed_friction_table — do NOT copy phrases from the example below.\n'
+            '\n'
+            'WORKED EXAMPLE (for shape only — do NOT reuse these exact words):\n'
+            '\n'
+            '  Given: friction_count=7, friction_share_of_total=82%, dominant_journey_stage="ما بعد التقديم"\n'
+            '  Acceptable section_body:\n'
+            '    "يكشف التحليل المعمّق للنصوص غير المهيكلة — تفاصيل الطلب ونصوص القرار — عن 7\n'
+            '     نقاط احتكاك حرجة تُحرّك الجزء الأكبر من حجم الشكاوى. وتتمحور غالبيتها حول\n'
+            '     مرحلة واحدة: ما بعد التقديم. فالمتعامل يصل رقمياً بسهولة، لكنه يفقد المتابعة\n'
+            '     بعد ذلك."\n'
+            '\n'
+            '  This is one valid realisation of the template — not a phrasing to imitate.\n'
+            '  Write Arabic that fits THIS dataset, with the framing rules above.\n'
+            '\n'
+            'HARD CONSTRAINTS (these still apply regardless of phrasing):\n'
+            '  - The friction_count value must appear verbatim as a digit in Sentence 1.\n'
+            '  - If dominant_journey_stage is non-null, it must appear verbatim in Sentence 2.\n'
+            '  - NO per-friction case count or percentage may appear anywhere in section_body.\n'
+            '  - The word "النقطة الأكثر حدة" must NOT appear in section_body.\n'
+            '  - The paragraph ends with a period ".", not a colon.\n'
+            '  - Maximum 60 words across all three sentences.\n'
             '\n'
             'B. الإجراء التحسيني column for EVERY row in pre_computed_friction_table\n'
             '  For each friction row, use friction_context[i].guidebook_recommendation as the\n'
@@ -317,15 +390,17 @@ def generate_customer_journey_section(
             '  Do NOT reframe complaint misrouting as an information access issue.\n'
             '\n'
             '─────────────────────────────────────────────\n'
-            'CRITICAL: INJECTED NUMBERS ARE FIXED FACTS\n'
+            'CRITICAL: INJECTED VALUES IN section_body\n'
             '─────────────────────────────────────────────\n'
-            'The section_body MUST include these exact injected values:\n'
-            f'  top_friction_point: "{top_friction_point}"\n'
-            f'  top_friction_count: {top_friction_count}\n'
-            f'  top_friction_pct: {top_friction_pct}%\n'
+            'The section_body MUST include the friction_count digit verbatim, and MUST include\n'
+            'dominant_journey_stage verbatim if it is non-null.\n'
+            'The section_body MUST NOT include top_friction_point, top_friction_count,\n'
+            'top_friction_pct, quick_win, dominant_stage_share, or friction_share_of_total —\n'
+            'those values are inputs that shape your framing choice, not text to print.\n'
             '\n'
-            'DO NOT derive these from friction_context or recalculate from case data.\n'
-            'Copy them directly into the generated section_body string.\n'
+            'top_friction_point/count/pct and quick_win remain injected because Task B (the\n'
+            'الإجراء التحسيني column) and downstream sections may use them. Section_body must\n'
+            'not.\n'
             '\n'
             '─────────────────────────────────────────────\n'
             'OUTPUT — single JSON object, no markdown, no extra keys\n'

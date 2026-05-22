@@ -372,7 +372,7 @@ class JSONReportBuilder:
         categories = ["شكوى", "استفسار", "طلب", "شكر وثناء"]
 
         return {
-            "type": "bar",
+            "type": "column",
             "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
             "categories": categories,
             "series": [
@@ -427,7 +427,7 @@ class JSONReportBuilder:
         values = [float(v) for v in counts.values.tolist()]
 
         return {
-            "type": "bar",
+            "type": "column",
             "title": "توزيع الطلبات على الخدمات",
             "categories": categories,
             "series": [
@@ -1395,7 +1395,7 @@ class JSONReportBuilder:
 
         # ── Use Cases table dict ──────────────────────────────────────────────
         use_cases_table_dict = {
-            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية"), "تقييم التنفيذ"],
+            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع", "تقييم التنفيذ"],
             "rows":           display_rows,
             "row_count":      len(display_rows),
             "col_count":      4,

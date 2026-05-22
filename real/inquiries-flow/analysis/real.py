@@ -15,9 +15,18 @@ import anthropic
 from .base import Analyzer
 
 # Import pipeline (located in parent inquiries-flow folder)
+# Use importlib with unique module name to prevent cache collision with complaints flow
 import sys
+import importlib.util
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pipeline.orchestrator import PipelineOrchestrator
+spec = importlib.util.spec_from_file_location(
+    "inquiries_pipeline_orchestrator",
+    str(Path(__file__).parent.parent / "pipeline" / "orchestrator.py")
+)
+inquiries_orch_module = importlib.util.module_from_spec(spec)
+sys.modules["inquiries_pipeline_orchestrator"] = inquiries_orch_module
+spec.loader.exec_module(inquiries_orch_module)
+PipelineOrchestrator = inquiries_orch_module.PipelineOrchestrator
 
 class RealAnalyzer:
     def __init__(self, api_key=None):

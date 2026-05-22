@@ -126,6 +126,7 @@ No fallbacks. No placeholder returns. Every failure raises so the caller
 
 import json
 from typing import Dict, Any, List, Tuple, Optional
+from collections import defaultdict
 import anthropic
 
 from .state import PipelineState, convert_month_year_to_arabic
@@ -174,6 +175,70 @@ def _horizon_rank(label: str) -> int:
         return len(_HORIZON_ORDER)
 
 
+def _consolidate_low_impact_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Consolidate multiple same-horizon rows with low case counts (< 5 each).
+
+    If a horizon bucket has 2+ rows each with < 5 cases, merge them into one
+    with combined case_count. This avoids cluttering the roadmap with multiple
+    minor items in the same bucket.
+
+    Returns deduplicated list; original row order preserved within horizons.
+    """
+    if len(rows) <= 1:
+        return rows
+
+    # Group by horizon
+    by_horizon: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_horizon[row["horizon"]].append(row)
+
+    consolidated = []
+    consolidation_log = []
+
+    for horizon, bucket in by_horizon.items():
+        if len(bucket) < 2:
+            # Only one row in this horizon — keep as-is
+            consolidated.extend(bucket)
+            continue
+
+        # Separate low-impact (< 5 cases) from high-impact (>= 5)
+        low_impact = [r for r in bucket if r.get("case_count", 0) < 5]
+        high_impact = [r for r in bucket if r.get("case_count", 0) >= 5]
+
+        if len(low_impact) < 2:
+            # Not enough low-impact rows to consolidate
+            consolidated.extend(bucket)
+            continue
+
+        # ── Consolidate low-impact rows ──────────────────────────────────────
+        consolidated_row = low_impact[0].copy()
+        combined_cases = sum(r.get("case_count", 0) for r in low_impact)
+        combined_seeds = " + ".join(
+            r.get("seed_recommendation_ar", "")[:30].strip()
+            for r in low_impact
+            if r.get("seed_recommendation_ar")
+        )
+
+        consolidated_row["case_count"] = combined_cases
+        consolidated_row["seed_recommendation_ar"] = f"تحسينات متعددة: {combined_seeds}"
+        consolidated_row["seed_impact_ar"] = f"معالجة {combined_cases}+ شكوى من مجالات متعددة"
+        consolidated_row["row_id"] = f"consolidated_{horizon[:10]}"
+
+        consolidation_log.append(
+            f"{horizon}: merged {len(low_impact)} items ({combined_cases} total cases)"
+        )
+
+        consolidated.append(consolidated_row)
+        consolidated.extend(high_impact)
+
+    if consolidation_log:
+        print(f"[ImprovementRoadmap._consolidate_low_impact_rows] Consolidations:\n  " +
+              "\n  ".join(consolidation_log))
+
+    return consolidated
+
+
 def _source_for_gap(gap) -> str:
     """
     Return المصدر value for a gap row.
@@ -187,18 +252,69 @@ def _source_for_gap(gap) -> str:
     return _SOURCE_ANALYSIS_ONLY
 
 
-def _effort_for_root_cause(root_cause: str, case_count: int) -> str:
+def _constrain_effort_to_horizon(effort: str, horizon: str) -> str:
     """
-    Derive effort level from root_cause_category.
-    Higher case counts with complex root causes escalate effort slightly.
+    Ensure effort is logically consistent with time horizon.
+
+    Constraints:
+    - 🚨 فوري (immediate/weeks) → MUST be منخفض (can't take months)
+    - 📅 قصير المدى (short-term/1-3mo) → MAX متوسط (can't be multi-year)
+    - 🔧 متوسط المدى (3-6mo) → typically متوسط or مرتفع
+    - 🚀 طويل المدى (6+mo) → typically مرتفع (complex, long-term)
     """
-    if root_cause in ("no_proactive_notification", "missing_info"):
-        return "منخفض"
-    if root_cause in ("inaccessible_info", "platform_bug"):
-        return "متوسط" if case_count < 30 else "متوسط"
-    if root_cause == "policy_complexity":
-        return "متوسط"
-    return "متوسط"
+    if horizon == "🚨 فوري":
+        return "منخفض"  # Immediate must be low effort
+    elif horizon == "📅 قصير المدى":
+        return "منخفض" if effort == "منخفض" else "متوسط"  # Cap at medium
+    elif horizon == "🚀 طويل المدى":
+        return "مرتفع"  # Long-term is inherently high-effort
+    else:  # 🔧 متوسط المدى — no constraint needed
+        return effort
+
+
+def _effort_for_root_cause(root_cause: str, case_count: int, matched_gap=None) -> str:
+    """
+    Derive effort level from root_cause_category and supporting evidence.
+
+    Base effort by root cause:
+    - no_proactive_notification, missing_info → منخفض (just notification/content config)
+    - inaccessible_info, platform_bug → متوسط (needs development/portal changes)
+    - policy_complexity → مرتفع (cross-agency coordination required)
+
+    Escalate if gap exists with critical severity or high complexity.
+    De-escalate slightly if case_count is very low (< 5 cases).
+    """
+    # Base effort by root cause complexity
+    base_effort_map = {
+        "no_proactive_notification": "منخفض",
+        "missing_info": "منخفض",
+        "inaccessible_info": "متوسط",
+        "platform_bug": "متوسط",
+        "policy_complexity": "مرتفع",
+        "wrong_channel_used": "منخفض",
+        "service_delivery_failure": "متوسط",
+        "processing_delay": "متوسط",
+    }
+
+    base = base_effort_map.get(root_cause, "متوسط")
+
+    # Escalate if matched gap has critical severity
+    if matched_gap:
+        if matched_gap.severity == "Critical":
+            if base == "منخفض":
+                base = "متوسط"  # Critical + easy root cause → medium effort
+            elif base == "متوسط":
+                base = "مرتفع"   # Critical + medium complexity → high effort
+        # Escalate for High severity as well
+        elif matched_gap.severity == "High":
+            if base == "منخفض":
+                base = "متوسط"
+
+    # De-escalate if very few cases (unlikely to be worth medium/high effort)
+    if case_count < 5 and base in ("متوسط", "مرتفع"):
+        base = "منخفض"
+
+    return base
 
 
 def _extract_keywords(text: str) -> set:
@@ -208,6 +324,43 @@ def _extract_keywords(text: str) -> set:
     words = text.split()
     # Filter out short words and common prepositions
     return {w for w in words if len(w) > 2 and w not in ['من', 'في', 'على', 'عن', 'إلى', 'هذا', 'أن', 'أو']}
+
+
+def _find_matching_gap(friction_text: str, gap_table: list) -> tuple:
+    """
+    Find best gap match for a friction point using semantic similarity.
+
+    Returns (best_gap, score) where score > 0.3 indicates a valid match.
+    Uses Jaccard similarity on keywords to avoid substring false positives.
+    """
+    if not gap_table or not friction_text:
+        return (None, 0.0)
+
+    friction_keywords = _extract_keywords(friction_text)
+    if not friction_keywords:
+        return (None, 0.0)
+
+    best_gap = None
+    best_score = 0.0
+
+    for gap in gap_table:
+        gap_text = gap.topic_ar or gap.topic or ""
+        gap_keywords = _extract_keywords(gap_text)
+
+        if not gap_keywords:
+            continue
+
+        # Jaccard similarity: |intersection| / |union|
+        intersection = len(friction_keywords & gap_keywords)
+        union = len(friction_keywords | gap_keywords)
+        score = intersection / union if union > 0 else 0.0
+
+        if score > best_score:
+            best_score = score
+            best_gap = gap
+
+    # Only accept matches with reasonable confidence
+    return (best_gap, best_score) if best_score > 0.3 else (None, 0.0)
 
 
 def _are_semantically_similar(text1: str, text2: str, threshold: float = 0.5) -> bool:
@@ -320,20 +473,27 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         seen_recommendations.append(rec_text)
         source_counts["critical_gaps"] += 1
 
-        # Horizon assignment for gaps:
-        # - Proactive notification + guidebook missing → "🚨 فوري" (quick notification config)
-        # - Proactive notification + guidebook exists → "📅 قصير المدى" (needs minor guidebook updates)
-        # - Not proactive + guidebook missing → "📅 قصير المدى" (FAQ/content publishing)
-        # - Not proactive + guidebook exists → "🔧 متوسط المدى" (complex guidebook updates)
+        # ── Horizon assignment for gaps ──────────────────────────────────────
+        # Driven by guidebook status and proactive opportunity
         if gap.proactive_notification_opportunity and gap.guidebook_status == "Missing":
             horizon = "🚨 فوري"
-            effort = "منخفض"
-        elif gap.proactive_notification_opportunity or gap.guidebook_status == "Missing":
+        elif gap.proactive_notification_opportunity:
             horizon = "📅 قصير المدى"
-            effort = "متوسط"
+        elif gap.guidebook_status == "Missing":
+            horizon = "📅 قصير المدى"
         else:
             horizon = "🔧 متوسط المدى"
-            effort = "متوسط"
+
+        # ── Effort calculation (before constraint) ──────────────────────────
+        # Base on gap case count and complexity
+        effort = "متوسط"  # Default
+        if gap.case_count and gap.case_count > 50:
+            effort = "مرتفع"  # Large scope needs high effort
+        elif gap.case_count and gap.case_count < 3:
+            effort = "منخفض"  # Tiny scope, low effort
+
+        # ── Constrain effort to horizon (logical consistency) ───────────────
+        effort = _constrain_effort_to_horizon(effort, horizon)
 
         source = _source_for_gap(gap)
         rows.append({
@@ -375,34 +535,33 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         root_cause = friction.root_cause_category or "platform_bug"
         horizon = _ROOT_CAUSE_TO_HORIZON.get(root_cause, "📅 قصير المدى")
 
-        # BUG 4 FIX: Adjust horizon based on gap severity to create varied timelines
-        # Don't over-upgrade to immediate just because a gap is critical
-        matched_gap = None
-        for gap in (state.gap_table or []):
-            if (friction.cluster or friction.cluster_ar or "")[:20] in (gap.topic or gap.topic_ar or ""):
-                matched_gap = gap
-                break
+        # ── Use semantic gap matching (not substring) ────────────────────────
+        friction_text = friction.cluster_ar or friction.cluster or friction_seed
+        matched_gap, match_score = _find_matching_gap(friction_text, state.gap_table or [])
+
+        if matched_gap and match_score > 0.3:
+            print(f"[Gap Match] '{friction_text[:40]}' → '{matched_gap.topic_ar or matched_gap.topic}' (score={match_score:.2f})")
 
         if matched_gap:
-            # For Critical + proactive_notification → can stay immediate
+            # Adjust horizon based on gap severity
             if matched_gap.severity == "Critical" and matched_gap.proactive_notification_opportunity:
-                horizon = "🚨 فوري"
-            # For Critical but no proactive → escalate to short-term (requires work)
+                horizon = "🚨 فوري"  # Critical + proactive → immediate
             elif matched_gap.severity == "Critical":
-                horizon = "📅 قصير المدى"
-            # For Medium severity → medium-term (integration needed)
+                horizon = "📅 قصير المدى"  # Critical but complex → short-term
             elif matched_gap.severity == "Medium":
                 if horizon not in ("🔧 متوسط المدى", "🚀 طويل المدى"):
                     horizon = "🔧 متوسط المدى"
 
-        effort = _effort_for_root_cause(root_cause, friction.case_count)
+        # ── Calculate effort (before constraint) ──────────────────────────────
+        effort = _effort_for_root_cause(root_cause, friction.case_count, matched_gap)
 
-        # Corroborate with guidebook if a matching gap exists
+        # ── Constrain effort to horizon (logical consistency) ─────────────────
+        effort = _constrain_effort_to_horizon(effort, horizon)
+
+        # ── Determine source attribution ──────────────────────────────────────
         source = _SOURCE_ANALYSIS_ONLY
-        for gap in (state.gap_table or []):
-            if (friction.cluster or friction.cluster_ar or "")[:20] in (gap.topic or gap.topic_ar or ""):
-                source = _source_for_gap(gap)
-                break
+        if matched_gap:
+            source = _source_for_gap(matched_gap)
 
         rows.append({
             "row_id":                 f"journey_{cluster_key.replace(' ', '_')}",
@@ -432,15 +591,21 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         seen_clusters.add(tool_id)
         source_counts["ai_use_cases"] += 1
 
-        # Derive effort level from complexity text
-        if "مرتفع" in complexity:
-            effort = "مرتفع"
-        elif "منخفض" in complexity:
-            effort = "منخفض"
-        else:
-            effort = "متوسط"
+        # ── Derive effort from complexity text (data-driven) ─────────────────
+        effort = "متوسط"  # Default
+        if complexity:
+            complexity_lower = complexity.lower()
+            # Check for explicit effort indicators
+            if any(word in complexity_lower for word in ["مرتفع", "عالي", "معقد", "جداً", "متقدم"]):
+                effort = "مرتفع"
+            elif any(word in complexity_lower for word in ["منخفض", "بسيط", "قليل"]):
+                effort = "منخفض"
 
+        # ── Map effort to horizon for AI tools ────────────────────────────────
         horizon = _EFFORT_TO_HORIZON.get(effort, "🔧 متوسط المدى")
+
+        # ── Constrain effort to horizon (logical consistency) ─────────────────
+        effort = _constrain_effort_to_horizon(effort, horizon)
 
         rows.append({
             "row_id":                 f"ai_{tool_id}",
@@ -451,6 +616,11 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
             "seed_impact_ar":         impact,
             "case_count":             0,              # AI tools have estimated, not exact, counts
         })
+
+    # ── Consolidate low-impact rows ────────────────────────────────────────────
+    # Before sorting, merge same-horizon items with < 5 cases each.
+    # This avoids cluttering the roadmap with minor, similar issues.
+    rows = _consolidate_low_impact_rows(rows)
 
     # ── Sort, reserve AI slots, and cap ────────────────────────────────────────
     # BUG 2 FIX: Reserve guaranteed slots for AI rows before the cap.

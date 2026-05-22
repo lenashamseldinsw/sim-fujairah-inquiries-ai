@@ -32,9 +32,9 @@ Intro paragraph: "لماذا تستمر المشاكل رغم توفر قنوا�
                   Quotes digital channel % from case_channel data; names the core finding.
 
 Sub-section 5.1 — جدول الفجوات المُدمج (ربط التواصل بالفجوة)
-  Table columns: الموضوع | الحالات | وضع استقبال الشكاوى والمعالجة | نوع الفجوة | التوصية
-  Pre-computed from state: الموضوع, الحالات, نوع الفجوة
-  LLM-written: وضع استقبال الشكاوى والمعالجة, التوصية
+  Table columns: الخدمة | الشكاوى | القناة الرسمية في دليل الخدمات | نوع الفجوة | التوصية
+  Pre-computed from state: الخدمة, الشكاوى, القناة الرسمية في دليل الخدمات (from guidebook_status), نوع الفجوة
+  LLM-written: التوصية
 
 Sub-section 5.2 — الأسباب الجذرية لاستمرار المشاكل
   Table columns: # | السبب الجذري | مثال على التحدي | الحل
@@ -80,6 +80,9 @@ _ROOT_CAUSE_LABELS: Dict[str, str] = {
     "no_proactive_notification":  "طول مدة معالجة الشكوى",
     "platform_bug":               "غياب آلية إبلاغ موحدة للمشاكل التقنية",
     "policy_complexity":          "تعقيد إجراءات المعالجة",
+    "wrong_channel_used":         "استخدام قناة اتصال خاطئة",
+    "service_delivery_failure":   "عدم تقديم الخدمة بشكل صحيح",
+    "processing_delay":           "تأخر في معالجة البلاغ",
 }
 
 # Sort order for severity (Critical first)
@@ -90,6 +93,31 @@ _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 # Module-level helpers
 # Also paste into stage6_json_report.py for the JSON builder.
 # ──────────────────────────────────────────────────────────────────────────────
+
+def _build_guidebook_channel_status(gap) -> str:
+    """
+    Build a concise description of what's documented in the service guidebook
+    for this service/topic.
+
+    Uses guidebook_status (Covered | Partially Covered | Missing) and
+    guidebook_excerpt to create a one-line summary of the official channel status.
+    """
+    status = gap.guidebook_status or "Unknown"
+    excerpt = gap.guidebook_excerpt_ar or gap.guidebook_excerpt or ""
+
+    if status == "Covered":
+        if excerpt:
+            return f"موثّق — {excerpt[:60]}"
+        return "موثّق في دليل الخدمات"
+    elif status == "Partially Covered":
+        if excerpt:
+            return f"موثّق جزئياً — {excerpt[:50]}"
+        return "موثّق جزئياً في دليل الخدمات"
+    else:  # Missing
+        if excerpt:
+            return f"غير موثّق — {excerpt[:60]}"
+        return "غير موثّق في دليل الخدمات"
+
 
 def _compute_submission_channel_pct(state: PipelineState) -> float:
     """
@@ -164,9 +192,10 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     Pre-computed rows for Section 5.1 table.
 
     Sort: Critical first, then by case_count descending.
-    Columns locked here — LLM adds وضع استقبال الشكاوى والمعالجة and التوصية.
+    Columns locked here — LLM only adds التوصية.
+    القناة الرسمية في دليل الخدمات is pre-computed from guidebook_status + excerpt.
 
-    Schema: الموضوع | الحالات | الشدّة | نوع الفجوة
+    Schema: الخدمة | الشكاوى | القناة الرسمية في دليل الخدمات | نوع الفجوة
     """
     sorted_gaps = sorted(
         state.gap_table,
@@ -174,10 +203,10 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     )
     return [
         {
-            "الموضوع":    gap.topic_ar or gap.topic,
-            "الحالات":    str(gap.case_count),
-            "الشدّة":      _SEVERITY_EMOJI.get(gap.severity, gap.severity),
-            "نوع الفجوة": gap.gap_type_ar or gap.gap_type or "—",
+            "الخدمة":                            gap.topic_ar or gap.topic,
+            "الشكاوى":                          str(gap.case_count),
+            "القناة الرسمية في دليل الخدمات": _build_guidebook_channel_status(gap),
+            "نوع الفجوة":                       gap.gap_type_ar or gap.gap_type or "—",
         }
         for gap in sorted_gaps
     ]
@@ -315,10 +344,10 @@ def generate_digital_gaps_section(
       "section_body": "لماذا تستمر المشاكل...",
       "gap_table": [
         {
-          "الموضوع": "...",
-          "الحالات": "...",
-          "وضع استقبال الشكاوى والمعالجة": "...",   ← LLM-written
-          "نوع الفجوة": "...",
+          "الخدمة": "...",                          ← Pre-computed
+          "الشكاوى": "...",                        ← Pre-computed
+          "القناة الرسمية في دليل الخدمات": "...",  ← Pre-computed (from guidebook_status)
+          "نوع الفجوة": "...",                     ← Pre-computed
           "التوصية": "..."                          ← LLM-written (refined from Stage 5 rec)
         }
       ],
@@ -420,7 +449,7 @@ def generate_digital_gaps_section(
         f'{json.dumps(root_cause_context, ensure_ascii=False, indent=2)}\n'
         '\n'
         'pre_computed_gap_table — Section 5.1\n'
-        '(الموضوع, الحالات, الشدّة, نوع الفجوة are LOCKED — copy verbatim; only ADD the two new columns):\n'
+        '(الخدمة, الشكاوى, القناة الرسمية في دليل الخدمات, نوع الفجوة are LOCKED — copy verbatim; only ADD التوصية):\n'
         f'{json.dumps(gap_rows, ensure_ascii=False, indent=2)}\n'
         '\n'
         'pre_computed_root_cause_table — Section 5.2\n'
@@ -449,18 +478,12 @@ def generate_digital_gaps_section(
         + f'     citing «{top_gap_name}» as the largest ({top_gap_count} cases). Use « » (angle brackets), never double quotes, around topic names.\n'
         + proactive_instruction +
         '\n'
-        'B. "وضع استقبال الشكاوى والمعالجة" for EVERY row in pre_computed_gap_table\n'
-        '   - Use guidebook_excerpt + guidebook_status from gap_context.\n'
-        '   - Describe what currently exists in complaint reception/processing AND what is missing.\n'
-        '   - 1–2 Arabic sentences, max 40 words per row.\n'
-        '   - Name the existing feature; state the missing action/workflow explicitly.\n'
-        '\n'
-        'C. "التوصية" for EVERY row in pre_computed_gap_table\n'
+        'B. "التوصية" for EVERY row in pre_computed_gap_table\n'
         '   - Use recommendation_from_stage5 from gap_context as primary source.\n'
         '   - Rephrase into a concise Arabic imperative, max 25 words.\n'
         '   - If proactive_notification=true, lead with "تفعيل إشعار SMS/بريد تلقائي..."\n'
         '\n'
-        'D. "الحل" for EVERY row in pre_computed_root_cause_table\n'
+        'C. "الحل" for EVERY row in pre_computed_root_cause_table\n'
         '   - Use notification_opportunity from root_cause_context where present.\n'
         '   - Concrete and actionable Arabic, max 20 words.\n'
         '\n'
@@ -473,10 +496,9 @@ def generate_digital_gaps_section(
         '  "section_body": "...",\n'
         '  "gap_table": [\n'
         '    {\n'
-        '      "الموضوع": "...",\n'
-        '      "الحالات": "...",\n'
-        '      "الشدّة": "🔴 حرجة",\n'
-        '      "وضع استقبال الشكاوى والمعالجة": "...",\n'
+        '      "الخدمة": "...",\n'
+        '      "الشكاوى": "...",\n'
+        '      "القناة الرسمية في دليل الخدمات": "...",\n'
         '      "نوع الفجوة": "...",\n'
         '      "التوصية": "..."\n'
         '    }\n'
@@ -494,7 +516,7 @@ def generate_digital_gaps_section(
         'RULES:\n'
         '- gap_table must have exactly the same number of rows as pre_computed_gap_table.\n'
         '- root_cause_table must have exactly the same number of rows as pre_computed_root_cause_table.\n'
-        '- الموضوع, الحالات, الشدّة, نوع الفجوة: copy verbatim from pre_computed_gap_table.\n'
+        '- الخدمة, الشكاوى, القناة الرسمية في دليل الخدمات, نوع الفجوة: copy verbatim from pre_computed_gap_table.\n'
         '- #, السبب الجذري, مثال على التحدي: copy verbatim from pre_computed_root_cause_table.\n'
         '- Every number in section_body must match a pre-computed input above.\n'
         '- Arabic only. Proper nouns only in Latin script: MOI, SMS, UAE PASS.\n'
@@ -563,28 +585,21 @@ def generate_digital_gaps_section(
 
     merged_gap_table = []
     for i, (pre_row, llm_row) in enumerate(zip(gap_rows, llm_gap_rows)):
-        app_status = llm_row.get("وضع استقبال الشكاوى والمعالجة", "")
-        توصية      = llm_row.get("التوصية", "")
+        توصية = llm_row.get("التوصية", "")
 
-        if not app_status:
-            raise RuntimeError(
-                f"[DigitalGaps] Missing 'وضع استقبال الشكاوى والمعالجة' in gap_table row {i} "
-                f"(topic: '{pre_row['الموضوع']}')"
-            )
         if not توصية:
             raise RuntimeError(
                 f"[DigitalGaps] Missing 'التوصية' in gap_table row {i} "
-                f"(topic: '{pre_row['الموضوع']}')"
+                f"(topic: '{pre_row['الخدمة']}')"
             )
 
-        # Column order matches sample output: الموضوع | الحالات | الشدّة | وضع استقبال الشكاوى والمعالجة | نوع الفجوة | التوصية
+        # Column order matches sample output: الخدمة | الشكاوى | القناة الرسمية في دليل الخدمات | نوع الفجوة | التوصية
         merged_gap_table.append({
-            "الموضوع":                        pre_row["الموضوع"],
-            "الحالات":                        pre_row["الحالات"],
-            "الشدّة":                         pre_row["الشدّة"],
-            "وضع استقبال الشكاوى والمعالجة": app_status,
-            "نوع الفجوة":                     pre_row["نوع الفجوة"],
-            "التوصية":                        توصية,
+            "الخدمة":                            pre_row["الخدمة"],
+            "الشكاوى":                          pre_row["الشكاوى"],
+            "القناة الرسمية في دليل الخدمات": pre_row["القناة الرسمية في دليل الخدمات"],
+            "نوع الفجوة":                       pre_row["نوع الفجوة"],
+            "التوصية":                          توصية,
         })
 
     result["gap_table"] = merged_gap_table
