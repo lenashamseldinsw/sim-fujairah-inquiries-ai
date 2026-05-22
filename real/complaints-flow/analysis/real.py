@@ -15,18 +15,19 @@ import anthropic
 from .base import Analyzer
 
 # Import pipeline (located in parent complaints-flow folder)
-# Use importlib with unique module name to prevent cache collision with inquiries flow
+# Clear cached pipeline modules to ensure we get the complaints version, not inquiries
 import sys
-import importlib.util
-sys.path.insert(0, str(Path(__file__).parent.parent))
-spec = importlib.util.spec_from_file_location(
-    "complaints_pipeline_orchestrator",
-    str(Path(__file__).parent.parent / "pipeline" / "orchestrator.py")
-)
-complaints_orch_module = importlib.util.module_from_spec(spec)
-sys.modules["complaints_pipeline_orchestrator"] = complaints_orch_module
-spec.loader.exec_module(complaints_orch_module)
-PipelineOrchestrator = complaints_orch_module.PipelineOrchestrator
+complaints_base = str(Path(__file__).parent.parent)
+if complaints_base not in sys.path:
+    sys.path.insert(0, complaints_base)
+
+# Clear any cached pipeline modules to prevent mix-ups between inquiries/complaints flows
+for mod_key in list(sys.modules.keys()):
+    if mod_key.startswith('pipeline') or mod_key.startswith('stage'):
+        del sys.modules[mod_key]
+
+# Now import fresh from this flow's pipeline
+from pipeline.orchestrator import PipelineOrchestrator
 
 class RealAnalyzer:
     def __init__(self, api_key=None):
