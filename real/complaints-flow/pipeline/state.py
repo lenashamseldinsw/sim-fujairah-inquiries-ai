@@ -19,7 +19,7 @@ class CaseRow(BaseModel):
     case_channel: str
     description: str
     resolution_response: str
-    sla_color: str
+    severity_raw: str
     case_type: str
     service_name: str
     actual_contact_type: str  # Set by rule or LLM classifier
@@ -169,7 +169,7 @@ class PipelineState(BaseModel):
     total_cases: int = 0
     closed_cases_count: int = 0  # Cases where تاريخ_إغلاق_الطلب is not empty (for methodology section)
     reclassified_count: int = 0  # FIX 1: Centralized reclassification count
-    reclassification_rate: float = 0.0  # Percentage of cases reclassified
+    reclassification_rate: float = 0.0  # Percentage 0-100 (NOT a fraction). Set by stage6_artifacts._compute_reclassified_count.
 
     # --- PIPELINE ROUTING STATS (stored before queues cleared) ---
     llm_queue_count: int = 0  # Cases sent to LLM after stage 2

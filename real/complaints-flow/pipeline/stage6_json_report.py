@@ -460,21 +460,22 @@ class JSONReportBuilder:
     # Section 3.1 supplementary charts
     # ------------------------------------------------------------------
 
-    _SEVERITY_DISPLAY_MAP: Dict[str, str] = {
-        'طلب روتينى': 'شكوى عادية',
-        'طلب روتيني': 'شكوى عادية',
-        'روتينى': 'شكوى عادية',
-        'روتيني': 'شكوى عادية',
-        'طلب حرج': 'شكوى عاجلة',
-        'حرج': 'شكوى عاجلة',
-        'طلب معقد': 'شكوى معقدة',
-        'معقد': 'شكوى معقدة',
-        'شكوى روتينية': 'شكوى عادية',
-        'شكوى روتيني': 'شكوى عادية',
-        'شكوى حرجة': 'شكوى عاجلة',
-        'شكوى معقدة': 'شكوى معقدة',
+    _SEVERITY_VARIANTS: Dict[str, str] = {
+        # Normalize diacritic variants to canonical form
+        'طلب روتينى': 'طلب روتينى',
+        'طلب روتيني': 'طلب روتينى',
+        'روتينى': 'طلب روتينى',
+        'روتيني': 'طلب روتينى',
+        'شكوى روتينية': 'طلب روتينى',
+        'شكوى روتيني': 'طلب روتينى',
+        'طلب حرج': 'طلب حرج',
+        'حرج': 'طلب حرج',
+        'شكوى حرجة': 'طلب حرج',
+        'طلب معقد': 'طلب معقد',
+        'معقد': 'طلب معقد',
+        'شكوى معقدة': 'طلب معقد',
     }
-    _SEVERITY_ORDER = ['شكوى عادية', 'شكوى عاجلة', 'شكوى معقدة']
+    _SEVERITY_ORDER = ['طلب روتينى', 'طلب حرج', 'طلب معقد']
     _SEVERITY_COLORS = ['#B68A35', '#999999', '#FF0000']
 
     def build_service_distribution_chart(self) -> Optional[Dict[str, Any]]:
@@ -517,19 +518,19 @@ class JSONReportBuilder:
         }
 
     def build_resolution_status_chart(self) -> Optional[Dict[str, Any]]:
-        """Pie chart — complaints accepted vs rejected (based on sla_color)."""
+        """Pie chart — complaints accepted vs rejected (based on case_status)."""
         if not self.state.all_classified:
             return None
 
-        accepted = sum(
+        rejected = sum(
             1 for c in self.state.all_classified
-            if str(c.sla_color).strip() == 'نعم'
+            if c.case_status and c.case_status.strip() == 'طلب مرفوض'
         )
         total = len(self.state.all_classified)
         if total == 0:
             return None
 
-        rejected = total - accepted
+        accepted = total - rejected
 
         return {
             "type": "pie",
@@ -566,8 +567,9 @@ class JSONReportBuilder:
             if not val:
                 continue
             non_empty_count += 1
-            mapped = self._SEVERITY_DISPLAY_MAP.get(val, val)
-            counts[mapped] += 1
+            # Normalize diacritic variants to canonical form
+            normalized = self._SEVERITY_VARIANTS.get(val, val)
+            counts[normalized] += 1
 
         if not counts:
             print(f"[build_severity_chart] No valid severity data found. Total non-empty: {non_empty_count}")
@@ -587,11 +589,11 @@ class JSONReportBuilder:
         print(f"[build_severity_chart] Built pie chart with categories: {categories}, counts: {[counts[s] for s in categories]}")
         return {
             "type": "pie",
-            "title": "شدة الطلب",
+            "title": "شدة الشكوى",
             "categories": categories,
             "series": [
                 {
-                    "name": "شدة الطلب",
+                    "name": "شدة الشكوى",
                     "data": values,
                 }
             ],
@@ -603,27 +605,53 @@ class JSONReportBuilder:
         if not self.state.all_classified:
             return None
 
-        on_time = sum(
-            1 for c in self.state.all_classified
-            if str(c.sla_closed_on_time).strip() == 'نعم'
-        )
-        total = len(self.state.all_classified)
+        on_time = 0
+        late = 0
+        unknown = 0
+        for c in self.state.all_classified:
+            raw = c.sla_closed_on_time
+            val = str(raw).strip() if raw is not None else ''
+            if val == 'نعم':
+                on_time += 1
+            elif val == 'لا':
+                late += 1
+            else:
+                # Empty, 'nan', 'None', or any other unexpected value
+                unknown += 1
+
+        total = on_time + late + unknown
         if total == 0:
             return None
 
-        late = total - on_time
+        # Build slices, omitting empty categories
+        categories: List[str] = []
+        values: List[float] = []
+        colors: List[str] = []
+
+        if on_time > 0:
+            categories.append("ضمن الوقت المحدد")
+            values.append(float(on_time))
+            colors.append("#B68A35")
+        if late > 0:
+            categories.append("خارج الوقت المحدد")
+            values.append(float(late))
+            colors.append("#999999")
+        if unknown > 0:
+            categories.append("غير محدد")
+            values.append(float(unknown))
+            colors.append("#D9D9D9")
 
         return {
             "type": "pie",
             "title": "إغلاق الطلب خلال الوقت المحدد",
-            "categories": ["ضمن الوقت المحدد", "خارج الوقت المحدد"],
+            "categories": categories,
             "series": [
                 {
                     "name": "إغلاق الطلب",
-                    "data": [float(on_time), float(late)],
+                    "data": values,
                 }
             ],
-            "colors": ["#B68A35", "#999999"],
+            "colors": colors,
         }
 
     def build_executive_summary_section(self, lang: str = "ar") -> Dict[str, Any]:

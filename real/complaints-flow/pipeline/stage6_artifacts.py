@@ -321,7 +321,7 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
         'نوع_المكالمة': 'case_type',
         'الخدمة_الرئيسية': 'service_name',
         'الحل': 'resolution_response',
-        'الحالة': 'sla_color',
+        'الحالة': 'case_status',
         'الإدارة_العامة': 'admin',
         'الخدمة': 'service',  # May not exist in CaseRow — pull from raw_df if available
     }
@@ -402,7 +402,7 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
             elif header_col == 'قناة_تقديم_الخدمة':
                 value = case.case_channel or ''
             elif header_col == 'الحالة':
-                value = case.sla_color or ''
+                value = case.case_status or ''
             elif header_col == 'تاريخ_الإنشاء':
                 value = case.date_opened or ''
             elif header_col == 'تاريخ_الإغلاق':
@@ -1080,7 +1080,11 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
 
         # Calculate SLA metrics — check for 'نعم' (yes) in SLA compliance field
         # Must be done BEFORE _build_pre_computed_findings call
-        sla_closed = sum(1 for c in all_classified if c.sla_color == 'نعم')
+        # NOTE: severity_raw field stores severity; sla_closed_on_time stores actual SLA status
+        sla_closed = sum(
+            1 for c in all_classified
+            if c.sla_closed_on_time and c.sla_closed_on_time.strip() == 'نعم'
+        )
         sla_rate = (sla_closed / total_cases * 100) if total_cases > 0 else 0
 
         # FIX: Pre-compute findings table deterministically from state before LLM call

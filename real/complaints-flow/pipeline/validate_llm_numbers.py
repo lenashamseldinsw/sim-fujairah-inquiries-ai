@@ -6,8 +6,77 @@ Prevents hallucination where LLM substitutes different numbers without validatio
 """
 
 import re
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 from .state import PipelineState
+
+# Arabic punctuation that delimits clauses
+_CLAUSE_DELIMITERS = '،.؛\n'
+_NEGATION_TOKENS = ('دون', 'بلا', 'بدون', 'لا يوجد', 'بمعدل صفر')
+
+
+def _local_clause_bounds(text: str, pos: int, max_chars: int = 25) -> Tuple[int, int]:
+    """
+    Return (start, end) indices of the clause containing `pos`.
+    Bounded by Arabic punctuation or `max_chars` on each side — whichever is closer.
+    """
+    start = pos
+    for i in range(pos - 1, max(0, pos - max_chars) - 1, -1):
+        if text[i] in _CLAUSE_DELIMITERS:
+            start = i + 1
+            break
+        start = i
+
+    end = pos
+    for i in range(pos, min(len(text), pos + max_chars)):
+        if text[i] in _CLAUSE_DELIMITERS:
+            end = i
+            break
+        end = i + 1
+
+    return start, end
+
+
+def _best_metric_match(
+    context: str,
+    pct_pos_in_context: int,
+    locked: Dict[str, Tuple[float, list, float]],
+) -> Optional[Tuple[str, float, float]]:
+    """
+    Score each candidate metric by:
+      - keyword presence in context (required)
+      - distance from keyword to percentage (closer = better)
+      - number of distinct keywords matched (more = better)
+
+    Return the best match, or None if no metric scores above threshold,
+    OR if two metrics tie within 1 character of distance (ambiguous → bail out).
+    """
+    scores = []
+    for metric_name, (actual_val, keywords, tolerance) in locked.items():
+        best_dist = None
+        match_count = 0
+        for kw in keywords:
+            idx = context.find(kw)
+            while idx != -1:
+                d = abs(idx - pct_pos_in_context)
+                if best_dist is None or d < best_dist:
+                    best_dist = d
+                match_count += 1
+                idx = context.find(kw, idx + 1)
+        if best_dist is not None:
+            scores.append((metric_name, actual_val, tolerance, best_dist, match_count))
+
+    if not scores:
+        return None
+
+    # Sort: closest keyword first, then most matches
+    scores.sort(key=lambda s: (s[3], -s[4]))
+
+    # Ambiguity guard: if two metrics tie within 1 char distance, bail out
+    if len(scores) >= 2 and scores[1][3] - scores[0][3] <= 1:
+        return None
+
+    name, actual, tol, _, _ = scores[0]
+    return (name, actual, tol)
 
 
 def enforce_locked_percentages(
@@ -16,14 +85,16 @@ def enforce_locked_percentages(
     section_name: str = ""
 ) -> Tuple[str, Dict[str, Any]]:
     """
-    Validate and correct percentage values in LLM-generated text.
+    Two-pass validation with clause awareness:
+      1. Find every percentage in the text.
+      2. For each match, examine ONLY the local clause to identify which metric it refers to.
+      3. If the claimed value diverges from the actual value, substitute.
 
-    Checks for common percentage claims and validates them against actual data.
-
-    Returns:
-        (corrected_text, validation_report)
-        - corrected_text: Text with invalid percentages replaced with correct values
-        - validation_report: Dict with found_issues, corrections_made, details
+    Fixes Round 4's over-correction by:
+      - Bounding context to clause boundaries (not 40 characters)
+      - Scoring keyword proximity (closest keyword wins, not first in dict)
+      - Guarding against negations like "دون رفض" (reject without rejection = opposite)
+      - Bailing out on ambiguous cases (two metrics equally close)
     """
     report = {
         "section": section_name,
@@ -32,82 +103,69 @@ def enforce_locked_percentages(
         "details": []
     }
 
+    # Compute all locked actual values
+    locked: Dict[str, Tuple[float, list, float]] = {
+        # name → (actual_value, list_of_arabic_keywords, drift_tolerance)
+        "closure_rate":   (_compute_closure_rate(state), ["إغلاق", "أُغلقت", "أغلقت", "مغلقة"], 1.0),
+        "rejection_rate": (state.rejection_rate or 0.0, ["معدل الرفض", "نسبة الرفض", "مرفوضة", "مرفوض"], 0.5),
+        "digital_rate":   (state.digital_channel_rate or 0.0, ["القنوات الرقمية", "التطبيق", "الموقع الإلكتروني"], 0.5),
+        "sla_on_time_rate": (_compute_sla_on_time_rate(state), ["الوقت المحدد", "في الوقت", "ضمن الوقت"], 0.5),
+    }
+
+    # Pass 1: find every percentage
+    pct_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*%')
+
+    # Iterate in reverse so substitutions don't shift later positions
+    matches = list(pct_pattern.finditer(text))
     corrected = text
 
-    # Pattern 1: Closure rate claims "X% معدل الإغلاق" or similar
-    closure_patterns = [
-        r'(\d+(?:\.\d+)?)\s*%?\s*(?:معدل|نسبة)\s*الإغلاق',
-        r'(?:معدل|نسبة)\s*الإغلاق\s*[:|=]?\s*(\d+(?:\.\d+)?)\s*%',
-    ]
+    for match in reversed(matches):
+        try:
+            claimed = float(match.group(1))
+        except ValueError:
+            continue
 
-    actual_closure_rate = _compute_closure_rate(state)
-    for pattern in closure_patterns:
-        matches = re.finditer(pattern, corrected)
-        for match in matches:
-            try:
-                claimed_rate = float(match.group(1))
-                if abs(claimed_rate - actual_closure_rate) > 0.5:  # Allow small rounding diffs
-                    report["found_issues"].append(
-                        f"Closure rate mismatch: LLM claimed {claimed_rate}% but actual is {actual_closure_rate}%"
-                    )
-                    corrected = corrected.replace(
-                        match.group(0),
-                        match.group(0).replace(str(claimed_rate), str(actual_closure_rate))
-                    )
-                    report["corrections_made"] += 1
-                    report["details"].append(f"Corrected closure rate: {claimed_rate}% → {actual_closure_rate}%")
-            except (ValueError, IndexError):
-                pass
+        # Pass 2: bound context to local clause (Arabic punctuation or 25 chars)
+        clause_start, clause_end = _local_clause_bounds(text, match.start(), max_chars=25)
+        context = text[clause_start:clause_end]
+        pct_pos_in_context = match.start() - clause_start
 
-    # Pattern 2: Rejection rate claims "X% معدل الرفض" or similar
-    rejection_patterns = [
-        r'(\d+(?:\.\d+)?)\s*%?\s*(?:معدل|نسبة)\s*الرفض',
-        r'(?:معدل|نسبة)\s*الرفض\s*[:|=]?\s*(\d+(?:\.\d+)?)\s*%',
-    ]
+        # Check for negation in context
+        if any(neg in context for neg in _NEGATION_TOKENS):
+            continue
 
-    actual_rejection_rate = state.rejection_rate or 0.0
-    for pattern in rejection_patterns:
-        matches = re.finditer(pattern, corrected)
-        for match in matches:
-            try:
-                claimed_rate = float(match.group(1))
-                if abs(claimed_rate - actual_rejection_rate) > 0.5:  # Allow small rounding diffs
-                    report["found_issues"].append(
-                        f"Rejection rate mismatch: LLM claimed {claimed_rate}% but actual is {actual_rejection_rate}%"
-                    )
-                    corrected = corrected.replace(
-                        match.group(0),
-                        match.group(0).replace(str(claimed_rate), str(actual_rejection_rate))
-                    )
-                    report["corrections_made"] += 1
-                    report["details"].append(f"Corrected rejection rate: {claimed_rate}% → {actual_rejection_rate}%")
-            except (ValueError, IndexError):
-                pass
+        # Score candidate metrics with proximity weighting
+        matched_metric = _best_metric_match(context, pct_pos_in_context, locked)
+        if matched_metric is None:
+            continue
 
-    # Pattern 3: Digital channel rate claims
-    digital_patterns = [
-        r'(\d+(?:\.\d+)?)\s*%?\s*(?:من التقديمات|عبر القنوات الرقمية)',
-        r'(?:القنوات الرقمية|التقديمات الرقمية)\s*[:|=]?\s*(\d+(?:\.\d+)?)\s*%',
-    ]
+        metric_name, actual_val, tolerance = matched_metric
 
-    actual_digital_rate = state.digital_channel_rate or 0.0
-    for pattern in digital_patterns:
-        matches = re.finditer(pattern, corrected)
-        for match in matches:
-            try:
-                claimed_rate = float(match.group(1))
-                if abs(claimed_rate - actual_digital_rate) > 0.5:
-                    report["found_issues"].append(
-                        f"Digital channel rate mismatch: LLM claimed {claimed_rate}% but actual is {actual_digital_rate}%"
-                    )
-                    corrected = corrected.replace(
-                        match.group(0),
-                        match.group(0).replace(str(claimed_rate), str(actual_digital_rate))
-                    )
-                    report["corrections_made"] += 1
-                    report["details"].append(f"Corrected digital rate: {claimed_rate}% → {actual_digital_rate}%")
-            except (ValueError, IndexError):
-                pass
+        # Skip if within tolerance
+        if abs(claimed - actual_val) <= tolerance:
+            continue
+
+        # Substitute the number — use the exact string form found in the doc
+        old_number_str = match.group(1)
+        # Preserve format: if the doc said "80" use "92"; if "80.0" use "92.0"
+        if '.' in old_number_str:
+            new_number_str = f"{actual_val:.1f}"
+        else:
+            new_number_str = f"{int(round(actual_val))}"
+
+        # Replace just the captured number, not the whole match (which includes %)
+        old_full = match.group(0)  # "80.0%"
+        new_full = old_full.replace(old_number_str, new_number_str, 1)
+        corrected = corrected[:match.start()] + new_full + corrected[match.end():]
+
+        report["found_issues"].append(
+            f"{metric_name}: LLM claimed {claimed}% but actual is {actual_val}% "
+            f"(clause: ...{context.strip()}...)"
+        )
+        report["corrections_made"] += 1
+        report["details"].append(
+            f"Corrected {metric_name}: {claimed}% → {actual_val}%"
+        )
 
     return corrected, report
 
@@ -172,14 +230,24 @@ def _compute_closure_rate(state: PipelineState) -> float:
     return round((closed / total * 100), 1) if total > 0 else 0.0
 
 
+def _compute_sla_on_time_rate(state: PipelineState) -> float:
+    """SLA on-time rate from sla_closed_on_time == 'نعم'."""
+    total = len(state.all_classified) or state.total_cases or 1
+    on_time = sum(
+        1 for c in state.all_classified
+        if c.sla_closed_on_time and c.sla_closed_on_time.strip() == 'نعم'
+    )
+    return round(on_time / total * 100, 1) if total > 0 else 0.0
+
+
 def validate_section_9_narrative(
     text: str,
     state: PipelineState
-) -> Dict[str, Any]:
+) -> Tuple[str, Dict[str, Any]]:
     """
     Validate Section 9 conclusion narrative against actual metrics.
 
-    Returns comprehensive validation report with all found issues.
+    Returns (corrected_text, validation_report) — corrected text has invalid metrics replaced.
     """
     report = {
         "section": "الخلاصة والتوصيات",
@@ -195,8 +263,11 @@ def validate_section_9_narrative(
     report["total_issues"] += pct_report["corrections_made"]
 
     # Validate case counts
-    count_text, count_report = enforce_locked_case_counts(text, state, "Section 9")
+    count_text, count_report = enforce_locked_case_counts(pct_text, state, "Section 9")
     report["case_count_validations"] = count_report
     report["total_issues"] += len(count_report["found_issues"])
 
-    return report
+    corrected_text = count_text
+    report["corrections_applied"] = report["total_issues"] > 0
+
+    return corrected_text, report

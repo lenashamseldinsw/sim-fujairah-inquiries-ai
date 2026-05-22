@@ -393,6 +393,10 @@ class DynamicReportDisplay:
 
     def _render_chart(self, chart_data: Dict) -> str:
         chart_type = chart_data.get('type', 'bar')
+        # Normalize chart types: Chart.js uses 'bar' for vertical columns
+        if chart_type == 'column':
+            chart_type = 'bar'
+            chart_data = {**chart_data, 'type': chart_type}
         if chart_type in ('pie', 'doughnut'):
             return (self._render_pie_chart_highcharts_rtl(chart_data)
                     if self.lang == 'ar'

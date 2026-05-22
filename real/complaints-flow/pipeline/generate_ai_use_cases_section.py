@@ -170,27 +170,29 @@ def _build_nlp_classifier_impact(state: PipelineState) -> Dict[str, Any]:
     """
     total_cases = len(state.all_classified) or state.total_cases or 1
 
-    # Count actual "أخرى" cases from sub-classifications (Stage 2)
+    # Count actual "أخرى" cases from sub-classifications (no conflation with reclassification history)
     unclassified_count = 0
     for case in (state.all_classified or []):
         sub = case.sub_classification or ""
         if "أخرى" in sub or "بلا تصنيف" in sub:
             unclassified_count += 1
 
-    if unclassified_count == 0:
-        # Fallback: use actual count from state if available
-        unclassified_count = state.reclassified_count or 0
-
     unclassified_pct = round((unclassified_count / total_cases * 100), 1) if total_cases > 0 else 0
     reclass_pct = round(state.reclassification_rate, 1) if state.reclassification_rate else 0
 
     # LOCKED impact: grounded in REAL classification metrics, never hallucinated
-    impact = (
-        f"إعادة تصنيف {unclassified_count}+ حالة من فئة «أخرى» ({unclassified_pct}% من الحالات) "
-        f"— معدل إعادة التصنيف الحالي {reclass_pct}%، مع إمكانية الرفع إلى 90%+"
-        if unclassified_count > 0
-        else "تحسين دقة التصنيف من خلال تطبيق نموذج NLP على حالات «أخرى» الموجودة"
-    )
+    if unclassified_count > 0:
+        # Cases currently in «أخرى» — reclassification would immediately improve them
+        impact = (
+            f"إعادة تصنيف {unclassified_count}+ حالة من فئة «أخرى» ({unclassified_pct}% من الحالات) "
+            f"— معدل إعادة التصنيف الحالي {reclass_pct}%، مع إمكانية الرفع إلى 90%+"
+        )
+    else:
+        # No cases currently in «أخرى» — frame as preventive safeguard for future cases
+        impact = (
+            "لا توجد حالات حالياً في فئة «أخرى» — يُستخدم النموذج كطبقة وقائية للتصنيف الفوري "
+            "للحالات المستقبلية ومنع تراكم البيانات غير المصنفة."
+        )
 
     return {
         "tool_id": "nlp_text_classifier",
@@ -427,7 +429,7 @@ def _build_training_data_note(state: PipelineState) -> Dict[str, Any]:
     return {
         "current_total":     current_total,
         "prior_total":       prior_total,  # May be None if no prior run loaded
-        "reclassification_rate_pct": round(reclass_rate * 100, 1) if reclass_rate <= 1 else round(reclass_rate, 1),
+        "reclassification_rate_pct": round(reclass_rate, 1),
         "date_range":        convert_month_year_to_arabic(state.month_year) or "",
         "has_prior_run":     prior_total is not None,
     }
@@ -504,11 +506,7 @@ def generate_ai_use_cases_section(
 
     # ── Pre-compute all values from state ────────────────────────────────────
     date_range       = convert_month_year_to_arabic(state.month_year)
-    reclass_rate_pct = (
-        round(state.reclassification_rate * 100, 1)
-        if state.reclassification_rate and state.reclassification_rate <= 1
-        else round(state.reclassification_rate or 0.0, 1)
-    )
+    reclass_rate_pct = round(state.reclassification_rate or 0.0, 1)
 
     tool_rows      = _build_ai_tool_rows(state)
     training_data  = _build_training_data_note(state)

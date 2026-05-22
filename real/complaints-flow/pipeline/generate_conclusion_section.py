@@ -64,7 +64,7 @@ from .validate_llm_numbers import validate_section_9_narrative
 def _compute_sla_stats(state: PipelineState) -> tuple[int, float]:
     """Return (sla_closed_count, sla_rate_pct) from all_classified."""
     cases = state.all_classified or []
-    sla_closed = sum(1 for c in cases if str(c.sla_color).strip() == 'نعم')
+    sla_closed = sum(1 for c in cases if c.sla_closed_on_time and str(c.sla_closed_on_time).strip() == 'نعم')
     total = len(cases) or 1
     return sla_closed, round(sla_closed / total * 100, 1)
 
@@ -632,9 +632,10 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
 
     # ── Validate LLM narrative against actual metrics ───────────────────────────
     section_body = result.get("section_body", "")
-    validation_report = validate_section_9_narrative(section_body, state)
+    section_body, validation_report = validate_section_9_narrative(section_body, state)
+    result["section_body"] = section_body  # Use corrected text
     if validation_report["total_issues"] > 0:
-        print(f"[Conclusion] ⚠️  Found {validation_report['total_issues']} validation issues:")
+        print(f"[Conclusion] ⚠️  Found {validation_report['total_issues']} validation issues, applied corrections:")
         for issue in validation_report["percentage_validations"].get("found_issues", []):
             print(f"  • {issue}")
         for issue in validation_report["case_count_validations"].get("found_issues", []):

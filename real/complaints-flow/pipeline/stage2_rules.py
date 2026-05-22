@@ -328,7 +328,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
             case_channel=str(row.get('قناة_تقديم_الخدمة', '')).strip(),
             description=str(row.get('تفاصيل_الطلب', '')),
             resolution_response=str(row.get('الحل', '')),
-            sla_color=str(row.get('شدة_الطلب', '')),  # repurpose for severity
+            severity_raw=str(row.get('شدة_الطلب', '')),
             case_type=str(row.get('نوع_المكالمة', '')),  # always 'شكاوى' — keep for audit
             service_name=str(row.get('الخدمة_الرئيسية', '') or row.get('الخدمة_الرئيسيه', '')),
             actual_contact_type=top_level,

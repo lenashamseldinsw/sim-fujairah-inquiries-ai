@@ -495,7 +495,11 @@ def generate_digital_gaps_section(
     critical_count = sum(1 for g in state.gap_table if g.severity == "Critical")
     medium_count   = sum(1 for g in state.gap_table if g.severity == "Medium")
 
-    proactive_case_count = len(state.notification_opportunities or [])
+    # Sum actual cases from all notification opportunities (post-reconciliation)
+    proactive_case_count = sum(
+        n.get("cases_eliminated", n.get("case_count", 0))
+        for n in (state.notification_opportunities or [])
+    )
     proactive_pct        = round(proactive_case_count / total_cases * 100, 1) if total_cases > 0 else 0
 
     # ── Prompt ────────────────────────────────────────────────────────────────
