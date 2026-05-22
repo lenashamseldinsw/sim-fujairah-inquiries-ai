@@ -822,15 +822,16 @@ class JSONReportBuilder:
     def _build_rejection_reasons_table(self) -> Dict[str, Any]:
         """
         Build rejection reasons breakdown table for Section 3.3.
-        Analyzes only REJECTED cases (sla_color != 'نعم') and counts rejection reasons dynamically.
+        Analyzes only FORMALLY REJECTED cases (case_status == 'طلب مرفوض') and counts rejection reasons dynamically.
         Returns table dict with columns: سبب الرفض, العدد, % من المرفوضات, التشخيص
         """
         all_classified = self.state.all_classified or []
 
-        # Filter for rejected cases only (sla_color != 'نعم')
+        # Filter for formally rejected cases only (case_status == 'طلب مرفوض')
+        # Note: This is different from SLA compliance — formal rejection is an explicit status in the input data
         rejected_cases = [
             c for c in all_classified
-            if str(c.sla_color).strip() != 'نعم'
+            if c.case_status and c.case_status.strip() == 'طلب مرفوض'
         ]
 
         # Count rejection reasons
@@ -1400,7 +1401,7 @@ class JSONReportBuilder:
         notif_pct = round(notif_intro_count / total_for_notif_pct * 100, 0) if notif_intro_count > 0 else 0
 
         notif_intro = (
-            f"تحليل البيانات يكشف أن {notif_intro_count}+ حالة تواصل "
+            f"تحليل البيانات يكشف أن {notif_intro_count} حالة تواصل "
             f"({notif_pct:.0f}% "
             "من الإجمالي) كان يمكن إلغاؤها كلياً بمنظومة إشعارات بسيطة — "
             "دون أي تغيير هيكلي في الأنظمة أو الإجراءات:"
@@ -1452,7 +1453,7 @@ class JSONReportBuilder:
 
         # ── Subsection 6.2: Notification Pathway ─────────────────────────────
         notif_count_label = (
-            str(notif_intro_count) + "+" if notif_intro_count > 0 else "30+"
+            str(notif_intro_count) if notif_intro_count > 0 else "عدة"
         )
         subsection_62_title = (
             f"6.2  مسار إلغاء {notif_count_label} حالة تواصل بالإشعار الاستباقي"

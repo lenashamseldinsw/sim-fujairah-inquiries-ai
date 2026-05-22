@@ -316,6 +316,10 @@ def run_stage2(state: PipelineState) -> PipelineState:
     for idx, row in state.raw_df.iterrows():
         top_level, sub_classification, reason, confidence = classify_case(row.to_dict(), additional_oor_kw)
 
+        # Clean department name to match stage1 processing (remove "الفجيرة - " prefix)
+        dept_raw = str(row.get('الإدارة_العامة', '') or row.get('الإداره_العامة', '')).strip()
+        dept_clean = re.sub(r'^الفجيرة\s*-\s*', '', dept_raw).strip()
+
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),
             case_title=str(row.get('تفاصيل_الطلب', '')),
@@ -333,7 +337,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
             misclassification='OK',
             top_level=top_level,
             sub_classification=sub_classification,
-            admin=str(row.get('الإدارة_العامة', '') or row.get('الإداره_العامة', '')).strip(),
+            admin=dept_clean,
             # New complaints fields
             severity=str(row.get('شدة_الطلب', '')),
             complaint_category=sub_classification,
@@ -346,6 +350,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
             employee_number=str(row.get('الرقم_الوظيفي', '')),
             sla_closed_on_time=str(row.get('إغلاق_الطلب_خلال_الوقت_المحدد', '')),
             emirate=str(row.get('الإمارة', '')),
+            case_status=str(row.get('الحالة', '')).strip(),  # Original status from input
         )
 
         # Track rejection

@@ -306,7 +306,9 @@ class DynamicReportDisplay:
         st.markdown("---")
 
         current = sections[st.session_state.current_section]
-        self._display_section(current, current.get('charts', []))
+        # Merge section charts with report-level charts
+        all_charts = (current.get('charts', []) or []) + (report.get('charts', []) or [])
+        self._display_section(current, all_charts)
 
     # ------------------------------------------------------------------
     # Section / subsection rendering

@@ -43,6 +43,7 @@ class CaseRow(BaseModel):
     employee_number: Optional[str] = None  # الرقم_الوظيفي
     sla_closed_on_time: Optional[str] = None  # إغلاق_الطلب_خلال_الوقت_المحدد (نعم/لا)
     emirate: Optional[str] = None  # الإمارة
+    case_status: Optional[str] = None  # الحالة from input: "طلب مرفوض" | "تم الموافقة على الحل" | "طلب منجز" etc.
 
 
 class PatternCluster(BaseModel):

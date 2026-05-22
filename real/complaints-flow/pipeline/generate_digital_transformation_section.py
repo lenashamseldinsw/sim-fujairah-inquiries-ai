@@ -67,16 +67,20 @@ from .json_utils import parse_json_response
 
 def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     """
-    Build FAQ rows from validated FAQs and candidates for the transformation section.
+    Build FAQ rows from validated FAQs for the transformation section.
 
     COLUMNS (matching Section 6.1 screenshot):
     #, السؤال, الفئة الرسمية, الإجابة الصحيحة, التكرار
 
-    SOURCE: validated_faqs and faq_candidates from Stage 4/5.
-    ACCURACY: Frequency values are actual case counts from the pipeline, never LLM-invented.
+    SOURCE: state.validated_faqs (from Stage 5, post-reconciliation).
+    ACCURACY: Frequency values are actual case counts from the pipeline (reconciled in Stage 5),
+              never LLM-invented. FAQs with frequency=0 are skipped (no matching cases found).
+
+    CRITICAL: Frequencies must be >= 1 to be included. FAQs with reconciled frequency=0
+              indicate no actual cases matched the FAQ question/answer, so they're excluded.
 
     Args:
-        state: Pipeline state containing validated_faqs and faq_candidates
+        state: Pipeline state containing validated_faqs
 
     Returns:
         List of row dicts with FAQ columns, sorted by frequency (descending)
@@ -84,27 +88,15 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     rows = []
     counter = 1
 
-    # Collect all FAQs (validated first, then candidates as fallback)
-    all_faqs = []
-    if state.validated_faqs:
-        all_faqs.extend(state.validated_faqs)
-    if state.faq_candidates:
-        # Only add candidates that aren't already in validated_faqs
-        validated_questions = {
-            (faq.get('question_ar') if isinstance(faq, dict) else getattr(faq, 'question_ar', ''))
-            for faq in (state.validated_faqs or [])
-        }
-        for candidate in state.faq_candidates:
-            q_ar = candidate.get('question_ar') if isinstance(candidate, dict) else getattr(candidate, 'question_ar', '')
-            if q_ar not in validated_questions:
-                all_faqs.append(candidate)
+    # Use validated_faqs only (these have already been reconciled with actual case counts in Stage 5)
+    all_faqs = list(state.validated_faqs) if state.validated_faqs else []
 
     # Sort by frequency (descending) to show most impactful FAQs first
     all_faqs.sort(
         key=lambda f: (
-            f.get('frequency', f.get('case_count', 0))
+            f.get('frequency', 0)
             if isinstance(f, dict)
-            else getattr(f, 'frequency', getattr(f, 'case_count', 0))
+            else getattr(f, 'frequency', 0)
         ),
         reverse=True
     )
@@ -118,16 +110,17 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
         q_ar = faq.get('question_ar') if isinstance(faq, dict) else getattr(faq, 'question_ar', '')
         a_ar = faq.get('answer_ar') if isinstance(faq, dict) else getattr(faq, 'answer_ar', '')
         category = faq.get('top_level') if isinstance(faq, dict) else getattr(faq, 'top_level', '')
-        freq = faq.get('frequency', faq.get('case_count', 0)) if isinstance(faq, dict) else getattr(faq, 'frequency', getattr(faq, 'case_count', 0))
+        freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-        # Only include if question and answer are present
-        if q_ar and a_ar:
+        # CRITICAL: Skip FAQs with frequency=0 (no matching cases found in pipeline)
+        # Only include if question, answer are present AND frequency > 0
+        if q_ar and a_ar and freq > 0:
             rows.append({
                 '#': str(counter),
                 'السؤال': q_ar,
                 'الفئة الرسمية': category if category else '—',
                 'الإجابة الصحيحة': a_ar,
-                'التكرار': str(int(freq)) if freq else '—',
+                'التكرار': str(int(freq)),
             })
             counter += 1
 

@@ -162,21 +162,42 @@ def _compute_digital_channel_rate(state: PipelineState) -> tuple[int, float]:
 
 def _compute_zero_rejection_rate(state: PipelineState) -> tuple[int, float]:
     """
-    Compute % of complaints with 0 formal rejections.
+    Compute % of complaints WITHOUT formal rejection status (الحالة != 'طلب مرفوض').
 
     Returns (count, percentage) for complaints that were handled without formal rejections.
-    This reflects handling quality and customer satisfaction.
+    This reflects handling quality where rejections are explicitly marked in the original data.
     """
     cases = state.all_classified or []
     total = len(cases) or 1
 
-    # Complaints with rejection_count == 0 or null
-    zero_rejection = sum(
+    # Count cases that are NOT formally rejected (status != 'طلب مرفوض')
+    # Uses case_status field captured from input الحالة column
+    non_rejected = sum(
         1 for c in cases
-        if not hasattr(c, 'rejection_count') or c.rejection_count == 0 or c.rejection_count is None
+        if not c.case_status or c.case_status.strip() != 'طلب مرفوض'
     )
-    pct = round(zero_rejection / total * 100, 1)
-    return zero_rejection, pct
+    pct = round(non_rejected / total * 100, 1)
+    return non_rejected, pct
+
+
+def _compute_closure_rate(state: PipelineState) -> tuple[int, float]:
+    """
+    Compute % of cases with a closure date (date_closed is not empty/NaT).
+
+    Returns (count, percentage) for cases that have been closed (closure date populated).
+    This is separate from SLA compliance and measures closure completion.
+    """
+    cases = state.all_classified or []
+    total = len(cases) or 1
+
+    closed_count = sum(
+        1 for c in cases
+        if c.date_closed
+        and str(c.date_closed).strip()
+        and str(c.date_closed).strip() not in ('NaT', 'nat', '', 'None')
+    )
+    pct = round(closed_count / total * 100, 1)
+    return closed_count, pct
 
 
 def _compute_traffic_complaint_pct(state: PipelineState) -> tuple[int, float]:
@@ -461,6 +482,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     # Complaints-specific metrics
     digital_channel_count, digital_channel_rate = _compute_digital_channel_rate(state)
     zero_rejection_count, zero_rejection_rate = _compute_zero_rejection_rate(state)
+    closure_count, closure_rate = _compute_closure_rate(state)
     traffic_complaint_count, traffic_complaint_pct = _compute_traffic_complaint_pct(state)
     severity_dist = _compute_complaint_severity(state)
 
@@ -507,6 +529,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         'DATA — use ONLY these numbers, never invent\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         f'submission_channel_digital_pct: {submission_channel_pct_str}\n'
+        f'closure_rate: {closure_rate:.1f}%\n'
         f'sla_rate: {sla_rate:.1f}%\n'
         f'zero_rejection_rate: {zero_rejection_rate:.1f}%\n'
         f'proactive_cancellable: {proactive_cancellable}+\n'
@@ -520,7 +543,8 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         'Sentence 1: Opening statement that frames the data paradox.\n'
         '  • Start with: "الرسالة النهائية:"\n'
         f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of complaints via app/website\n'
-        f'  • Cite operational excellence: {sla_rate:.1f}% SLA closure rate\n'
+        f'  • Cite closure achievement: {closure_rate:.1f}% of cases have closure dates\n'
+        f'  • Cite handling quality: {zero_rejection_rate:.1f}% handled without formal rejection\n'
         '  • Use a pivot word (لكن) to acknowledge the gap remains\n'
         '\n'
         'Sentence 2: The core challenge and proof.\n'
@@ -560,7 +584,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     print(
         f"[Conclusion] Calling API — total_cases={total_cases}, "
         f"reclass={reclass_count} ({reclass_rate:.1f}%), "
-        f"sla={sla_rate:.1f}%, submission_channel={submission_channel_pct_str}, "
+        f"closure_rate={closure_rate:.1f}%, sla_rate={sla_rate:.1f}%, submission_channel={submission_channel_pct_str}, "
         f"digital_channel={digital_channel_rate:.1f}%, zero_rejection={zero_rejection_rate:.1f}%, "
         f"traffic_complaints={traffic_complaint_pct:.1f}%, "
         f"friction_digital_context={friction_digital_context_str}, "

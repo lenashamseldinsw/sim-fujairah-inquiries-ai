@@ -227,7 +227,7 @@ def _build_cover(builder: WordBuilder, data: dict):
         cover.add_paragraph(f"إجمالي الشكاوى: {total_complaints} شكوى", style=stat_style, rtl=True)
     if traffic_pct:
         cover.add_paragraph(f"الشكاوى المرورية: {traffic_pct} من الإجمالي", style=stat_style, rtl=True)
-    cover.add_paragraph(f"القنوات الرقمية: {digital_channel_rate}% من التقديمات", style=stat_style, rtl=True)
+    cover.add_paragraph(f"القنوات الرقمية: {digital_channel_rate} من التقديمات", style=stat_style, rtl=True)
     if true_digital_gaps:
         cover.add_paragraph(f"رصد {true_digital_gaps} فجوات رقمية محددة", style=stat_style, rtl=True)
     if zero_rejection:

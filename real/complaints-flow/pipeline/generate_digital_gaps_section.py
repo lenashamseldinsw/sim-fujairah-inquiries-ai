@@ -89,6 +89,86 @@ _ROOT_CAUSE_LABELS: Dict[str, str] = {
 _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
 
+def _compute_gap_type_from_friction(
+    gap_topic: str,
+    state: PipelineState,
+    guidebook_status: str = "",
+    clarity: str = "",
+) -> tuple[str, str]:
+    """
+    Compute gap_type and gap_type_ar dynamically from actual friction data.
+
+    Returns (gap_type, gap_type_ar) tuple with values determined by:
+    1. Root cause patterns in friction points for this topic
+    2. Guidebook coverage status
+    3. Actual complaint distribution
+
+    Values from complaints flow Section 5.1:
+    - "فجوة وعي واستخدام" — awareness/usage issue
+      (users don't know about the service or how to use it)
+    - "فجوة حقيقية" — real/genuine gap
+      (missing feature, broken functionality, unavailable service)
+    - "غير محدد" — undefined/unclassified
+      (insufficient data to classify)
+    """
+    if not state.journey_map:
+        return ("undefined", "غير محدد")
+
+    # Find friction points for this gap topic (normalized comparison)
+    gap_topic_lower = (gap_topic or "").lower().strip()
+    matching_frictions = []
+
+    for f in state.journey_map:
+        # Check against all text fields of friction point
+        friction_texts = [
+            (f.friction_point_ar or "").lower(),
+            (f.friction_point or "").lower(),
+            (f.cluster_ar or "").lower(),
+            (f.cluster or "").lower(),
+        ]
+
+        for text in friction_texts:
+            if gap_topic_lower in text or text in gap_topic_lower:
+                matching_frictions.append(f)
+                break
+
+    if not matching_frictions:
+        # No friction matches — this is likely a "حقيقية" (real gap) with no visibility yet
+        if guidebook_status == "Missing":
+            return ("real_gap", "فجوة حقيقية")
+        return ("undefined", "غير محدد")
+
+    # Analyze root cause patterns from matching frictions
+    root_cause_counts = defaultdict(int)
+    total_cases = 0
+    for friction in matching_frictions:
+        cat = friction.root_cause_category or "unknown"
+        root_cause_counts[cat] += friction.case_count
+        total_cases += friction.case_count
+
+    # Decision tree: classify gap type based on root causes
+    # Priority 1: Missing content or platform bugs → "فجوة حقيقية"
+    if guidebook_status == "Missing":
+        return ("real_gap", "فجوة حقيقية")
+
+    if "platform_bug" in root_cause_counts:
+        return ("real_gap", "فجوة حقيقية")
+
+    # Priority 2: Proactive notification opportunity → "فجوة وعي واستخدام"
+    # (problem: users don't know about the service or how to use it)
+    if "no_proactive_notification" in root_cause_counts:
+        notif_pct = root_cause_counts["no_proactive_notification"] / total_cases * 100 if total_cases > 0 else 0
+        if notif_pct > 30:  # Significant notification gap
+            return ("awareness_usage_gap", "فجوة وعي واستخدام")
+
+    # Priority 3: Clarity/readability issue → could be awareness gap or usability gap
+    if clarity in ("bureaucratic", "unclear"):
+        return ("awareness_usage_gap", "فجوة وعي واستخدام")
+
+    # Fallback: undefined
+    return ("undefined", "غير محدد")
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Module-level helpers
 # Also paste into stage6_json_report.py for the JSON builder.
@@ -195,6 +275,9 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     Columns locked here — LLM only adds التوصية.
     القناة الرسمية في دليل الخدمات is pre-computed from guidebook_status + excerpt.
 
+    KEY FIX: نوع الفجوة is now computed dynamically from friction data, not from LLM.
+    This ensures accurate classification based on actual complaint patterns, not hallucination.
+
     Schema: الخدمة | الشكاوى | القناة الرسمية في دليل الخدمات | نوع الفجوة
     """
     sorted_gaps = sorted(
@@ -206,7 +289,12 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
             "الخدمة":                            gap.topic_ar or gap.topic,
             "الشكاوى":                          str(gap.case_count),
             "القناة الرسمية في دليل الخدمات": _build_guidebook_channel_status(gap),
-            "نوع الفجوة":                       gap.gap_type_ar or gap.gap_type or "—",
+            "نوع الفجوة":                       _compute_gap_type_from_friction(
+                gap.topic_ar or gap.topic,
+                state,
+                guidebook_status=gap.guidebook_status or "",
+                clarity=gap.clarity_assessment or "",
+            )[1],  # [1] = gap_type_ar (Arabic label)
         }
         for gap in sorted_gaps
     ]
@@ -347,7 +435,7 @@ def generate_digital_gaps_section(
           "الخدمة": "...",                          ← Pre-computed
           "الشكاوى": "...",                        ← Pre-computed
           "القناة الرسمية في دليل الخدمات": "...",  ← Pre-computed (from guidebook_status)
-          "نوع الفجوة": "...",                     ← Pre-computed
+          "نوع الفجوة": "...",                     ← Pre-computed (from friction analysis — DO NOT MODIFY)
           "التوصية": "..."                          ← LLM-written (refined from Stage 5 rec)
         }
       ],
@@ -517,6 +605,11 @@ def generate_digital_gaps_section(
         '- gap_table must have exactly the same number of rows as pre_computed_gap_table.\n'
         '- root_cause_table must have exactly the same number of rows as pre_computed_root_cause_table.\n'
         '- الخدمة, الشكاوى, القناة الرسمية في دليل الخدمات, نوع الفجوة: copy verbatim from pre_computed_gap_table.\n'
+        '  ** CRITICAL: نوع الفجوة (gap type) is derived from friction analysis in the pipeline — DO NOT INVENT OR MODIFY.\n'
+        '     Always copy the value from pre_computed_gap_table exactly as-is. Common values are:\n'
+        '     - "فجوة حقيقية" (real/genuine gap — missing feature or broken functionality)\n'
+        '     - "فجوة وعي واستخدام" (awareness/usage gap — users don\'t know about the service)\n'
+        '     - "غير محدد" (undefined/unclassified gap)\n'
         '- #, السبب الجذري, مثال على التحدي: copy verbatim from pre_computed_root_cause_table.\n'
         '- Every number in section_body must match a pre-computed input above.\n'
         '- Arabic only. Proper nouns only in Latin script: MOI, SMS, UAE PASS.\n'

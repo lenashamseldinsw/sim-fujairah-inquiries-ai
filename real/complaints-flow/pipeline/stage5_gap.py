@@ -77,6 +77,106 @@ GAP_ANALYSIS_TOOL = {
 }
 
 
+def reconcile_faq_frequencies(
+    faq_list: List[FAQCandidate],
+    journey_map: List[Any],
+    all_classified: List[Any]
+) -> List[FAQCandidate]:
+    """
+    Reconcile FAQ frequencies against actual case counts from the pipeline.
+
+    STRATEGY:
+    1. For each FAQ, try to match it to friction points in journey_map by keyword similarity
+    2. If matched, count actual cases from all_classified in the matched sub_classifications
+    3. If no match, set frequency to 0 (conservative approach — better to under-count than hallucinate)
+
+    This ensures FAQ frequencies come from actual pipeline data, never from LLM estimates.
+
+    Args:
+        faq_list: List of FAQCandidate objects with LLM-generated frequencies
+        journey_map: List of JourneyFriction objects with sub_classification mappings
+        all_classified: List of CaseRow objects (ground truth case data)
+
+    Returns:
+        Updated faq_list with reconciled frequency values
+    """
+    if not faq_list or not all_classified:
+        return faq_list
+
+    # Build ground truth: sub_classification → case count
+    actual_sub_counts = defaultdict(int)
+    for case in all_classified:
+        actual_sub_counts[case.sub_classification] += 1
+
+    # Build journey_map lookup: friction point keywords → sub_classifications
+    friction_keywords_to_subs = defaultdict(set)
+    if journey_map:
+        for friction in journey_map:
+            sub = friction.sub_classification if hasattr(friction, 'sub_classification') else None
+            if not sub:
+                continue
+
+            # Index by all text fields from the friction point
+            for text_field in [
+                getattr(friction, 'friction_point_ar', None),
+                getattr(friction, 'friction_point', None),
+                getattr(friction, 'cluster_ar', None),
+                getattr(friction, 'cluster', None),
+            ]:
+                if text_field:
+                    # Normalize for matching: lowercase, take first 50 chars
+                    key = text_field.strip().lower()[:50]
+                    friction_keywords_to_subs[key].add(sub)
+
+    # Reconcile each FAQ's frequency
+    reconciled_faqs = []
+    for faq in faq_list:
+        # Extract keywords from question and answer
+        faq_text = ""
+        if faq.question_ar:
+            faq_text += faq.question_ar.lower()
+        if faq.answer_ar:
+            faq_text += " " + faq.answer_ar.lower()
+        if faq.question:
+            faq_text += " " + faq.question.lower()
+        if faq.answer:
+            faq_text += " " + faq.answer.lower()
+
+        faq_text = faq_text.strip()
+
+        # Try to match FAQ to journey_map friction points by keyword overlap
+        matched_subs = set()
+        for friction_key, subs in friction_keywords_to_subs.items():
+            # Check if friction key appears in FAQ text (word boundary check)
+            if friction_key in faq_text or any(
+                word in faq_text for word in friction_key.split() if len(word) > 3
+            ):
+                matched_subs.update(subs)
+
+        # Count actual cases from matched sub_classifications
+        reconciled_frequency = 0
+        if matched_subs:
+            reconciled_frequency = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
+            print(
+                f"[Stage5] RECONCILE FAQ '{faq.question_ar[:50] if faq.question_ar else faq.question[:50]}': "
+                f"{faq.frequency} → {reconciled_frequency} "
+                f"(matched subs: {matched_subs})"
+            )
+        else:
+            # No match found — conservative approach: set to 0
+            if faq.frequency > 0:
+                print(
+                    f"[Stage5] FAQ '{faq.question_ar[:50] if faq.question_ar else faq.question[:50]}' "
+                    f"has no matching friction points — setting frequency {faq.frequency} → 0"
+                )
+
+        # Create new FAQ with reconciled frequency using model_copy
+        faq_copy = faq.model_copy(update={"frequency": reconciled_frequency})
+        reconciled_faqs.append(faq_copy)
+
+    return reconciled_faqs
+
+
 def find_guidebook_json() -> Optional[str]:
     """
     Find the complaints guidebook JSON file from multiple possible locations.
@@ -336,7 +436,11 @@ def run_stage5(
             )
             for faq in state.faq_candidates:
                 faq.validation_status = 'OK'
-            state.validated_faqs = list(state.faq_candidates)
+
+            # Reconcile FAQ frequencies against actual case counts
+            print("[Stage5] Reconciling FAQ frequencies against all_classified...")
+            reconciled = reconcile_faq_frequencies(state.faq_candidates, [], state.all_classified)
+            state.validated_faqs = reconciled
         else:
             print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
         return state
@@ -552,12 +656,16 @@ def run_stage5(
                         if status == 'OK':
                             validated.append(faq)
 
-                    state.validated_faqs = validated
+                    # Reconcile FAQ frequencies against actual case counts from journey_map and all_classified
+                    print("[Stage5] Reconciling FAQ frequencies against journey_map and all_classified...")
+                    state.validated_faqs = reconcile_faq_frequencies(validated, state.journey_map, state.all_classified)
                 else:
                     # If no validations provided, assume all OK
                     for faq in state.faq_candidates:
                         faq.validation_status = 'OK'
-                    state.validated_faqs = state.faq_candidates
+                    # Reconcile FAQ frequencies against actual case counts from journey_map and all_classified
+                    print("[Stage5] Reconciling FAQ frequencies against journey_map and all_classified...")
+                    state.validated_faqs = reconcile_faq_frequencies(state.faq_candidates, state.journey_map, state.all_classified)
 
                 break
         else:
