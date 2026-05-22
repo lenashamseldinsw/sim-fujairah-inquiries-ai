@@ -162,7 +162,7 @@ def _build_nlp_classifier_impact(state: PipelineState) -> Dict[str, Any]:
     Tool 1: NLP Text Classifier — reduce unclassified "أخرى" cases.
 
     Grounds impact in REAL metrics:
-    - unclassified_count: actual "أخرى" cases from sub_category_counts
+    - unclassified_count: actual "أخرى" cases from all_classified
     - unclassified_pct: percentage of total cases
     - reclass_rate: percentage already reclassified (Stage 2/3)
 
@@ -170,12 +170,12 @@ def _build_nlp_classifier_impact(state: PipelineState) -> Dict[str, Any]:
     """
     total_cases = len(state.all_classified) or state.total_cases or 1
 
-    # Count actual "أخرى" cases from sub-categories (Stage 2)
+    # Count actual "أخرى" cases from sub-classifications (Stage 2)
     unclassified_count = 0
-    for cat_count in (state.sub_category_counts or {}).values():
-        if "أخرى" in str(cat_count):  # Match "أخرى" category
-            unclassified_count = cat_count
-            break
+    for case in (state.all_classified or []):
+        sub = case.sub_classification or ""
+        if "أخرى" in sub or "بلا تصنيف" in sub:
+            unclassified_count += 1
 
     if unclassified_count == 0:
         # Fallback: use actual count from state if available
