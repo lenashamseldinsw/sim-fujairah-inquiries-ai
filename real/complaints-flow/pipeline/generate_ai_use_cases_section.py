@@ -182,7 +182,7 @@ def _build_nlp_classifier_impact(state: PipelineState) -> Dict[str, Any]:
         unclassified_count = state.reclassified_count or 0
 
     unclassified_pct = round((unclassified_count / total_cases * 100), 1) if total_cases > 0 else 0
-    reclass_pct = round(state.reclassification_rate * 100, 1) if state.reclassification_rate else 0
+    reclass_pct = round(state.reclassification_rate, 1) if state.reclassification_rate else 0
 
     # LOCKED impact: grounded in REAL classification metrics, never hallucinated
     impact = (
@@ -213,15 +213,14 @@ def _build_anomaly_detection_impact(state: PipelineState) -> Dict[str, Any]:
     threshold = total_cases * 0.05  # Top 5% of cases
 
     # Find friction entries with unusually high case counts (actual anomalies in data)
-    anomaly_count = 0
+    # Deduplicate using case_ids to avoid counting same case multiple times
+    anomaly_case_ids = set()
     for entry in (state.journey_map or []):
         if entry.case_count > threshold:
-            anomaly_count += 1
+            anomaly_case_ids.update(entry.case_ids or [])
 
-    high_impact_cases = sum(
-        e.case_count for e in (state.journey_map or [])
-        if e.case_count > threshold
-    )
+    anomaly_count = len(anomaly_case_ids)
+    high_impact_cases = anomaly_count
 
     # LOCKED impact: grounded in REAL anomalies found in journey_map
     impact = (
@@ -249,11 +248,15 @@ def _build_response_suggestion_impact(state: PipelineState) -> Dict[str, Any]:
     Returns dict with locked impact statement (no hallucination).
     """
     # Count gap entries indicating incomplete resolution
+    # Deduplicate using case_ids to avoid counting same case multiple times
     unresolved_gaps = [
         g for g in (state.gap_table or [])
         if g.severity in ("Critical", "High") and g.guidebook_status == "Missing"
     ]
-    unresolved_count = sum(g.case_count for g in unresolved_gaps)
+    unresolved_case_ids = set()
+    for g in unresolved_gaps:
+        unresolved_case_ids.update(g.case_ids or [])
+    unresolved_count = len(unresolved_case_ids)
 
     if unresolved_count == 0:
         # Fallback: count friction points about incomplete handling

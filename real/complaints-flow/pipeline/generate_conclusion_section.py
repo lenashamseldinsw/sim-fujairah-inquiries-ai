@@ -54,6 +54,7 @@ import anthropic
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response, extract_methodology_context
 from .utils import normalize_arabic
+from .validate_llm_numbers import validate_section_9_narrative
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -628,6 +629,18 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
             result = retry_result
         else:
             print("[Conclusion] WARNING: retry also missing 'لكن' — using original output")
+
+    # ── Validate LLM narrative against actual metrics ───────────────────────────
+    section_body = result.get("section_body", "")
+    validation_report = validate_section_9_narrative(section_body, state)
+    if validation_report["total_issues"] > 0:
+        print(f"[Conclusion] ⚠️  Found {validation_report['total_issues']} validation issues:")
+        for issue in validation_report["percentage_validations"].get("found_issues", []):
+            print(f"  • {issue}")
+        for issue in validation_report["case_count_validations"].get("found_issues", []):
+            print(f"  • {issue}")
+    else:
+        print("[Conclusion] ✅ Narrative validation passed")
 
     # ── Safety-reinject locked tables ─────────────────────────────────────────
     result["pivot_table"] = pivot_rows

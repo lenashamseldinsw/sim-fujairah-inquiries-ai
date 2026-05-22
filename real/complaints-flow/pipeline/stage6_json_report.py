@@ -405,9 +405,9 @@ class JSONReportBuilder:
         )
         digital_channel_rate = f"{digital_count / total * 100:.1f}%" if total > 0 else "0%"
 
-        # Check if zero rejection (all cases accepted)
-        rejected_count = sum(1 for c in all_classified if c.sla_color == 'مرفوضة')
-        zero_rejection_rate = rejected_count == 0
+        # Check formal rejection rate (cases with status='طلب مرفوض')
+        rejected_count = sum(1 for c in all_classified if c.case_status and c.case_status.strip() == 'طلب مرفوض')
+        rejection_rate = (rejected_count / total * 100) if total > 0 else 0.0
 
         return {
             "extraction_version": 1,
@@ -424,7 +424,7 @@ class JSONReportBuilder:
                 "closed_cases_count": self.state.closed_cases_count,
                 "total_complaints": total,
                 "digital_channel_rate": digital_channel_rate,
-                "zero_rejection_rate": zero_rejection_rate,
+                "rejection_rate": round(rejection_rate, 1),
             }
         }
 
@@ -1758,30 +1758,7 @@ class JSONReportBuilder:
         if conclusion_section:
             sections.append(conclusion_section)
 
-        # ISSUE 3 FIX: Include 4 top-level charts alongside sections
-        charts = []
-
-        # 1. Classification chart (complaint sub-category distribution)
-        classification_chart = self.build_classification_chart()
-        if classification_chart:
-            charts.append(classification_chart)
-
-        # 2. Service distribution chart
-        service_chart = self.build_service_distribution_chart()
-        if service_chart:
-            charts.append(service_chart)
-
-        # 3. Resolution status chart
-        resolution_chart = self.build_resolution_status_chart()
-        if resolution_chart:
-            charts.append(resolution_chart)
-
-        # 4. Severity chart
-        severity_chart = self.build_severity_chart()
-        if severity_chart:
-            charts.append(severity_chart)
-
-        report["charts"] = charts
+        report["charts"] = []
         report["sections"] = sections
 
         # Issue 3 Fix: Recalculate total_tables at the end by walking all sections

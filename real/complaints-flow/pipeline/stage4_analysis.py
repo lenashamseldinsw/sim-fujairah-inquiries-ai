@@ -742,6 +742,7 @@ def _retry_journey_map_only(
                 friction_point_ar=j.get("friction_point_ar", ""),
                 root_cause_category=j.get("root_cause_category", ""),
                 case_count=j.get("case_count", 0),
+                case_ids=j.get("case_ids", []),
                 top_level=j.get("top_level", ""),
                 sub_classification=j.get("sub_classification", ""),
             )
@@ -886,6 +887,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                     friction_point_ar=j.get('friction_point_ar', ''),
                     root_cause_category=j.get('root_cause_category', ''),
                     case_count=j.get('case_count', 0),
+                    case_ids=j.get('case_ids', []),
                     top_level=j.get('top_level', ''),
                     sub_classification=j.get('sub_classification', '')
                 )

@@ -1749,13 +1749,7 @@ class JSONReportBuilder:
         # The old build_faq_section() was a duplicate with lower-quality content. Digital transformation
         # section provides FAQs with better operational guidance and contextual information.
 
-        # Charts
-        charts = []
-        chart = self.build_classification_chart()
-        if chart:
-            charts.append(chart)
-
-        report["charts"] = charts
+        report["charts"] = []
         report["sections"] = sections
 
         # Issue 3 Fix: Recalculate total_tables at the end by walking all sections

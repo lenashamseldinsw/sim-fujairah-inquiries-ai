@@ -495,9 +495,8 @@ def generate_digital_gaps_section(
     critical_count = sum(1 for g in state.gap_table if g.severity == "Critical")
     medium_count   = sum(1 for g in state.gap_table if g.severity == "Medium")
 
-    proactive_gaps       = [g for g in state.gap_table if g.proactive_notification_opportunity]
-    proactive_case_count = sum(g.case_count for g in proactive_gaps)
-    proactive_pct        = round(proactive_case_count / total_cases * 100, 1)
+    proactive_case_count = len(state.notification_opportunities or [])
+    proactive_pct        = round(proactive_case_count / total_cases * 100, 1) if total_cases > 0 else 0
 
     # ── Prompt ────────────────────────────────────────────────────────────────
     proactive_instruction = (

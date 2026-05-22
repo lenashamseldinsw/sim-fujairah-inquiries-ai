@@ -263,7 +263,7 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
     row += 1
     ws[f'A{row}'] = "4. معدل الرفض الرسمي"
     ws[f'A{row}'].font = Font(bold=True)
-    rejected = sum(1 for c in state.all_classified if c.sla_color == 'مرفوضة')
+    rejected = sum(1 for c in state.all_classified if c.case_status and c.case_status.strip() == 'طلب مرفوض')
     accepted = total - rejected
     row += 1
     accepted_row = row
@@ -276,14 +276,21 @@ def _populate_summary_sheet(ws, state: PipelineState) -> None:
     ws[f'B{row}'] = rejected
     ws[f'C{row}'] = f"=IFERROR(B{row}/B{totals_row},0)"  # Live formula
 
-    # --- Section 5: Proactive notifications (opportunity count) ---
+    # --- Section 5: Proactive notifications (categories + cases) ---
     row += 2
-    notification_opportunities = len(state.notification_opportunities or [])
-    ws[f'A{row}'] = f"5. الإشعارات الاستباقية ({notification_opportunities} فرصة)"
+    notification_categories = len(state.notification_opportunities or [])
+    notification_cases = sum(
+        n.get("cases_eliminated", 0) for n in (state.notification_opportunities or [])
+    )
+    ws[f'A{row}'] = f"5. الإشعارات الاستباقية ({notification_categories} فئة)"
     ws[f'A{row}'].font = Font(bold=True)
     row += 1
-    ws[f'A{row}'] = "فرص الإشعار المتوفرة"
-    ws[f'B{row}'] = notification_opportunities
+    ws[f'A{row}'] = "فئات الإشعار المكتشفة"
+    ws[f'B{row}'] = notification_categories
+    ws[f'C{row}'] = f"=IFERROR(B{row}/B{totals_row},0)"  # Live formula
+    row += 1
+    ws[f'A{row}'] = "حالات قابلة للإشعار الاستباقي"
+    ws[f'B{row}'] = notification_cases
     ws[f'C{row}'] = f"=IFERROR(B{row}/B{totals_row},0)"  # Live formula
 
     ws.column_dimensions['A'].width = 40

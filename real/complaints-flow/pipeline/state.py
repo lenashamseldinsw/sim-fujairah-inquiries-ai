@@ -64,6 +64,7 @@ class JourneyFriction(BaseModel):
     friction_point: str
     root_cause_category: str  # missing_info | inaccessible_info | no_proactive_notification | platform_bug | policy_complexity | wrong_channel_used | service_delivery_failure | processing_delay
     case_count: int
+    case_ids: List[str] = Field(default_factory=list)  # IDs of cases in this friction point for deduplication
     cluster_ar: Optional[str] = None
     friction_point_ar: Optional[str] = None
     top_level: Optional[str] = None  # Associated top-level category
@@ -85,6 +86,7 @@ class GapRow(BaseModel):
     """Gap analysis row from Stage 5."""
     topic: str
     case_count: int
+    case_ids: List[str] = Field(default_factory=list)  # IDs of cases in this gap for deduplication
     guidebook_status: str  # "Covered" | "Partially Covered" | "Missing"
     gap_type: str
     severity: str  # Critical | Medium | Adequate

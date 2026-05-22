@@ -578,6 +578,7 @@ def run_stage5(
                             topic=g.get('topic', ''),
                             topic_ar=g.get('topic_ar', ''),
                             case_count=case_count,
+                            case_ids=g.get('case_ids', []),
                             guidebook_status=g.get('guidebook_status', ''),
                             gap_type=g.get('gap_type', ''),
                             gap_type_ar=g.get('gap_type_ar', ''),
