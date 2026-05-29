@@ -178,8 +178,10 @@ def enforce_locked_case_counts(
     """
     Validate and correct case count claims in LLM-generated text.
 
-    Checks for claims like "X حالة" and validates against actual data.
+    Checks for claims like "X حالة" or "X+ شكوى" (must be explicitly marked).
     Corrects proactive_cancellable counts based on notification_opportunities.
+
+    IMPORTANT: Pattern requires explicit "حالة/حالات" marker to avoid matching percentages.
 
     Returns:
         (corrected_text, validation_report)
@@ -194,8 +196,9 @@ def enforce_locked_case_counts(
     corrected = text
     total_cases = len(state.all_classified) or state.total_cases or 0
 
-    # Pattern: "X حالة" or "X+" (case count claims)
-    case_count_pattern = r'(\d+)\s*(?:\+)?\s*(?:حالة|حالات)?'
+    # Pattern: "X حالة" or "X+ شكوى" — MUST have explicit case marker
+    # This prevents matching numbers in percentages like "44.44%"
+    case_count_pattern = r'(\d+)\s*(?:\+)?\s*(?:حالة|حالات|شكوى|شكاوى)'
 
     # Get locked case count values
     proactive_actual = _compute_proactive_cancellable_count(state)
@@ -235,13 +238,21 @@ def enforce_locked_case_counts(
                     old_match = match.group(0)
                     # Preserve "+", "حالة", "حالات" suffix if present
                     has_plus = '+' in old_match
-                    has_hala = 'حالة' in old_match or 'حالات' in old_match
+                    case_marker = ""
+                    if 'حالات' in old_match:
+                        case_marker = "حالات" if actual_val != 1 else "حالة"
+                    elif 'حالة' in old_match:
+                        case_marker = "حالات" if actual_val != 1 else "حالة"
+                    elif 'شكاوى' in old_match:
+                        case_marker = "شكاوى" if actual_val != 1 else "شكوى"
+                    elif 'شكوى' in old_match:
+                        case_marker = "شكاوى" if actual_val != 1 else "شكوى"
 
                     new_str = str(actual_val)
                     if has_plus and metric_name == "proactive":
                         new_str += "+"
-                    if has_hala:
-                        new_str += " " + ("حالات" if actual_val != 1 else "حالة")
+                    if case_marker:
+                        new_str += " " + case_marker
 
                     corrected = corrected[:match.start()] + new_str + corrected[match.end():]
                     report["found_issues"].append(
