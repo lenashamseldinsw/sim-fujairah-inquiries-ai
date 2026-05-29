@@ -289,3 +289,8 @@ class ChartStyle:
     title_font_size: int | None = None   # pt; chart title text
     axis_font_size: int | None = None    # pt; axis tick/category labels
     legend_font_size: int | None = None  # pt; legend entry labels
+
+    # Data label formatting (for pie charts and other types)
+    data_label_font_size: int | None = None  # pt; None = inherit axis_font_size
+    show_data_label_values: bool = True      # Show absolute values in data labels
+    show_data_label_percentages: bool = False  # Show percentages in data labels (pie/doughnut only)

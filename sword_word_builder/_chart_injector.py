@@ -259,11 +259,25 @@ def _build_chart_xml(chart: _PendingChart) -> bytes:
         # Data labels for pie charts: show values on slices
         if style.show_data_labels:
             dLbls = etree.SubElement(ser_el, _c("dLbls"))
-            etree.SubElement(dLbls, _c("showVal")).set("val", "1")
+            etree.SubElement(dLbls, _c("showVal")).set("val", "1" if style.show_data_label_values else "0")
             etree.SubElement(dLbls, _c("showCatName")).set("val", "0")
             etree.SubElement(dLbls, _c("showSerName")).set("val", "0")
-            etree.SubElement(dLbls, _c("showPercent")).set("val", "0")
+            etree.SubElement(dLbls, _c("showPercent")).set("val", "1" if style.show_data_label_percentages else "0")
             etree.SubElement(dLbls, _c("dLblPos")).set("val", "bestFit")
+
+            # Data label font size (if specified)
+            if style.data_label_font_size:
+                txPr = etree.SubElement(dLbls, _c("txPr"))
+                bodyPr = etree.SubElement(txPr, _a("bodyPr"))
+                bodyPr.set("anchor", "ctr")
+                bodyPr.set("anchorCtr", "0")
+                lstStyle = etree.SubElement(txPr, _a("lstStyle"))
+
+                p = etree.SubElement(txPr, _a("p"))
+                pPr = etree.SubElement(p, _a("pPr"))
+                defRPr = etree.SubElement(pPr, _a("defRPr"))
+                # Font size in hundreds of points (e.g., 800 for 8pt)
+                defRPr.set("sz", str(style.data_label_font_size * 100))
 
     else:
         # Series — reference layout: series in columns (B, C, ...), categories in rows (A2:AN+1)

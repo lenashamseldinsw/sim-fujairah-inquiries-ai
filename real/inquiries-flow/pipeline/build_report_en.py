@@ -62,6 +62,22 @@ CHART_STYLE = ChartStyle(
     title_font_size=12,
 )
 
+PIE_CHART_STYLE = ChartStyle(
+    width_cm=14,
+    height_cm=9,
+    show_legend=True,
+    legend_position="b",
+    show_data_labels=True,
+    show_gridlines=True,
+    font="Calibri",
+    axis_font_size=9,
+    legend_font_size=9,
+    title_font_size=12,
+    show_data_label_values=False,
+    show_data_label_percentages=True,
+    data_label_font_size=8,
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -275,7 +291,7 @@ def _render_chart(builder: WordBuilder, chart: dict):
     style = CHART_STYLE
     if chart_type == "pie" and colors:
         style = dataclasses.replace(
-            CHART_STYLE,
+            PIE_CHART_STYLE,
             series_colors=[c.lstrip("#") for c in colors],
         )
     

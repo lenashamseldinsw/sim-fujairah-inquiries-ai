@@ -73,6 +73,9 @@ PIE_CHART_STYLE = ChartStyle(
     axis_font_size=9,
     legend_font_size=9,
     title_font_size=12,
+    show_data_label_values=False,
+    show_data_label_percentages=True,
+    data_label_font_size=8,
 )
 
 # ---------------------------------------------------------------------------
