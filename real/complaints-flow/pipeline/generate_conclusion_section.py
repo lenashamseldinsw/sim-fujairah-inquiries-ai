@@ -54,7 +54,7 @@ import anthropic
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response, extract_methodology_context
 from .utils import normalize_arabic
-from .validate_llm_numbers import validate_section_9_narrative
+from .validate_llm_numbers import validate_section_9_narrative, _compute_proactive_cancellable_count
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -249,17 +249,11 @@ def _count_proactive_cancellable(state: PipelineState) -> int:
     """
     Count cases cancellable by proactive notification.
 
-    Sums notification_opportunities.cases_eliminated from state (set in Stage 4).
-    Falls back to counting journey_map entries with root_cause_category ==
-    'no_proactive_notification' if notification_opportunities is empty.
+    Uses shared function _compute_proactive_cancellable_count from validate_llm_numbers
+    to ensure consistency across all sections (Sections 5, 6.2, and 9).
+    Computes dynamically from notification_opportunities post-reconciliation (Stage 4).
     """
-    opps = state.notification_opportunities or []
-    if opps:
-        return sum(int(o.get('cases_eliminated', 0)) for o in opps)
-
-    # Fallback: journey_map proactive friction points
-    jm = state.journey_map or []
-    return sum(j.case_count for j in jm if j.root_cause_category == 'no_proactive_notification')
+    return _compute_proactive_cancellable_count(state)
 
 
 def _count_critical_gaps(state: PipelineState) -> int:

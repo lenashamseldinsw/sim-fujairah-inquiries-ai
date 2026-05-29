@@ -179,6 +179,7 @@ def enforce_locked_case_counts(
     Validate and correct case count claims in LLM-generated text.
 
     Checks for claims like "X حالة" and validates against actual data.
+    Corrects proactive_cancellable counts based on notification_opportunities.
 
     Returns:
         (corrected_text, validation_report)
@@ -193,14 +194,18 @@ def enforce_locked_case_counts(
     corrected = text
     total_cases = len(state.all_classified) or state.total_cases or 0
 
-    # Pattern: "X حالة" (case count claims)
-    case_count_pattern = r'(\d+)\s*(?:\+)?\s*(?:حالة|حالات)'
+    # Pattern: "X حالة" or "X+" (case count claims)
+    case_count_pattern = r'(\d+)\s*(?:\+)?\s*(?:حالة|حالات)?'
 
-    # Map context to expected values
-    context_values = {
-        "closed": state.closed_cases_count,
-        "rejected": sum(1 for c in state.all_classified if c.case_status and c.case_status.strip() == 'طلب مرفوض'),
-        "total": total_cases,
+    # Get locked case count values
+    proactive_actual = _compute_proactive_cancellable_count(state)
+    closure_actual = _compute_closure_rate(state) * total_cases / 100 if total_cases else 0
+    closure_actual = int(round(closure_actual))
+
+    # Keywords that indicate which metric the number refers to
+    keywords_map = {
+        "proactive": (proactive_actual, ["إشعار", "استباقي", "إخطار", "إشعارات", "التنبيه", "قابل للإلغاء"]),
+        "closure": (closure_actual, ["إغلاق", "مغلقة", "أُغلقت", "closed"]),
     }
 
     matches = list(re.finditer(case_count_pattern, corrected))
@@ -208,15 +213,43 @@ def enforce_locked_case_counts(
         try:
             claimed_count = int(match.group(1))
 
-            # Check if any locked value is exceeded
-            if claimed_count > total_cases:
-                report["found_issues"].append(
-                    f"Case count {claimed_count} exceeds total cases {total_cases}"
-                )
-                # Don't correct, just flag - context matters for what should be corrected
-                report["details"].append(
-                    f"Found potentially invalid case count {claimed_count} at position {match.start()}"
-                )
+            # Check if proactive_cancellable is mentioned in nearby context
+            context_start = max(0, match.start() - 50)
+            context_end = min(len(text), match.end() + 50)
+            context = text[context_start:context_end].lower()
+
+            # Determine which metric this number refers to
+            best_metric = None
+            best_score = 0
+
+            for metric_name, (actual_val, keywords) in keywords_map.items():
+                score = sum(1 for kw in keywords if kw in context)
+                if score > best_score:
+                    best_score = score
+                    best_metric = (metric_name, actual_val)
+
+            # If we identified a metric and the claim diverges, correct it
+            if best_metric and claimed_count != best_metric[1]:
+                metric_name, actual_val = best_metric
+                if actual_val > 0:  # Only correct if we have a meaningful actual value
+                    old_match = match.group(0)
+                    # Preserve "+", "حالة", "حالات" suffix if present
+                    has_plus = '+' in old_match
+                    has_hala = 'حالة' in old_match or 'حالات' in old_match
+
+                    new_str = str(actual_val)
+                    if has_plus and metric_name == "proactive":
+                        new_str += "+"
+                    if has_hala:
+                        new_str += " " + ("حالات" if actual_val != 1 else "حالة")
+
+                    corrected = corrected[:match.start()] + new_str + corrected[match.end():]
+                    report["found_issues"].append(
+                        f"{metric_name.title()} count: claimed {claimed_count} but actual is {actual_val} "
+                        f"(context: ...{context.strip()}...)"
+                    )
+                    report["corrections_made"] += 1
+
         except (ValueError, IndexError):
             pass
 
@@ -224,9 +257,22 @@ def enforce_locked_case_counts(
 
 
 def _compute_closure_rate(state: PipelineState) -> float:
-    """Compute closure rate as percentage."""
-    total = len(state.all_classified) or state.total_cases or 1
-    closed = state.closed_cases_count or 0
+    """
+    Compute closure rate as percentage.
+
+    Uses SAME logic as generate_conclusion_section._compute_closure_rate:
+    Count cases where date_closed is truthy AND has non-empty string representation.
+    This ensures consistency with Section 3.3 (Resolution Analysis).
+    """
+    cases = state.all_classified or []
+    total = len(cases) or 1
+
+    # Match the logic from generate_conclusion_section._compute_closure_rate:
+    # Check if date_closed attribute exists AND is truthy AND has non-empty string representation
+    closed = sum(
+        1 for c in cases
+        if c.date_closed and str(c.date_closed).strip()
+    )
     return round((closed / total * 100), 1) if total > 0 else 0.0
 
 
@@ -238,6 +284,24 @@ def _compute_sla_on_time_rate(state: PipelineState) -> float:
         if c.sla_closed_on_time and c.sla_closed_on_time.strip() == 'نعم'
     )
     return round(on_time / total * 100, 1) if total > 0 else 0.0
+
+
+def _compute_proactive_cancellable_count(state: PipelineState) -> int:
+    """
+    Compute proactive cancellable case count from notification_opportunities.
+
+    This is the authoritative count used consistently across all sections.
+    Uses actual data from state.notification_opportunities (post-reconciliation from Stage 4),
+    not cached values from state.proactive_notification_case_count.
+    """
+    if not state.notification_opportunities:
+        return 0
+
+    total = sum(
+        int(n.get("cases_eliminated", n.get("case_count", 0)))
+        for n in state.notification_opportunities
+    )
+    return total
 
 
 def validate_section_9_narrative(
