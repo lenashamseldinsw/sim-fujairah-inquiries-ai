@@ -523,10 +523,48 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         missing_subs = expected_subs - returned_subs
 
         if missing_subs:
-            raise RuntimeError(
-                f"[WorkloadMap] VALIDATION FAILED: complaints_table is missing sub-classifications: {missing_subs}. "
-                f"LLM must include ALL 6 complaint sub-categories, even those with low counts."
+            print(
+                f"[WorkloadMap] WARNING: LLM omitted {len(missing_subs)} complaint sub-categories: {missing_subs}. "
+                f"Injecting missing rows from pre-computed data..."
             )
+
+            # Inject missing rows from complaint_subs (pre-computed ground truth)
+            for missing_sub in missing_subs:
+                source_row = next(
+                    (row for row in complaint_subs if row.get('الفئة الفرعية') == missing_sub),
+                    None
+                )
+                if source_row:
+                    # Build row with LLM-style column names, using ground truth data
+                    injected_row = {
+                        "نوع الشكوى": missing_sub,
+                        "العدد": source_row.get('العدد', ''),
+                        "النسبة": source_row.get('النسبة', ''),
+                        "الوصف": f"[Injected] تصنيف متكرر في البيانات الفعلية"
+                    }
+                    complaints_table.append(injected_row)
+                    print(f"[WorkloadMap] Injected missing row: {missing_sub}")
+
+            # Re-sort by العدد descending (numeric sort)
+            try:
+                complaints_table = sorted(
+                    complaints_table,
+                    key=lambda x: int(x.get('العدد', '0')),
+                    reverse=True
+                )
+                result["complaints_table"] = complaints_table
+            except (ValueError, TypeError):
+                print("[WorkloadMap] WARNING: Could not re-sort complaints_table by العدد")
+                result["complaints_table"] = complaints_table
+
+            # Verify again
+            returned_subs = {row.get('نوع الشكوى', '') for row in complaints_table}
+            still_missing = expected_subs - returned_subs
+            if still_missing:
+                raise RuntimeError(
+                    f"[WorkloadMap] VALIDATION FAILED: After injection, still missing sub-classifications: {still_missing}. "
+                    f"Could not recover from LLM omission."
+                )
 
         # Add digital transformation capability to each row
         for row in complaints_table:
