@@ -22,9 +22,18 @@ if complaints_base not in sys.path:
     sys.path.insert(0, complaints_base)
 
 # Clear any cached pipeline modules to prevent mix-ups between inquiries/complaints flows
+# Must be comprehensive to avoid importing from inquiries flow
+pipeline_module_patterns = [
+    'pipeline.', 'pipeline', 'orchestrator', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6',
+    'state', 'stage2_rules', 'stage1_validator', 'stage3_llm', 'stage4_analysis', 'stage5_gap',
+    'generate_', 'json_utils', 'utils', 'validate_llm'
+]
 for mod_key in list(sys.modules.keys()):
-    if mod_key.startswith('pipeline') or mod_key.startswith('stage'):
-        del sys.modules[mod_key]
+    if any(mod_key.startswith(pattern) or pattern in mod_key for pattern in pipeline_module_patterns):
+        try:
+            del sys.modules[mod_key]
+        except (KeyError, RuntimeError):
+            pass
 
 # Now import fresh from this flow's pipeline
 from pipeline.orchestrator import PipelineOrchestrator
