@@ -513,7 +513,8 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
                 )
 
         # Check all sub-classifications are present
-        expected_subs = {row.get('نوع الشكوى', '') for row in complaint_subs}
+        # complaint_subs uses 'الفئة الفرعية'; complaints_table (from LLM) uses 'نوع الشكوى'
+        expected_subs = {row.get('الفئة الفرعية', '') for row in complaint_subs}
         returned_subs = {row.get('نوع الشكوى', '') for row in complaints_table}
         missing_subs = expected_subs - returned_subs
 
