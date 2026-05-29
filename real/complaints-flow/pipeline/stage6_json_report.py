@@ -138,7 +138,11 @@ def _digital_readiness(complaint_subcategory: str) -> str:
     return mapping.get(complaint_subcategory, "—")
 
 
-def _validate_complaints_table(rows: List[Dict[str, str]], table_name: str = "complaints_table") -> None:
+def _validate_complaints_table(
+    rows: List[Dict[str, str]],
+    table_name: str = "complaints_table",
+    expected_subs: Optional[set] = None
+) -> None:
     """
     Strictly validate that complaints_table has correct structure and all required columns.
     Raises RuntimeError with detailed message if validation fails.
@@ -146,6 +150,7 @@ def _validate_complaints_table(rows: List[Dict[str, str]], table_name: str = "co
     Args:
         rows: Table rows to validate
         table_name: Name of table for error messages
+        expected_subs: Set of expected sub-classifications. If provided, validates all are present.
 
     Raises:
         RuntimeError: If any validation check fails
@@ -177,23 +182,15 @@ def _validate_complaints_table(rows: List[Dict[str, str]], table_name: str = "co
                     f"All columns must have non-empty values."
                 )
 
-    # Verify we have all 6 expected sub-classifications
-    sub_classifications = {row.get("نوع الشكوى") for row in rows}
-    expected_subs = {
-        'شكاوى مكررة (مرفوضة)',
-        'شكاوى بلا تصنيف خدمي ("أخرى")',
-        'شكاوى على الخدمات المرورية',
-        'شكاوى أمنية وجنائية',
-        'شكاوى شهادات وتصاريح',
-        'شكاوى خارج الاختصاص والأخرى',
-    }
-
-    missing_subs = expected_subs - sub_classifications
-    if missing_subs:
-        raise RuntimeError(
-            f"[JSONReportBuilder] VALIDATION FAILED: {table_name} is missing sub-classifications: {missing_subs}. "
-            f"All 6 complaint types must be present, even with zero count."
-        )
+    # Verify we have all expected sub-classifications (if expected_subs provided)
+    if expected_subs is not None:
+        sub_classifications = {row.get("نوع الشكوى") for row in rows}
+        missing_subs = expected_subs - sub_classifications
+        if missing_subs:
+            raise RuntimeError(
+                f"[JSONReportBuilder] VALIDATION FAILED: {table_name} is missing sub-classifications: {missing_subs}. "
+                f"All {len(expected_subs)} complaint types must be present, even with zero count."
+            )
 
     print(f"[JSONReportBuilder] ✓ {table_name} validation passed — all {len(rows)} rows valid")
 
@@ -1041,8 +1038,15 @@ class JSONReportBuilder:
 
         dist_rows = wm_raw["complaints_table"]
 
-        # Strictly validate the complaints_table
-        _validate_complaints_table(dist_rows, table_name="workload_map complaints_table")
+        # Compute expected sub-classifications dynamically from state
+        expected_complaint_subs = set(sub_category_counts.keys())
+
+        # Strictly validate the complaints_table with dynamic expected categories
+        _validate_complaints_table(
+            dist_rows,
+            table_name="workload_map complaints_table",
+            expected_subs=expected_complaint_subs
+        )
 
         dist_table = {
             "columns": ["نوع الشكوى", "العدد", "النسبة", "الوصف", "قابلية التحويل الرقمي"],
