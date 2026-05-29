@@ -100,11 +100,18 @@ ANALYSIS_TOOL = {
                     "type": "object",
                     "properties": {
                         "top_level": {"type": "string"},
+                        "sub_classification": {
+                            "type": "string",
+                            "description": "The sub_classification value (copied exactly from the case data) that best represents the cases driving this FAQ. Used for authoritative frequency lookup from all_classified."
+                        },
                         "question": {"type": "string"},
                         "question_ar": {"type": "string"},
                         "answer": {"type": "string"},
                         "answer_ar": {"type": "string"},
-                        "frequency": {"type": "integer"}
+                        "frequency": {
+                            "type": "integer",
+                            "description": "Exact count of cases where this question was the PRIMARY driver of customer contact. Count each case once. Do NOT use sub-classification group totals. Do NOT add '+' to frequencies — return the exact integer."
+                        }
                     }
                 }
             },
@@ -244,6 +251,7 @@ ANALYSIS INSTRUCTIONS:
    Set frequency = the EXACT count of cases in the dataset where this specific question
    was the PRIMARY driver of the customer contact. Count each case exactly once.
    Do NOT extrapolate or estimate beyond the cases provided.
+   Do NOT use the group header total as `frequency`.
    Do NOT add "+" to frequencies — return the exact integer count.
    A frequency of 1 means exactly 1 case. Only assign frequency > 1 if multiple DISTINCT
    cases show the SAME question as their primary concern.
@@ -526,15 +534,28 @@ def _reconcile_counts(
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
     # Distribute the capped budget proportionally across all notification opportunities.
 
-    # Cap proactive_case_count against actual total to prevent LLM inflation
+    # Cap proactive_case_count against the ground-truth count of eligible sub-classifications
+    # to enforce the ceiling deterministically from actual data (Fix 3)
+    _PROACTIVE_ELIGIBLE_SUBS = {
+        "اعتراض على مخالفة مرورية",
+        "شكوى عن عدم استلام الخدمة",
+        "شكوى عن تأخر المعالجة",
+        "شكوى على تأخر المعالجة",
+    }
+    ground_truth_proactive = sum(
+        1 for case in all_classified
+        if case.sub_classification in _PROACTIVE_ELIGIBLE_SUBS
+    )
     actual_total = len(all_classified)
-    max_proactive_cases = min(proactive_case_count, actual_total)
+    max_proactive_cases = min(proactive_case_count, ground_truth_proactive, actual_total)
 
-    if proactive_case_count > actual_total:
+    if proactive_case_count > ground_truth_proactive:
         print(
             f"[Stage4] WARNING: proactive_notification_case_count={proactive_case_count} "
-            f"exceeds total cases={actual_total}. Capping to {actual_total}."
+            f"exceeds eligible sub-classifications count={ground_truth_proactive}. "
+            f"Capping to {max_proactive_cases}."
         )
+
 
     # Sum what the LLM claimed across all notification opportunities
     llm_total = sum(
@@ -579,7 +600,15 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"}
+                        "top_level": {"type": "string", "description": "Top-level category (شكوى, طلب, استفسار)"},
+                        "sub_classification": {
+                            "type": "string",
+                            "description": "The sub_classification value that best represents cases driving this FAQ. Copy exactly from case data."
+                        },
+                        "frequency": {
+                            "type": "integer",
+                            "description": "Exact count of cases where this was the PRIMARY question. Count each case once. Do NOT use group header totals. Return exact integer, no '+' suffix."
+                        }
                     },
                     "required": ["question", "question_ar", "answer", "answer_ar", "frequency"]
                 }
@@ -663,6 +692,8 @@ def _retry_faq_only(
                 answer_ar=f.get("answer_ar", ""),
                 frequency=f.get("frequency", 0),
                 validation_status="PENDING",
+                top_level=f.get("top_level", ""),
+                sub_classification=f.get("sub_classification", ""),
             )
             for f in raw_items
         ]
@@ -897,7 +928,9 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                     answer=f.get('answer', ''),
                     answer_ar=f.get('answer_ar', ''),
                     frequency=f.get('frequency', 0),
-                    validation_status='PENDING'
+                    validation_status='PENDING',
+                    top_level=f.get('top_level', ''),
+                    sub_classification=f.get('sub_classification', '')
                 )
                 for f in analysis.get('faq_candidates', [])
             ]

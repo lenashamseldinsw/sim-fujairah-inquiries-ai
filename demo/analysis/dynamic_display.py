@@ -670,9 +670,11 @@ class DynamicReportDisplay:
                     cursor: 'pointer',
                     dataLabels: {{
                         enabled: true,
-                        format: '{{point.percentage:.1f}}%',
+                        formatter: function() {{
+                            return Math.round(this.percentage) + '%';
+                        }},
                         style: {{
-                            fontSize: '12px',
+                            fontSize: '9px',
                             fontWeight: 'bold',
                             color: '#FFFFFF',
                             textShadow: '0 0 3px rgba(0, 0, 0, 0.8)'
@@ -791,9 +793,11 @@ class DynamicReportDisplay:
                     cursor: 'pointer',
                     dataLabels: {{
                         enabled: true,
-                        format: '{{point.percentage:.1f}}%',
+                        formatter: function() {{
+                            return Math.round(this.percentage) + '%';
+                        }},
                         style: {{
-                            fontSize: '12px',
+                            fontSize: '9px',
                             fontWeight: 'bold',
                             color: '#FFFFFF',
                             textShadow: '0 0 3px rgba(0, 0, 0, 0.8)'

@@ -461,8 +461,11 @@ Highcharts.chart('pie-chart', {{
     pie: {{
       innerSize: '{inner_size}', depth:45, allowPointSelect:true, cursor:'pointer',
       dataLabels: {{
-        enabled:true, format:'{{point.percentage:.1f}}%',
-        style:{{ fontSize:'12px', fontWeight:'bold', color:'#FFFFFF',
+        enabled:true,
+        formatter: function() {{
+          return Math.round(this.percentage) + '%';
+        }},
+        style:{{ fontSize:'9px', fontWeight:'bold', color:'#FFFFFF',
                  textShadow:'0 0 3px rgba(0,0,0,0.8)' }},
         connectorColor:'#FFFFFF'
       }},

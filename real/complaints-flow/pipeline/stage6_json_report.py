@@ -138,74 +138,64 @@ def _digital_readiness(complaint_subcategory: str) -> str:
     return mapping.get(complaint_subcategory, "—")
 
 
-def _build_rich_distribution_rows(
-    corrected_dist: Dict[str, int],
-    original_dist: Dict[str, int],
-    total_cases: int,
-    sub_category_counts: Optional[Dict[str, int]] = None,
-) -> List[Dict[str, str]]:
+def _validate_complaints_table(rows: List[Dict[str, str]], table_name: str = "complaints_table") -> None:
     """
-    Build the distribution table rows for complaints version.
-    Uses نوع الشكوى (complaint sub-category) with 6 rows, one per sub-category.
+    Strictly validate that complaints_table has correct structure and all required columns.
+    Raises RuntimeError with detailed message if validation fails.
 
-    Each row includes:
-    - نوع الشكوى: Category name
-    - العدد: Actual count from sub_category_counts (from stage 4 pipeline)
-    - النسبة: Calculated percentage
-    - الوصف: Description of category characteristics
-    - قابلية التحويل الرقمي: Digital transformation recommendation
+    Args:
+        rows: Table rows to validate
+        table_name: Name of table for error messages
 
-    Both الوصف and digital capability are non-LLM generated standard descriptions
-    to ensure consistency and prevent hallucination.
+    Raises:
+        RuntimeError: If any validation check fails
     """
-    if sub_category_counts is None:
-        sub_category_counts = {}
+    if not rows:
+        raise RuntimeError(
+            f"[JSONReportBuilder] VALIDATION FAILED: {table_name} is empty. "
+            f"Expected at least 6 complaint sub-categories."
+        )
 
-    rows = []
+    required_columns = {"نوع الشكوى", "العدد", "النسبة", "الوصف", "قابلية التحويل الرقمي"}
 
-    # Use the 6 complaint sub-categories in the same order as Excel sheets
-    categories = [
+    for idx, row in enumerate(rows):
+        row_keys = set(row.keys())
+        if not required_columns.issubset(row_keys):
+            missing = required_columns - row_keys
+            extra = row_keys - required_columns
+            raise RuntimeError(
+                f"[JSONReportBuilder] VALIDATION FAILED: Row {idx} in {table_name} has wrong columns. "
+                f"Missing: {missing}. Extra/unexpected: {extra}. "
+                f"Required exactly: {required_columns}. Got: {row_keys}"
+            )
+
+        # Verify non-empty values
+        for col in required_columns:
+            if not str(row[col]).strip():
+                raise RuntimeError(
+                    f"[JSONReportBuilder] VALIDATION FAILED: Row {idx}, column '{col}' is empty. "
+                    f"All columns must have non-empty values."
+                )
+
+    # Verify we have all 6 expected sub-classifications
+    sub_classifications = {row.get("نوع الشكوى") for row in rows}
+    expected_subs = {
         'شكاوى مكررة (مرفوضة)',
         'شكاوى بلا تصنيف خدمي ("أخرى")',
         'شكاوى على الخدمات المرورية',
         'شكاوى أمنية وجنائية',
         'شكاوى شهادات وتصاريح',
         'شكاوى خارج الاختصاص والأخرى',
-    ]
-
-    # Descriptions of what each category represents
-    category_description_map = {
-        'شكاوى مكررة (مرفوضة)': 'طلبات مرفوضة — طلبات متكررة أو لا تستوفي المعايير',
-        'شكاوى بلا تصنيف خدمي ("أخرى")': 'متنوعة — لا تندرج ضمن التصنيفات المحددة',
-        'شكاوى على الخدمات المرورية': 'خدمات مرورية — تسجيل بلاغات، معاملات رخص وملكيات',
-        'شكاوى أمنية وجنائية': 'بلاغات أمنية — جنائية وموروية وحالات اجتماعية',
-        'شكاوى شهادات وتصاريح': 'شهادات وتصاريح — شهادة السيرة والسلوك وترخيص الأسلحة',
-        'شكاوى خارج الاختصاص والأخرى': 'خارج الاختصاص — تتعلق بجهات أخرى أو إمارات أخرى',
     }
 
-    # Digital transformation recommendations for each category
-    digital_readiness_map = {
-        'شكاوى مكررة (مرفوضة)': 'نظام تصفية آلي — لتجنب الازدواجية',
-        'شكاوى بلا تصنيف خدمي ("أخرى")': 'إعادة تصنيف ذكي — بتحليل النصوص',
-        'شكاوى على الخدمات المرورية': 'بوابة مرورية متكاملة — تقديم وتتبع أونلاين',
-        'شكاوى أمنية وجنائية': 'نموذج إبلاغ آمن — مع التشفير والخصوصية',
-        'شكاوى شهادات وتصاريح': 'نظام طلبات موحد — متكامل مع قاعدة البيانات',
-        'شكاوى خارج الاختصاص والأخرى': 'نموذج تحويل ذكي — مع إعادة التوجيه التلقائية',
-    }
+    missing_subs = expected_subs - sub_classifications
+    if missing_subs:
+        raise RuntimeError(
+            f"[JSONReportBuilder] VALIDATION FAILED: {table_name} is missing sub-classifications: {missing_subs}. "
+            f"All 6 complaint types must be present, even with zero count."
+        )
 
-    for category in categories:
-        count = sub_category_counts.get(category, 0)
-        pct = f"{count / total_cases * 100:.1f}%" if total_cases > 0 else "0%"
-
-        rows.append({
-            "نوع الشكوى": category,
-            "العدد": str(count),
-            "النسبة": pct,
-            "الوصف": category_description_map.get(category, ""),
-            "قابلية التحويل الرقمي": digital_readiness_map.get(category, ""),
-        })
-
-    return rows
+    print(f"[JSONReportBuilder] ✓ {table_name} validation passed — all {len(rows)} rows valid")
 
 
 def _deduplicate_friction_rows(friction_rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
@@ -1042,11 +1032,18 @@ class JSONReportBuilder:
 
         intro_paragraph = wm_raw["intro_paragraph"]
 
-        dist_rows = wm_raw.get("complaints_table") or _build_rich_distribution_rows(
-            corrected_dist, original_dist, total_cases, sub_category_counts
-        )
-        # ISSUE 1 FIX: Use نوع الشكوى column with الوصف instead of نوع التواصل
-        # Added قابلية التحويل الرقمي column for digital transformation readiness
+        # Require LLM to provide complaints_table — no fallback, fail loudly if missing
+        if "complaints_table" not in wm_raw:
+            raise RuntimeError(
+                "[JSONReportBuilder] VALIDATION FAILED: workload_map LLM output missing 'complaints_table'. "
+                "LLM must provide a complete complaints_table with all 6 complaint sub-categories."
+            )
+
+        dist_rows = wm_raw["complaints_table"]
+
+        # Strictly validate the complaints_table
+        _validate_complaints_table(dist_rows, table_name="workload_map complaints_table")
+
         dist_table = {
             "columns": ["نوع الشكوى", "العدد", "النسبة", "الوصف", "قابلية التحويل الرقمي"],
             "rows": dist_rows,

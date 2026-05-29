@@ -119,45 +119,51 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     Uses validated_faqs (Stage 5) if available; falls back to faq_candidates (Stage 4).
     Sorted by frequency descending. Capped at _MAX_FAQ_ROWS.
 
-    Task 12 Fix: Cap FAQ frequency against actual sub_classification case count from
-    state.all_classified to prevent Stage 4 LLM over-counting from inflating the table.
+    Comments #21 and #22 fix: Derive التكرار directly from state.all_classified using the
+    FAQ's associated sub_classification, not from the LLM-supplied frequency which over/undercounts.
 
     Schema returned: # | التكرار
     (السؤال and الإجابة المقترحة are written by the LLM from faq context)
     """
     source = state.validated_faqs if state.validated_faqs else state.faq_candidates
-    # Sort by frequency descending
+    # Sort by frequency descending (for ranking only)
     sorted_faqs = sorted(source, key=lambda f: f.frequency, reverse=True)
 
-    # Build sub_classification counts from all_classified (ground truth)
+    # Build ground-truth counts per sub_classification from all_classified
     sub_counts: Dict[str, int] = defaultdict(int)
+    top_level_counts: Dict[str, int] = defaultdict(int)
     for case in (state.all_classified or []):
         if case.sub_classification:
             sub_counts[case.sub_classification] += 1
+        if case.top_level:
+            top_level_counts[case.top_level] += 1
 
     rows = []
     for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1):
         raw_freq = faq.frequency
-        # Cap frequency: if FAQ has a top_level attribute that matches a sub_classification key,
-        # cap against the actual count. Otherwise cap against total classified cases.
-        top_level_sub = getattr(faq, "top_level", "")
-        if top_level_sub and top_level_sub in sub_counts:
-            capped_freq = min(raw_freq, sub_counts[top_level_sub])
-        elif sub_counts:
-            # Cap against the maximum single sub-classification count as a loose upper bound
-            max_sub_count = max(sub_counts.values())
-            capped_freq = min(raw_freq, max_sub_count)
-        else:
-            capped_freq = raw_freq
 
-        if capped_freq != raw_freq:
+        # Comments #21/#22 fix: Prefer explicit sub_classification attribute from LLM
+        faq_sub = getattr(faq, "sub_classification", "") or ""
+        faq_top = getattr(faq, "top_level", "") or ""
+
+        if faq_sub and faq_sub in sub_counts:
+            # Authoritative: use the actual count for that sub-classification (Comments #21/#22)
+            display_freq = sub_counts[faq_sub]
+        elif faq_top and faq_top in top_level_counts:
+            # Fallback: cap against the top-level count
+            display_freq = min(raw_freq, top_level_counts[faq_top])
+        else:
+            # No match: use raw LLM frequency as-is (last resort)
+            display_freq = raw_freq
+
+        if display_freq != raw_freq:
             print(
-                f"[DigitalTransform] FAQ frequency capped: rank={i}, "
-                f"top_level={top_level_sub!r}, original={raw_freq} → capped={capped_freq}"
+                f"[DigitalTransform] FAQ frequency replaced: rank={i}, "
+                f"sub_classification={faq_sub!r}, LLM={raw_freq} → ground_truth={display_freq}"
             )
 
-        # Display: show exact integer (no "+" suffix for capped values)
-        freq_display = str(capped_freq)
+        # Display: show exact integer (no "+" suffix)
+        freq_display = str(display_freq)
 
         rows.append({
             "#":        str(i),

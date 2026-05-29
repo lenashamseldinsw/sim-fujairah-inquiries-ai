@@ -247,6 +247,10 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
     """
     Pre-compute the four AI tool rows for the use-cases table.
 
+    Comments #25/#26 fix: Cap all impact case counts against ground truth from
+    all_classified to prevent journey_map reconciliation inflation from inflating
+    impact statements.
+
     Each row contains:
       - tool_id:         internal identifier for LLM matching
       - الأثر المتوقع:   pre-computed impact statement (numbers from state)
@@ -257,27 +261,64 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
     Column values marked LOCKED must be copied verbatim by the LLM into the output.
     Columns الأداة, الوظيفة, and the narrative in تقييم التنفيذ are LLM-written.
 
-    Pure read of Stage 2–5 outputs — no new computation.
+    Pure read of Stage 2–5 outputs with ground-truth capping.
     """
     total_cases  = len(state.all_classified) or state.total_cases
     reclass_rate = state.reclassification_rate or 0.0
     date_range   = convert_month_year_to_arabic(state.month_year) or ""
 
+    # Build ground-truth eligible counts for each tool from all_classified
+    _VIOLATION_ELIGIBLE_SUBS = {"شكوى عن مخالفة مشكوك فيها", "اعتراض على مخالفة مرورية"}
+    _MISROUTING_ELIGIBLE_SUBS = {"إحالة حالات بين جهات حكومية متعددة"}
+    _DOCUMENT_ELIGIBLE_SUBS = {"شكوى عن عدم استلام الخدمة", "شكوى عن تأخر المعالجة"}
+    _GEO_ELIGIBLE_SUBS = {"مقترحات بنية تحتية"}
+
+    ground_truth_violation = sum(
+        1 for case in (state.all_classified or [])
+        if case.sub_classification in _VIOLATION_ELIGIBLE_SUBS
+    )
+    ground_truth_misrouted = sum(
+        1 for case in (state.all_classified or [])
+        if any(kw in (case.sub_classification or "").lower() for kw in {"جهة", "هيئة", "توجيه"})
+    )
+    ground_truth_document = sum(
+        1 for case in (state.all_classified or [])
+        if case.sub_classification in _DOCUMENT_ELIGIBLE_SUBS
+    )
+    ground_truth_geo = sum(
+        1 for case in (state.all_classified or [])
+        if any(kw in (case.sub_classification or "").lower() for kw in {"موقع", "جغرافي", "بنية", "مقترح"})
+    )
+
     # ── Tool 1: Vision model for violation photo anomaly detection ───────────
     violation_cases = _count_friction_cases(state, _VIOLATION_PHOTO_KEYWORDS)
     if violation_cases == 0:
-        # Fall back to pattern count
         violation_cases = _count_pattern_cases(state, _VIOLATION_PHOTO_KEYWORDS)
+    # Comments #25: Cap against ground truth (Comment #25)
+    if ground_truth_violation > 0:
+        violation_cases = min(violation_cases, ground_truth_violation)
 
     # ── Tool 2: Multi-agency case router ─────────────────────────────────────
     misrouted_cases = _count_misrouted_cases(state)
+    # Comment #26: Cap against ground truth
+    if ground_truth_misrouted > 0:
+        misrouted_cases = min(misrouted_cases, ground_truth_misrouted)
 
     # ── Tool 3: Pre-submission document quality checker ───────────────────────
     stalled, rejected = _count_document_stall_cases(state)
     doc_total = stalled + rejected
+    # Comment #26: Cap against ground truth
+    if ground_truth_document > 0:
+        doc_total = min(doc_total, ground_truth_document)
+        stalled = min(stalled, doc_total)
+        rejected = min(rejected, doc_total - stalled)
 
     # ── Tool 4: Geographic friction radar ─────────────────────────────────────
     geo_cases   = _count_geo_cases(state)
+    # Comment #26: Cap against ground truth
+    if ground_truth_geo > 0:
+        geo_cases = min(geo_cases, ground_truth_geo)
+
     geo_locations = _extract_geo_locations(state)
     geo_loc_str = "، ".join(geo_locations) if geo_locations else "مناطق متعددة"
 
@@ -304,11 +345,12 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
         },
         {
             "tool_id": "agency_router",
-            "impact_cases": max(misrouted_cases, 5),  # floor at 5 to match sample output
+            "impact_cases": misrouted_cases,
             "impact_statement_ar": (
-                f"في {date_range}: {max(misrouted_cases, 5)}+ حالات وُجِّهت لجهة خاطئة "
+                f"في {date_range}: {misrouted_cases}+ حالات وُجِّهت لجهة خاطئة "
                 "— يقطع الدوران ويُقلص وقت الحل"
-            ),
+            ) if misrouted_cases > 0
+            else "يقطع الدوران ويُقلص وقت الحل بتوجيه الحالات للجهة الصحيحة",
             "effort_level": _EFFORT_MEDIUM,
             "effort_timeline_ar": "3-4 أشهر (يتطلب خريطة صلاحيات موثقة لكل الجهات)",
             "context": {
@@ -323,12 +365,17 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
         },
         {
             "tool_id": "document_quality_checker",
-            "impact_cases": max(doc_total, stalled),
+            "impact_cases": doc_total,
             "impact_statement_ar": (
-                f"منع {max(stalled, 17)}+ حالة رخصة متوقفة لصورة غير مستوفية "
-                f"+ {max(rejected, 5)}+ طلبات مرفوضة لنقص صورة الهوية "
+                f"منع {stalled}+ حالة رخصة متوقفة لصورة غير مستوفية "
+                f"+ {rejected}+ طلبات مرفوضة لنقص صورة الهوية "
                 "— يحل المشكلة قبل أن تُسجَّل في CRM"
-            ),
+            ) if rejected > 0
+            else (
+                f"منع {stalled}+ حالة رخصة متوقفة أو وثيقة غير مستوفية "
+                "— يحل المشكلة قبل أن تُسجَّل في CRM"
+            ) if stalled > 0
+            else "يحل المشكلة قبل أن تُسجَّل في CRM بالتحقق من اكتمال الوثائق",
             "effort_level": _EFFORT_MEDIUM,
             "effort_timeline_ar": "3-4 أشهر (نموذج OCR ومعايير التحقق من الوثائق متاحة تجارياً)",
             "context": {
@@ -357,11 +404,15 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
         },
         {
             "tool_id": "geo_friction_radar",
-            "impact_cases": max(geo_cases, 4),
+            "impact_cases": geo_cases,
             "impact_statement_ar": (
-                f"في {date_range}: {max(geo_cases, 4)} مقترحات بنية تحتية وردت من مناطق متكررة "
+                f"في {date_range}: {geo_cases} مقترحات بنية تحتية وردت من مناطق متكررة "
                 f"({geo_loc_str}) — يُحوِّل المقترحات العشوائية إلى قرارات استثمار "
                 "مبنية على كثافة الحالات الفعلية"
+            ) if geo_cases > 0
+            else (
+                f"يُحوِّل المقترحات العشوائية إلى قرارات استثمار مبنية على "
+                "كثافة الحالات الفعلية من خلال تحليل الأنماط الجغرافية"
             ),
             "effort_level": _EFFORT_LOW_MED,
             "effort_timeline_ar": "2-3 أشهر (بيانات الموقع مستخرجة من نصوص CRM الموجودة)",

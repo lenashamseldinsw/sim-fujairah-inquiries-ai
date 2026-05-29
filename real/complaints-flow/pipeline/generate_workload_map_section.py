@@ -438,17 +438,22 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '  "channel_insight": "...",\n'
             '  "resolution_intro": "...",\n'
             '  "complaints_table": [\n'
-            '    {"الفئة الفرعية": "...", "العدد": "...", "النسبة من الشكاوى": "...", "الوصف": "..."}\n'
+            '    {"نوع الشكوى": "...", "العدد": "...", "النسبة": "...", "الوصف": "..."}\n'
             '  ]\n'
             '}\n'
             '\n'
-            'RULES:\n'
+            'RULES — CRITICAL (must be followed exactly):\n'
             '- resolution_table and department_table: pre-computed, will be injected after parsing.\n'
             '  Do NOT include them in your JSON output.\n'
+            '- CRITICAL: complaints_table MUST use EXACTLY these column names:\n'
+            '  * "نوع الشكوى" (NOT "الفئة الفرعية")\n'
+            '  * "العدد"\n'
+            '  * "النسبة" (NOT "النسبة من الشكاوى")\n'
+            '  * "الوصف"\n'
+            '  These exact names are required. Any variation will cause the report to fail.\n'
             '- CRITICAL: complaints_table must include EVERY sub-classification from\n'
             '  pre_computed_complaint_sub_classifications, even those with count = 1.\n'
             '  Do NOT omit low-count rows. All sub-classifications must appear.\n'
-            '- complaints_table: rename "النسبة" -> "النسبة من الشكاوى", add "الوصف".\n'
             '- All prose keys must be Arabic only.\n'
             '- Every number in prose must match a pre-computed input above.\n'
             '- No markdown, no extra keys, no extra nesting.\n'
@@ -483,48 +488,47 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         result["department_table"] = department_rows
         result["channel_table"] = channel_rows
 
-        # Add digital transformation capability to complaints_table rows
+        # STRICT VALIDATION: Verify complaints_table has correct structure and all required rows
         complaints_table = result.get("complaints_table", [])
+
+        if not complaints_table:
+            raise RuntimeError(
+                "[WorkloadMap] VALIDATION FAILED: complaints_table is missing or empty in LLM output. "
+                "LLM must return a non-empty complaints_table with all 6 complaint sub-categories."
+            )
+
+        # Check column names are exactly as required
+        required_columns = {"نوع الشكوى", "العدد", "النسبة", "الوصف"}
+        for idx, row in enumerate(complaints_table):
+            row_keys = set(row.keys())
+            if not required_columns.issubset(row_keys):
+                missing = required_columns - row_keys
+                extra = row_keys - required_columns
+                raise RuntimeError(
+                    f"[WorkloadMap] VALIDATION FAILED: Row {idx} has wrong column names. "
+                    f"Missing: {missing}. "
+                    f"Extra/wrong: {extra}. "
+                    f"Required exactly: {required_columns}. "
+                    f"Row keys: {row_keys}"
+                )
+
+        # Check all sub-classifications are present
+        expected_subs = {row.get('نوع الشكوى', '') for row in complaint_subs}
+        returned_subs = {row.get('نوع الشكوى', '') for row in complaints_table}
+        missing_subs = expected_subs - returned_subs
+
+        if missing_subs:
+            raise RuntimeError(
+                f"[WorkloadMap] VALIDATION FAILED: complaints_table is missing sub-classifications: {missing_subs}. "
+                f"LLM must include ALL 6 complaint sub-categories, even those with low counts."
+            )
+
+        # Add digital transformation capability to each row
         for row in complaints_table:
-            complaint_type = row.get("الفئة الفرعية", "أخرى")
+            complaint_type = row.get("نوع الشكوى", "أخرى")
             row["قابلية التحويل الرقمي"] = _digital_readiness_complaint(complaint_type)
 
-        # VALIDATION: Verify all sub-classifications are present in returned complaints_table
-        def validate_and_fix_complaints_table(table_rows, expected_rows):
-            """Ensure all expected rows are present in table; add missing ones."""
-            if not expected_rows:
-                return table_rows
-
-            returned_count = len(table_rows)
-            expected_count = len(expected_rows)
-
-            if returned_count < expected_count:
-                print(f"[WorkloadMap] WARNING: complaints_table has {returned_count} rows, expected {expected_count}")
-
-                # Add missing rows from expected_rows
-                returned_subs = {row.get('الفئة الفرعية', '') for row in table_rows}
-                for expected_row in expected_rows:
-                    sub = expected_row.get('الفئة الفرعية', '')
-                    if sub not in returned_subs:
-                        # Add missing row with placeholder description
-                        completed_row = {
-                            **expected_row,
-                            "النسبة من الشكاوى": expected_row.get('النسبة'),  # Copy النسبة to النسبة من الشكاوى
-                            "الوصف": f"حالات {sub} المُسجَّلة خلال الفترة.",
-                        }
-                        # Remove the original النسبة key if it exists
-                        if "النسبة" in completed_row:
-                            del completed_row["النسبة"]
-                        table_rows.append(completed_row)
-                        print(f"[WorkloadMap] FIX: Added missing row for '{sub}'")
-
-            return table_rows
-
-        # Validate complaints table against pre-computed data
-        result["complaints_table"] = validate_and_fix_complaints_table(
-            result.get("complaints_table", []),
-            complaint_subs
-        )
+        result["complaints_table"] = complaints_table
 
         print(
             f"[WorkloadMap] OK — "
