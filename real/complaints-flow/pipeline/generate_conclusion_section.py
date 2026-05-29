@@ -185,17 +185,20 @@ def _compute_closure_rate(state: PipelineState) -> tuple[int, float]:
     """
     Compute % of cases with a closure date (date_closed is not empty/NaT).
 
+    Uses SAME logic as _build_resolution_analysis_rows in generate_workload_map_section.py
+    to ensure Section 3.3 (closure count) and conclusion (closure rate) are consistent.
+
     Returns (count, percentage) for cases that have been closed (closure date populated).
     This is separate from SLA compliance and measures closure completion.
     """
     cases = state.all_classified or []
     total = len(cases) or 1
 
+    # Match the logic from generate_workload_map_section._build_resolution_analysis_rows:
+    # Check if date_closed attribute exists AND is truthy AND has non-empty string representation
     closed_count = sum(
         1 for c in cases
-        if c.date_closed
-        and str(c.date_closed).strip()
-        and str(c.date_closed).strip() not in ('NaT', 'nat', '', 'None')
+        if c.date_closed and str(c.date_closed).strip()
     )
     pct = round(closed_count / total * 100, 1)
     return closed_count, pct

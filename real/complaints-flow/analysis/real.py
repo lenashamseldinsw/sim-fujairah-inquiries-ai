@@ -92,25 +92,45 @@ class RealAnalyzer:
             # Read Excel file
             if uploaded_file.type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                        'application/vnd.ms-excel']:
-                # Try to read with various headers and find one with required columns
+                # Required columns
                 required_cols = ['رقم الطلب', 'تفاصيل الطلب', 'الحل', 'الخدمة']
                 df = None
+                best_sheet = None
+                best_rows = 0
 
-                for header_row in [None, 0, 1, 2, 3, 4]:  # Try multiple header rows
-                    try:
-                        test_df = pd.read_excel(uploaded_file, header=header_row)
+                # Get all sheet names to try each one
+                xl_file = pd.ExcelFile(uploaded_file)
+                sheet_names = xl_file.sheet_names
+                print(f"[RealAnalyzer] Found sheets: {sheet_names}")
 
-                        # Check if this has the required columns
-                        if all(col in test_df.columns for col in required_cols):
-                            df = test_df
-                            print(f"[RealAnalyzer] Successfully read Excel with header={header_row}")
-                            break
-                    except Exception as e:
-                        print(f"[RealAnalyzer] Failed to read with header={header_row}: {e}")
-                        continue
+                # Try each sheet with various header rows
+                for sheet_idx, sheet_name in enumerate(sheet_names):
+                    for header_row in [None, 0, 1, 2, 3, 4]:  # Try multiple header rows
+                        try:
+                            test_df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=header_row)
+
+                            # Check if this has the required columns
+                            if all(col in test_df.columns for col in required_cols):
+                                row_count = len(test_df)
+                                print(f"[RealAnalyzer] Sheet '{sheet_name}' (header={header_row}): {row_count} rows with required columns")
+
+                                # Pick the sheet with most rows (avoid old/empty sheets on Sheet1)
+                                if row_count > best_rows:
+                                    df = test_df
+                                    best_rows = row_count
+                                    best_sheet = sheet_name
+                                    print(f"[RealAnalyzer] Updated best sheet to '{best_sheet}' with {best_rows} rows")
+                        except Exception as e:
+                            print(f"[RealAnalyzer] Failed to read sheet '{sheet_name}' with header={header_row}: {e}")
+                            continue
 
                 if df is None or len(df) == 0:
-                    raise ValueError("Could not read Excel file with required columns: رقم الطلب, تفاصيل الطلب, الحل, الخدمة")
+                    raise ValueError(
+                        f"Could not read Excel file with required columns: {', '.join(required_cols)}. "
+                        f"Sheets found: {sheet_names}"
+                    )
+
+                print(f"[RealAnalyzer] Selected sheet '{best_sheet}' with {best_rows} data rows")
             else:
                 raise ValueError("PDF processing not yet implemented")
 
