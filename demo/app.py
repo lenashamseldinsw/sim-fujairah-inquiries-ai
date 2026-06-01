@@ -1686,6 +1686,7 @@ def load_credentials():
                 ('aisha_safsouf_email', 'aisha_safsouf_password', 'aisha_safsouf_center'),
                 ('ibrahim_taniji_email', 'ibrahim_taniji_password', 'ibrahim_taniji_center'),
                 ('khams_alhamar_email', 'khams_alhamar_password', 'khams_alhamar_center'),
+                ('mariam_alhashemy_email', 'mariam_alhashemy_password', 'mariam_alhashemy_center'),
             ]
             for email_key, password_key, center_key in user_configs:
                 if email_key in st.secrets.users and password_key in st.secrets.users:
