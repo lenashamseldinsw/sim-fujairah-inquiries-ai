@@ -1752,6 +1752,7 @@ def load_credentials():
                 ('ibrahim_taniji_email', 'ibrahim_taniji_password', 'ibrahim_taniji_center'),
                 ('khams_alhamar_email', 'khams_alhamar_password', 'khams_alhamar_center'),
                 ('mariam_alhashemy_email', 'mariam_alhashemy_password', 'mariam_alhashemy_center'),
+                ('yosra_alkaabi_email', 'yosra_alkaabi_password', 'yosra_alkaabi_center'),
             ]
 
             for email_key, password_key, center_key in user_configs:
