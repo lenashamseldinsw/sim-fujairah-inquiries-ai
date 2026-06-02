@@ -345,6 +345,25 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         # sub_classification, not just on resolution-text matching.
         resolution_rows = _build_resolution_analysis_rows(all_classified, total_cases)
 
+        # BUG 1 FIX: Verify closure count matches state.closed_cases_count (from stage1)
+        # If mismatch, it indicates serialization loss or validation logic divergence
+        computed_closed = sum(
+            int(r['العدد']) for r in resolution_rows
+            if 'مغلقة' in r.get('نوع الإغلاق', '')
+        )
+        if state.closed_cases_count and computed_closed != state.closed_cases_count:
+            print(
+                f"[WorkloadMap] ⚠️  CLOSURE COUNT MISMATCH: "
+                f"computed={computed_closed} (from resolution_rows), "
+                f"state.closed_cases_count={state.closed_cases_count} (from stage1). "
+                f"This may indicate date_closed serialization loss in llm_queue path."
+            )
+        else:
+            print(
+                f"[WorkloadMap] ✓ Closure count consistent: "
+                f"{computed_closed}/{total_cases} = {computed_closed/total_cases*100:.1f}%"
+            )
+
         # Department distribution
         dept_dist = state.department_distribution or {}
         department_rows = _build_department_distribution_rows(dept_dist, total_cases)

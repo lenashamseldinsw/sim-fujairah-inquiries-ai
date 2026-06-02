@@ -414,11 +414,47 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
         state.zero_rejection_flag = (rejected == 0)
 
     # 6. Closed cases count
+    # CRITICAL: Must match downstream validation logic in _build_resolution_analysis_rows:
+    # A case is "closed" only if date_closed is truthy AND str(date_closed).strip() is non-empty
+    # This handles: NaN, whitespace-only, 'nan'/'nat'/'none' strings
     closed_col = 'تاريخ_الإغلاق'
     if closed_col in df_normalized.columns:
-        state.closed_cases_count = int(df_normalized[closed_col].notna().sum())
+        col = df_normalized[closed_col]
+
+        def is_valid_closure_date(v):
+            """Check if value is a valid closure date (matches downstream validation)."""
+            if pd.isna(v):
+                return False
+            v_str = str(v).strip()
+            if not v_str or v_str.lower() in ('nan', 'nat', 'none', ''):
+                return False
+            return True
+
+        state.closed_cases_count = int(col.apply(is_valid_closure_date).sum())
     else:
         state.closed_cases_count = state.total_cases
+
+    # BUG 3 FIX: Detect if SLA column has any actual data
+    # Prevents LLM from hallucinating SLA percentages when column is empty
+    sla_col = 'إغلاق_خلال_الوقت_المحدد'
+    if sla_col in df_normalized.columns:
+        col = df_normalized[sla_col]
+        sla_values = col.dropna()
+        state.sla_data_available = (
+            len(sla_values) > 0 and
+            sla_values.astype(str).str.strip().ne('').any()
+        )
+        if state.sla_data_available:
+            on_time = (sla_values.astype(str).str.strip() == 'نعم').sum()
+            state.sla_on_time_rate = round(on_time / state.total_cases * 100, 1) if state.total_cases else 0.0
+            print(f"[Stage1] SLA data available: {on_time}/{state.total_cases} on-time = {state.sla_on_time_rate}%")
+        else:
+            state.sla_data_available = False
+            state.sla_on_time_rate = 0.0
+            print(f"[Stage1] ⚠️  SLA column is empty — suppressing SLA metric")
+    else:
+        state.sla_data_available = False
+        state.sla_on_time_rate = 0.0
 
     if not is_valid:
         raise ValueError(f"Schema validation failed: {result}")

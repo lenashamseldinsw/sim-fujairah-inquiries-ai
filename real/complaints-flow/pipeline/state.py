@@ -193,6 +193,9 @@ class PipelineState(BaseModel):
     rejection_rate: float = 0.0  # % of cases with الحالة == 'طلب مرفوض'
     digital_channel_rate: float = 0.0  # % submitted via digital channels
     zero_rejection_flag: bool = False  # True if 0% formal rejection this period
+    # BUG 3 FIX: Track whether SLA column has data before using it in prompts
+    sla_on_time_rate: float = 0.0  # % of cases closed within SLA (only if sla_data_available=True)
+    sla_data_available: bool = False  # True only if SLA column has non-empty values; prevents LLM hallucination
     channel_distribution: Dict[str, int] = Field(default_factory=dict)
     department_distribution: Dict[str, int] = Field(default_factory=dict)
 

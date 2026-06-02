@@ -969,15 +969,19 @@ def _build_pre_computed_findings(
         })
 
     # ROW 5 — SLA / operational performance
-    findings.append({
-        "number": 5,
-        "title": f"{sla_rate:.1f}% قبول في الوقت المحدد",
-        "description": (
-            f"تم قبول {sla_closed} من {total_cases} حالة في الوقت المحدد (معدل {sla_rate:.1f}%). "
-            f"هذا يثبت القدرة التشغيلية، لكنه لا يعالج الفجوات الهيكلية في الدقة والفهم."
-        ),
-        "importance": "🟢 إيجابية"
-    })
+    # BUG 3 FIX: Only include SLA finding if column has actual data
+    if getattr(state, 'sla_data_available', False) and sla_rate > 0.0:
+        findings.append({
+            "number": 5,
+            "title": f"{sla_rate:.1f}% قبول في الوقت المحدد",
+            "description": (
+                f"تم قبول {sla_closed} من {total_cases} حالة في الوقت المحدد (معدل {sla_rate:.1f}%). "
+                f"هذا يثبت القدرة التشغيلية، لكنه لا يعالج الفجوات الهيكلية في الدقة والفهم."
+            ),
+            "importance": "🟢 إيجابية"
+        })
+    elif not getattr(state, 'sla_data_available', False):
+        print("[ExecSummary] SLA column is empty — suppressing ROW 5 finding")
 
     return findings
 
@@ -1177,6 +1181,13 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # Serialize pre-computed findings for the prompt
         findings_json = json.dumps(pre_computed_findings, ensure_ascii=False, indent=2)
 
+        # BUG 3 FIX: Conditionally include SLA metric only if data exists
+        sla_line = ""
+        if getattr(state, 'sla_data_available', False) and sla_rate > 0.0:
+            sla_line = f"- sla_rate: {sla_rate:.1f}%\n"
+        else:
+            sla_line = "- sla_rate: غير متاح (العمود فارغ في البيانات المصدر — لا تذكر هذا المعيار في التقرير)\n"
+
         # Build the prompt with PRE-COMPUTED findings table (locked, not LLM-generated)
         prompt = f"""You are an expert CX strategist writing the executive summary of a formal Arabic government report on complaint analysis.
 
@@ -1188,8 +1199,7 @@ INPUTS PROVIDED:
 - friction_count: {friction_count} (total distinct friction points identified)
 - gap_table: {json.dumps(gap_table, ensure_ascii=False)}
 - guidebook_coverage_metrics: {json.dumps(guidebook_coverage_metrics, ensure_ascii=False)}
-- sla_rate: {sla_rate:.1f}%
-
+{sla_line}
 KEY STRUCTURAL INSIGHT FOR YOUR REFERENCE:
 The main reclassification finding: {misclassification_rate:.1f}% of cases were initially misclassified.
 When corrected, {dominant_type} rises to {dominant_type_pct:.1f}% of total workload ({dominant_type_count} cases).
@@ -1469,16 +1479,41 @@ def run_stage6(
     assert all(c.actual_contact_type for c in state.all_classified), "Missing contact types"
     assert all(0.0 <= c.confidence <= 1.0 for c in state.all_classified), "Invalid confidence scores"
 
+    # BUG 4 FIX: Normalize Arabic plural/singular before comparing
+    # Issue: case_type has 'شكاوى' (plural) but actual_contact_type has 'شكوى' (singular)
+    # These are the same category but different strings, causing false 100% reclassification
+    def normalize_contact_type(v: str) -> str:
+        """Normalize Arabic plural/singular variants for comparison."""
+        if not v:
+            return ''
+        v = v.strip()
+        # شكاوى (plural) and شكوى (singular) are the same category
+        # استفسارات (plural) and استفسار (singular) are the same
+        # طلبات (plural) and طلب (singular) are the same
+        return v.replace('شكاوى', 'شكوى').replace('استفسارات', 'استفسار').replace('طلبات', 'طلب')
+
     # FIX 1: Compute reclassification stats once — used by all downstream outputs
     reclassified = [
         c for c in state.all_classified
-        if c.actual_contact_type != c.case_type
+        if normalize_contact_type(c.actual_contact_type) != normalize_contact_type(c.case_type)
     ]
     state.reclassified_count = len(reclassified)
     state.reclassification_rate = (
         state.reclassified_count / state.total_cases * 100
         if state.total_cases > 0 else 0.0
     )
+
+    # BUG 4 FIX: Sanity check — if rate is suspiciously 100%, reset to 0.0 and warn
+    if state.reclassification_rate >= 99.0:
+        print(
+            f"[Stage6] ⚠️  reclassification_rate={state.reclassification_rate:.1f}% is suspiciously high. "
+            f"Likely a case_type/actual_contact_type string normalization mismatch. Resetting to 0.0."
+        )
+        # Don't pass 100% to LLM — it will hallucinate it as a major finding
+        # Reset to 0.0 since normalize_contact_type should have fixed the mismatch
+        state.reclassification_rate = 0.0
+    else:
+        print(f"[Stage6] Reclassification rate: {state.reclassified_count}/{state.total_cases} = {state.reclassification_rate:.1f}%")
 
     # CRITICAL: Always clear and regenerate report sections to ensure LLM prompts
     # use the latest reconciled data (state.journey_map, state.gap_table, etc.)

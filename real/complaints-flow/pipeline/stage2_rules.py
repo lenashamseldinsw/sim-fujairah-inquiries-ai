@@ -107,6 +107,14 @@ def classify_case(case_row: dict, additional_oor_keywords: list = None) -> Tuple
     title_norm = normalize_arabic(title)
     res_norm = normalize_arabic(resolution)
 
+    # --- PRIORITY 0: Preserve raw نوع_الشكوى if it matches a known category ---
+    # BUG 2 FIX: If raw data explicitly classifies the case, preserve that classification
+    # This prevents loss of "خارج الاختصاص" and other explicit categorizations
+    raw_nowa_shikwa = str(case_row.get('نوع_الشكوى', '')).strip()
+    if raw_nowa_shikwa and raw_nowa_shikwa in ALL_COMPLAINT_SUB_CATEGORIES:
+        return ('شكوى', raw_nowa_shikwa,
+                f'مُحفوظ من نوع_الشكوى الخام: {raw_nowa_shikwa}', 0.99)
+
     # --- PRIORITY 1: Formal rejection flag ---
     if status == 'طلب مرفوض':
         return ('شكوى', 'شكاوى مكررة (مرفوضة)',
@@ -321,16 +329,27 @@ def run_stage2(state: PipelineState) -> PipelineState:
         dept_raw = str(row.get('الإدارة_العامة', '') or row.get('الإداره_العامة', '')).strip()
         dept_clean = re.sub(r'^الفجيرة\s*-\s*', '', dept_raw).strip()
 
-        # TASK 2 FIX: Handle NaN in date_closed properly
-        # pandas NaN becomes str(NaN) = 'nan' (truthy, non-empty string) — must be ''
-        # Also handle whitespace-only values (Excel cells with just spaces/tabs)
+        # TASK 2 FIX: Handle date_closed serialization properly
+        # Must preserve datetime objects as ISO strings (not datetime objects)
+        # to avoid loss during JSON serialization/deserialization in llm_queue path
         date_closed_raw = row.get('تاريخ_الإغلاق', '')
+
         if pd.isna(date_closed_raw):
             date_closed_value = ""
         else:
-            date_closed_str = str(date_closed_raw).strip()
-            # Check for string 'nan' or whitespace-only after stripping
-            date_closed_value = "" if date_closed_str.lower() == 'nan' or not date_closed_str else date_closed_str
+            # Convert datetime/Timestamp to ISO string explicitly (prevents Pydantic coercion loss)
+            if hasattr(date_closed_raw, 'isoformat'):
+                date_closed_value = date_closed_raw.isoformat()
+            else:
+                date_closed_value = str(date_closed_raw)
+
+            # Strip and validate
+            date_closed_str = date_closed_value.strip()
+            # Check for 'nan'/'nat'/'none' strings or whitespace-only
+            if date_closed_str.lower() in ('nan', 'nat', 'none', ''):
+                date_closed_value = ""
+            else:
+                date_closed_value = date_closed_str
 
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),

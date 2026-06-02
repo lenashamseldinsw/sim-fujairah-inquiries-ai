@@ -422,9 +422,16 @@ class JSONReportBuilder:
 
         # For complaints, count by sub-classification (the 6 sub-categories)
         subcategory_counts = defaultdict(int)
+        unclassified_count = 0
         for case in self.state.all_classified:
-            sub = case.sub_classification or "شكاوى بلا تصنيف خدمي (\"أخرى\")"
-            subcategory_counts[sub] += 1
+            # BUG 2 FIX: Skip cases without sub_classification (don't map to fake category)
+            if case.sub_classification:
+                subcategory_counts[case.sub_classification] += 1
+            else:
+                unclassified_count += 1
+
+        if unclassified_count > 0:
+            print(f"[JSONChart] WARNING: {unclassified_count} cases lack sub_classification — excluded from chart")
 
         # TASK 5 FIX: Filter categories to ONLY include those with actual cases
         # Do NOT include zero-count categories in chart (avoids confusion about missing categories)
@@ -943,12 +950,14 @@ class JSONReportBuilder:
                 pct = f'{count/total*100:.1f}%'
 
                 # Find dominant complaint type for this department
+                # BUG 2 FIX: Skip cases without sub_classification (don't map to fallback "أخرى")
                 cases_in_dept = dept_cases.get(dept, [])
                 dominant_complaint = "—"
                 if cases_in_dept:
                     complaint_counts = Counter(
-                        case.sub_classification or "أخرى"
+                        case.sub_classification
                         for case in cases_in_dept
+                        if case.sub_classification  # Skip None/empty
                     )
                     if complaint_counts:
                         dominant_complaint = complaint_counts.most_common(1)[0][0]
@@ -1029,9 +1038,23 @@ class JSONReportBuilder:
         # 3.1 sub-category distribution
         # ISSUE 1 FIX: Build subcategory counts from all_classified
         sub_category_counts = defaultdict(int)
+        unclassified_cases = []  # Track cases that lack sub_classification
         for case in all_classified:
-            sub = case.sub_classification or "شكاوى بلا تصنيف خدمي (\"أخرى\")"
-            sub_category_counts[sub] += 1
+            if case.sub_classification:
+                sub_category_counts[case.sub_classification] += 1
+            else:
+                # BUG 2: Do NOT assign unclassified cases to "بلا تصنيف"
+                # Mark them as "غير محدد" internally for tracking, but exclude from output
+                unclassified_cases.append(case.case_number)
+
+        # BUG 2 FIX: If there are unclassified cases, log a warning
+        # but do NOT assign them to "بلا تصنيف" — that's a fallback, not a real classification
+        if unclassified_cases:
+            print(
+                f"[JSONReportBuilder] WARNING: {len(unclassified_cases)} cases have no sub_classification: "
+                f"{unclassified_cases[:5]}{'...' if len(unclassified_cases) > 5 else ''}. "
+                f"These will be skipped from the complaints table."
+            )
 
         intro_paragraph = wm_raw["intro_paragraph"]
 
@@ -1045,7 +1068,8 @@ class JSONReportBuilder:
         dist_rows = wm_raw["complaints_table"]
 
         # Compute expected sub-classifications dynamically from state
-        expected_complaint_subs = set(sub_category_counts.keys())
+        # Only include subs that actually have cases (filter out zero-count categories)
+        expected_complaint_subs = set(k for k, v in sub_category_counts.items() if v > 0)
 
         # Strictly validate the complaints_table with dynamic expected categories
         _validate_complaints_table(
