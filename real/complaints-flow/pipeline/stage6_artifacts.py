@@ -868,6 +868,7 @@ def _build_pre_computed_findings(
     friction_count: int,
     sla_closed: int,
     sla_rate: float,
+    sla_data_available: bool = False,
 ) -> list:
     """
     Pre-compute the findings table deterministically from state data.
@@ -970,7 +971,7 @@ def _build_pre_computed_findings(
 
     # ROW 5 — SLA / operational performance
     # BUG 3 FIX: Only include SLA finding if column has actual data
-    if getattr(state, 'sla_data_available', False) and sla_rate > 0.0:
+    if sla_data_available and sla_rate > 0.0:
         findings.append({
             "number": 5,
             "title": f"{sla_rate:.1f}% قبول في الوقت المحدد",
@@ -980,7 +981,7 @@ def _build_pre_computed_findings(
             ),
             "importance": "🟢 إيجابية"
         })
-    elif not getattr(state, 'sla_data_available', False):
+    elif not sla_data_available:
         print("[ExecSummary] SLA column is empty — suppressing ROW 5 finding")
 
     return findings
@@ -1106,6 +1107,7 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             friction_count=friction_count,
             sla_closed=sla_closed,
             sla_rate=sla_rate,
+            sla_data_available=getattr(state, 'sla_data_available', False),
         )
 
         # Extract gaps with enhanced guidebook intelligence
