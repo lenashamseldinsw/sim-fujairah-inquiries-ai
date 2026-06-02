@@ -187,41 +187,30 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Pre-computed rows for Section 5.2 table.
 
-    Comments #17/#18 fix: Use actual sub_classification counts from all_classified
-    instead of journey_map.case_count (which is a reconciled/allocated value that can be inflated).
-
     De-duplicates journey_map by root_cause_category (summing case counts).
-    Picks the friction point with highest ground-truth sub_classification count as the example.
+    Picks the highest-count friction point as the example text.
     Sort: descending by total case count.
     Columns locked here — LLM adds الحل.
 
     Schema: # | السبب الجذري | مثال على التحدي
     """
-    # Build ground-truth counts per sub_classification from all_classified
-    actual_sub_counts: Dict[str, int] = defaultdict(int)
-    for case in (state.all_classified or []):
-        if case.sub_classification:
-            actual_sub_counts[case.sub_classification] += 1
-
     rc_totals: Dict[str, int] = defaultdict(int)
-    rc_best_friction: Dict[str, tuple] = {}  # cat → (actual_count, text, sub_classification)
+    rc_best_friction: Dict[str, tuple] = {}  # cat → (count, text)
 
     for f in state.journey_map:
         cat = f.root_cause_category
         rc_totals[cat] += f.case_count
         text = f.friction_point_ar or f.friction_point
-        # Comments #17/#18: Use actual sub_classification count, not journey_map.case_count
-        actual_count = actual_sub_counts.get(f.sub_classification, f.case_count)
-        current_best = rc_best_friction.get(cat, (0, "", ""))[0]
-        if actual_count >= current_best:
-            rc_best_friction[cat] = (actual_count, text, f.sub_classification)
+        current_best_count = rc_best_friction.get(cat, (0, ""))[0]
+        if f.case_count >= current_best_count:
+            rc_best_friction[cat] = (f.case_count, text)
 
     sorted_rc = sorted(rc_totals.items(), key=lambda x: x[1], reverse=True)
 
     rows = []
     for i, (cat, total_count) in enumerate(sorted_rc, 1):
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
-        best_count, example_text, _ = rc_best_friction.get(cat, (0, "", ""))
+        best_count, example_text = rc_best_friction.get(cat, (0, ""))
         example_cell = f"{best_count} حالة — {example_text}" if example_text else str(total_count)
         rows.append({
             "#":               str(i),

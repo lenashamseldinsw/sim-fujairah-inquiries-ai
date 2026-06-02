@@ -313,23 +313,13 @@ def run_stage5(
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Build locked case counts from journey_map before API call (Fix 5)
-    # Use two separate lookup structures for robust matching
-    locked_by_cluster = {}     # cluster_ar/cluster → case_count
-    locked_by_friction = {}    # friction_point_ar/friction_point → case_count
-
+    # Build locked case counts from journey_map before API call
+    # This maps friction clusters to their case counts for injection into results
+    locked_case_counts = {}
     for friction in state.journey_map:
-        if friction.cluster_ar:
-            locked_by_cluster[friction.cluster_ar.strip()] = friction.case_count
-        if friction.cluster:
-            locked_by_cluster[friction.cluster.strip()] = friction.case_count
-        if friction.friction_point_ar:
-            locked_by_friction[friction.friction_point_ar.strip()] = friction.case_count
-        if friction.friction_point:
-            locked_by_friction[friction.friction_point.strip()] = friction.case_count
-
-    # Combine for prompt context but keep separate structures for matching (Fix 5)
-    locked_case_counts = {"clusters": locked_by_cluster, "friction_points": locked_by_friction}
+        cluster_key = friction.cluster or friction.cluster_ar or "unknown"
+        friction_point = friction.friction_point or friction.friction_point_ar or ""
+        locked_case_counts[f"{cluster_key} — {friction_point}"] = friction.case_count
 
     # Build analysis prompt with guidebook context and locked case counts
     prompt = build_gap_analysis_prompt(
@@ -382,46 +372,35 @@ def run_stage5(
 
                 # Parse gap table with enhanced guidebook intelligence
                 if 'gap_table' in analysis:
-                    # Resolve gap case counts using the separate lookup structures (Fix 5)
+                    # Build journey_map lookup by topic and cluster for case_count matching
+                    journey_map_by_topic = {}
+                    cluster_to_case_count = {}
+                    for friction in (state.journey_map or []):
+                        friction_topic = friction.friction_point or friction.friction_point_ar or ""
+                        cluster_topic = friction.cluster or friction.cluster_ar or ""
+                        if friction_topic:
+                            journey_map_by_topic[friction_topic.lower()[:50]] = friction.case_count
+                        if cluster_topic:
+                            cluster_key = cluster_topic.lower()[:50]
+                            journey_map_by_topic[cluster_key] = friction.case_count
+                            cluster_to_case_count[cluster_topic] = friction.case_count  # Exact match for reinject
+
                     gap_rows = []
                     for g in analysis.get('gap_table', []):
                         case_count = g.get('case_count', 0)
                         gap_topic = g.get('topic_ar') or g.get('topic') or ""
-                        matched_count = None
 
-                        # Try exact match in locked_by_cluster first (Fix 5)
-                        for cluster_key in locked_by_cluster:
-                            if cluster_key.lower().strip() == gap_topic.lower().strip():
-                                matched_count = locked_by_cluster[cluster_key]
-                                break
+                        # PRIMARY: Reinject from locked case counts (journey_map source of truth)
+                        # Try exact match on gap topic against journey_map
+                        gap_topic_lower = gap_topic.lower()[:50]
+                        matched_count = journey_map_by_topic.get(gap_topic_lower)
 
-                        # Try exact match in locked_by_friction if cluster match failed (Fix 5)
+                        # Try partial match if exact fails
                         if not matched_count:
-                            for friction_key in locked_by_friction:
-                                if friction_key.lower().strip() == gap_topic.lower().strip():
-                                    matched_count = locked_by_friction[friction_key]
+                            for jm_key, count in journey_map_by_topic.items():
+                                if jm_key in gap_topic_lower or gap_topic_lower in jm_key:
+                                    matched_count = count
                                     break
-
-                        # Try partial/longest overlap match if exact failed (Fix 5)
-                        if not matched_count:
-                            gap_topic_lower = gap_topic.lower()
-                            best_match = None
-                            best_overlap_len = 0
-
-                            for cluster_key, count in locked_by_cluster.items():
-                                overlap = len(set(gap_topic_lower.split()) & set(cluster_key.lower().split()))
-                                if overlap > best_overlap_len:
-                                    best_overlap_len = overlap
-                                    best_match = count
-
-                            for friction_key, count in locked_by_friction.items():
-                                overlap = len(set(gap_topic_lower.split()) & set(friction_key.lower().split()))
-                                if overlap > best_overlap_len:
-                                    best_overlap_len = overlap
-                                    best_match = count
-
-                            if best_match is not None:
-                                matched_count = best_match
 
                         # If matched, reinject locked count (overrides LLM output)
                         if matched_count and matched_count > 0:

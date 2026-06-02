@@ -100,18 +100,12 @@ ANALYSIS_TOOL = {
                     "type": "object",
                     "properties": {
                         "top_level": {"type": "string"},
-                        "sub_classification": {
-                            "type": "string",
-                            "description": "The sub_classification value (copied exactly from the case data) that best represents the cases driving this FAQ. Used for authoritative frequency lookup from all_classified."
-                        },
+                        "sub_classification": {"type": "string", "description": "Specific sub-classification this FAQ addresses (must match a sub_classification from the input groups)"},
                         "question": {"type": "string"},
                         "question_ar": {"type": "string"},
                         "answer": {"type": "string"},
                         "answer_ar": {"type": "string"},
-                        "frequency": {
-                            "type": "integer",
-                            "description": "Exact count of cases where this question was the PRIMARY driver of customer contact. Count each case once. Do NOT use sub-classification group totals. Do NOT add '+' to frequencies — return the exact integer."
-                        }
+                        "frequency": {"type": "integer"}
                     }
                 }
             },
@@ -251,7 +245,6 @@ ANALYSIS INSTRUCTIONS:
    Set frequency = the EXACT count of cases in the dataset where this specific question
    was the PRIMARY driver of the customer contact. Count each case exactly once.
    Do NOT extrapolate or estimate beyond the cases provided.
-   Do NOT use the group header total as `frequency`.
    Do NOT add "+" to frequencies — return the exact integer count.
    A frequency of 1 means exactly 1 case. Only assign frequency > 1 if multiple DISTINCT
    cases show the SAME question as their primary concern.
@@ -364,9 +357,10 @@ def _reconcile_counts(
 
     For patterns: replace each case_count with the actual count of cases with that sub_classification.
 
-    For journey_map: Cap LLM-supplied case_count at the remaining sub_classification budget
-    to prevent double-counting across multiple friction points in the same group.
-    Reconciled count never exceeds the actual sub_classification count.
+    For journey_map: Cap LLM-supplied case_count at the sub_classification's actual count.
+    When multiple friction points share the same sub_classification, ensure their combined
+    count never exceeds the sub_classification's actual total. Use word-overlap matching
+    to distribute the budget proportionally when exact matches don't exist.
 
     For notification_opportunities: cap cases_eliminated against the authoritative count
     from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
@@ -390,172 +384,130 @@ def _reconcile_counts(
     reconciled_patterns = []
     for pattern in patterns:
         actual_count = actual_counts.get(pattern.sub_classification, pattern.case_count)
-        # Use model_copy to create a new instance with reconciled count (Pydantic immutability)
         reconciled_pattern = pattern.model_copy(update={"case_count": actual_count})
         reconciled_patterns.append(reconciled_pattern)
 
-    # Reconcile journey_map: track how much of each sub_classification's budget has been allocated
-    sub_classification_budget = dict(actual_counts)  # mutable copy
+    # ── Reconcile journey_map: per-sub_classification cap ──────────────────────
+    # Group friction entries by sub_classification to enforce per-group capping
+    frictions_by_sub = defaultdict(list)
+    for i, friction in enumerate(journey_map):
+        frictions_by_sub[friction.sub_classification or ""].append((i, friction))
 
-    reconciled_journey_map = []
-    for friction in journey_map:
-        actual_count = actual_counts.get(friction.sub_classification)
+    reconciled_journey_map = [None] * len(journey_map)  # Pre-allocate to preserve indices
 
-        if actual_count is not None:
-            # Count cases that match BOTH sub_classification AND classification_reason.
-            # classification_reason is set deterministically by Stage 2 rules, and
-            # best-effort by Stage 3 LLM — making it a reliable friction-point-level filter.
-            friction_label = (
-                friction.friction_point_ar or
-                friction.friction_point or
-                friction.cluster_ar or
-                friction.cluster or ""
-            ).strip()
+    for sub_class, friction_group in frictions_by_sub.items():
+        actual_count = actual_counts.get(sub_class, 0)
 
-            OVERLAP_THRESHOLD = 0.5  # at least 50% of friction_label words must appear in classification_reason
-
-            if friction_label:
-                reason_matched = sum(
-                    1 for case in all_classified
-                    if case.sub_classification == friction.sub_classification
-                    and _overlap_ratio(friction_label, case.classification_reason) >= OVERLAP_THRESHOLD
-                )
-            else:
-                reason_matched = 0
-
-            remaining_budget = sub_classification_budget.get(friction.sub_classification, 0)
-
-            if reason_matched > 0:
-                # Use reason-level count, capped at remaining budget to prevent double-counting
-                reconciled_count = min(reason_matched, remaining_budget)
-            else:
-                # No classification_reason match (e.g. Stage 3 free-text reason doesn't match
-                # friction_point_ar exactly) — fall back to full remaining budget as before
-                reconciled_count = remaining_budget
-                print(
-                    f"[Stage4] FALLBACK: no classification_reason match for friction "
-                    f"'{friction_label}' in sub_classification '{friction.sub_classification}'. "
-                    f"Using full remaining budget ({remaining_budget})."
-                )
-
-            sub_classification_budget[friction.sub_classification] = max(
-                0, remaining_budget - reconciled_count
-            )
-        else:
-            # No exact match — LLM returned an approximate or merged sub_classification.
-            # Try word-overlap against actual_counts keys to find the closest match.
-            cluster_text = (
-                friction.sub_classification or
-                friction.cluster_ar or
-                friction.cluster or
-                friction.friction_point_ar or
-                friction.friction_point or ""
-            ).strip().lower()
-
-            best_key = None
-            best_overlap = 0
-            for sub_key in actual_counts:
-                if not sub_key:
-                    continue
-                sub_norm = sub_key.strip().lower()
-                words_a = set(w for w in cluster_text.split() if len(w) >= 3)
-                words_b = set(w for w in sub_norm.split() if len(w) >= 3)
-                overlap = len(words_a & words_b)
-                if overlap > best_overlap:
-                    best_overlap = overlap
-                    best_key = sub_key
-
-            if best_key and best_overlap >= 1:
-                # Plausible fuzzy match — use that key's remaining budget
-                remaining_budget = sub_classification_budget.get(best_key, 0)
-                reconciled_count = remaining_budget
-                sub_classification_budget[best_key] = 0
-                print(
-                    f"[Stage4] FUZZY MATCH: friction '{friction.cluster_ar or friction.cluster}' "
-                    f"sub_classification={friction.sub_classification!r} → matched '{best_key}' "
-                    f"(overlap={best_overlap}) count: {friction.case_count} → {reconciled_count}"
-                )
-            else:
-                # No match at all — cap against total remaining budget across all sub_classifications.
-                # This ensures the LLM's inflated count can never exceed the remaining case pool,
-                # even when sub_classification is completely unrecognisable.
-                total_remaining = sum(sub_classification_budget.values())
-                reconciled_count = min(friction.case_count, total_remaining)
-                print(
-                    f"[Stage4] WARNING: No match for friction '{friction.cluster_ar or friction.cluster}' "
-                    f"(sub_classification={friction.sub_classification!r}) — "
-                    f"capping against total_remaining={total_remaining}, was {friction.case_count} → {reconciled_count}"
-                )
-
-        reconciled_friction = friction.model_copy(update={"case_count": reconciled_count})
-        reconciled_journey_map.append(reconciled_friction)
-
-    # ── Cross-friction consistency check ──────────────────────────────────────
-    # For friction entries sharing the same (top_level, root_cause_category),
-    # combined case_count must not exceed the actual count of cases with that
-    # top_level in all_classified. Fully data-driven — no hardcoded numbers.
-    top_level_actual = defaultdict(int)
-    for case in all_classified:
-        if case.top_level:
-            top_level_actual[case.top_level] += 1
-
-    group_index = defaultdict(list)  # (top_level, root_cause_category) → [(idx, friction)]
-    for i, friction in enumerate(reconciled_journey_map):
-        key = (friction.top_level or '', friction.root_cause_category or '')
-        group_index[key].append((i, friction))
-
-    for (top_level, root_cause), group in group_index.items():
-        if not top_level or len(group) < 2:
-            continue
-        combined = sum(f.case_count for _, f in group)
-        ceiling = top_level_actual.get(top_level, combined)
-        if combined > ceiling:
+        if len(friction_group) == 1 and actual_count > 0:
+            # Single friction point for this sub_classification — use the actual count directly
+            idx, friction = friction_group[0]
+            reconciled_journey_map[idx] = friction.model_copy(update={"case_count": actual_count})
             print(
-                f"[Stage4] CROSS-FRICTION CAP: top_level='{top_level}' "
-                f"root_cause='{root_cause}' combined={combined} > ceiling={ceiling}. "
-                f"Scaling down proportionally across {len(group)} friction entries."
+                f"[Stage4] SINGLE-FRICTION: sub_classification='{sub_class}' "
+                f"has 1 friction point — using actual count {actual_count} directly"
             )
-            for idx, friction in group:
-                scaled = max(0, round(friction.case_count / combined * ceiling))
-                reconciled_journey_map[idx] = friction.model_copy(
-                    update={"case_count": scaled}
-                )
-            # Fix rounding drift so group total == ceiling exactly
-            actual_total = sum(reconciled_journey_map[i].case_count for i, _ in group)
-            if actual_total != ceiling:
-                largest_i = max((i for i, _ in group),
-                                key=lambda i: reconciled_journey_map[i].case_count)
-                f = reconciled_journey_map[largest_i]
-                reconciled_journey_map[largest_i] = f.model_copy(
-                    update={"case_count": f.case_count + (ceiling - actual_total)}
-                )
+
+        elif len(friction_group) > 1:
+            # Multiple friction points share this sub_classification
+            # Try to match each to specific cases using word-overlap
+            print(
+                f"[Stage4] MULTI-FRICTION: sub_classification='{sub_class}' "
+                f"has {len(friction_group)} friction points, actual count={actual_count}"
+            )
+
+            # For each friction in the group, count exact case matches
+            matched_counts = {}
+            total_matched = 0
+            for idx, friction in friction_group:
+                friction_label = (
+                    friction.friction_point_ar or
+                    friction.friction_point or
+                    friction.cluster_ar or
+                    friction.cluster or ""
+                ).strip()
+
+                # Count cases that match this friction based on classification_reason
+                if friction_label:
+                    matched = sum(
+                        1 for case in all_classified
+                        if case.sub_classification == sub_class
+                        and _overlap_ratio(friction_label, case.classification_reason) >= 0.5
+                    )
+                else:
+                    matched = 0
+
+                matched_counts[idx] = matched
+                total_matched += matched
+
+            # If word-overlap matching found counts that sum to actual_count, use those
+            if total_matched > 0 and total_matched <= actual_count:
+                # Distribute any unmatched remainder proportionally
+                remainder = actual_count - total_matched
+                for idx, friction in friction_group:
+                    base_count = matched_counts[idx]
+                    if total_matched > 0:
+                        prop_remainder = round(base_count / total_matched * remainder)
+                    else:
+                        prop_remainder = 0
+                    reconciled_count = base_count + prop_remainder
+                    reconciled_journey_map[idx] = friction.model_copy(
+                        update={"case_count": reconciled_count}
+                    )
+
+            else:
+                # Word-overlap matching failed or gave inflated counts
+                # Distribute actual_count proportionally across friction points
+                # based on their LLM-supplied case_count as a weight
+                llm_total = sum(f.case_count for _, f in friction_group)
+                if llm_total > 0:
+                    for idx, friction in friction_group:
+                        proportion = friction.case_count / llm_total
+                        scaled_count = round(proportion * actual_count)
+                        reconciled_journey_map[idx] = friction.model_copy(
+                            update={"case_count": scaled_count}
+                        )
+                    # Fix any rounding drift
+                    actual_total = sum(
+                        reconciled_journey_map[i].case_count for i, _ in friction_group
+                    )
+                    if actual_total != actual_count:
+                        # Add/subtract the difference from the largest entry
+                        largest_idx = max(
+                            (i for i, _ in friction_group),
+                            key=lambda i: reconciled_journey_map[i].case_count
+                        )
+                        f = reconciled_journey_map[largest_idx]
+                        reconciled_journey_map[largest_idx] = f.model_copy(
+                            update={"case_count": f.case_count + (actual_count - actual_total)}
+                        )
+                else:
+                    # No LLM counts to use as weights — split equally
+                    equal_share = actual_count // len(friction_group)
+                    remainder = actual_count % len(friction_group)
+                    for idx_offset, (idx, friction) in enumerate(friction_group):
+                        count = equal_share + (1 if idx_offset < remainder else 0)
+                        reconciled_journey_map[idx] = friction.model_copy(
+                            update={"case_count": count}
+                        )
+
+        else:
+            # No actual cases for this sub_classification — zero out all frictions
+            for idx, friction in friction_group:
+                reconciled_journey_map[idx] = friction.model_copy(update={"case_count": 0})
 
     # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
     # Distribute the capped budget proportionally across all notification opportunities.
 
-    # Cap proactive_case_count against the ground-truth count of eligible sub-classifications
-    # to enforce the ceiling deterministically from actual data (Fix 3)
-    _PROACTIVE_ELIGIBLE_SUBS = {
-        "اعتراض على مخالفة مرورية",
-        "شكوى عن عدم استلام الخدمة",
-        "شكوى عن تأخر المعالجة",
-        "شكوى على تأخر المعالجة",
-    }
-    ground_truth_proactive = sum(
-        1 for case in all_classified
-        if case.sub_classification in _PROACTIVE_ELIGIBLE_SUBS
-    )
+    # Cap proactive_case_count against actual total to prevent LLM inflation
     actual_total = len(all_classified)
-    max_proactive_cases = min(proactive_case_count, ground_truth_proactive, actual_total)
+    max_proactive_cases = min(proactive_case_count, actual_total)
 
-    if proactive_case_count > ground_truth_proactive:
+    if proactive_case_count > actual_total:
         print(
             f"[Stage4] WARNING: proactive_notification_case_count={proactive_case_count} "
-            f"exceeds eligible sub-classifications count={ground_truth_proactive}. "
-            f"Capping to {max_proactive_cases}."
+            f"exceeds total cases={actual_total}. Capping to {actual_total}."
         )
-
 
     # Sum what the LLM claimed across all notification opportunities
     llm_total = sum(
@@ -600,17 +552,11 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "top_level": {"type": "string", "description": "Top-level category (شكوى, طلب, استفسار)"},
-                        "sub_classification": {
-                            "type": "string",
-                            "description": "The sub_classification value that best represents cases driving this FAQ. Copy exactly from case data."
-                        },
-                        "frequency": {
-                            "type": "integer",
-                            "description": "Exact count of cases where this was the PRIMARY question. Count each case once. Do NOT use group header totals. Return exact integer, no '+' suffix."
-                        }
+                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"},
+                        "top_level": {"type": "string", "description": "Top-level category (شكوى, استفسار, etc.)"},
+                        "sub_classification": {"type": "string", "description": "The sub-classification this FAQ addresses — must match one of the section headers exactly"}
                     },
-                    "required": ["question", "question_ar", "answer", "answer_ar", "frequency"]
+                    "required": ["question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification"]
                 }
             }
         },

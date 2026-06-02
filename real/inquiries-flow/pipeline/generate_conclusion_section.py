@@ -352,46 +352,92 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     pivot_json  = json.dumps(pivot_rows, ensure_ascii=False, indent=2)
     kpi_json    = json.dumps(kpi_impact, ensure_ascii=False, indent=2)
 
+    # ── Build Sentence 1 instruction — always cite submission channel (never zero) ────
+    # Submission channel percentage is always available and non-zero.
+    # Friction-digital-context percentage is only cited if non-zero.
+    sentence1_instruction = (
+        '   Sentence 1 — "الرسالة النهائية:" prefix + submission channel performance:\n'
+        '     • MUST open with "الرسالة النهائية:"\n'
+        f'     • State that {submission_channel_pct_str} of cases came through digital submission channels '
+        f'(التطبيق / الموقع الإلكتروني) combined with SLA rate {sla_rate:.1f}%.\n'
+        '     • This proves operational excellence in the submission channel.\n'
+    )
+
+    # If friction-digital-context exists (problem occurred in digital channel), cite it separately
+    if friction_digital_context_str:
+        sentence1_instruction += (
+            f'     • SEPARATELY: Additionally, {friction_digital_context_str} of problem-related cases '
+            '(friction points) occurred in a digital service context (app error, online renewal, digital payment).\n'
+            '       This shows the gap is not in customer access but in service functionality.\n'
+        )
+
     # ── Prompt ────────────────────────────────────────────────────────────────
+    # Build INPUTS section with both submission channel (always present) and
+    # friction-digital-context (only if non-zero)
+    friction_digital_context_input_line = (
+        f'friction_digital_context_pct: "{friction_digital_context_str}"  (% of friction cases rooted in digital service context)\n'
+        if friction_digital_context_str else
+        'friction_digital_context_pct:  [not available — only cite if non-zero]\n'
+    )
+
     prompt = (
         'You are writing Section 9 (the final section) of a formal Arabic government report\n'
-        'on customer inquiry analysis for Fujairah Police.\n'
+        'on customer inquiry analysis for Fujairah Police. The section title is:\n'
+        '"تاسعاً: الخلاصة — من البيانات إلى القرار"\n'
         '\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        'DATA — use ONLY these numbers, never invent\n'
+        'INPUTS — use ONLY these numbers, never invent figures\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        f'submission_channel_digital_pct: {submission_channel_pct_str}\n'
-        f'sla_rate: {sla_rate:.1f}%\n'
-        f'inquiry_pct: {inquiry_pct:.1f}%\n'
-        f'proactive_cancellable: {proactive_cancellable}+\n'
-        f'critical_gap_count: {critical_gap_count}\n'
-        f'top_gap_label: "{top_gap_label}"\n'
+        f'total_cases:              {total_cases}\n'
+        f'date_range:               "{date_range}"\n'
+        f'reclassified_count:       {reclass_count}\n'
+        f'reclassification_rate:    "{reclass_rate:.1f}%"\n'
+        f'sla_closed:               {sla_closed}\n'
+        f'sla_rate:                 "{sla_rate:.1f}%"\n'
+        f'submission_channel_digital_pct: "{submission_channel_pct_str}"  (% of cases submitted via app/website)\n'
+        + friction_digital_context_input_line +
+        f'inquiry_count:            {inquiry_count}   (استفسار cases after reclassification)\n'
+        f'inquiry_pct:              "{inquiry_pct:.1f}%"\n'
+        f'proactive_cancellable:    {proactive_cancellable}+  (cases eliminable by proactive notification)\n'
+        f'critical_gap_count:       {critical_gap_count}  (Critical-severity gaps from gap analysis)\n'
+        f'top_friction_label:       "{top_friction_label}"\n'
+        f'top_friction_count:       {top_friction_count}\n'
+        f'top_gap_label:            "{top_gap_label}"\n'
+        f'immediate_count:          {immediate_count}  (immediate-horizon roadmap items)\n'
         '\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        'TASK — write section_body (exactly 3 sentences)\n'
+        'LOCKED TABLES — copy these VERBATIM into pivot_table and kpi_impact.\n'
+        'Do NOT add, remove, or rephrase any cell in these tables.\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         '\n'
-        'Sentence 1: Opening statement that frames the data paradox.\n'
-        '  • Start with: "الرسالة النهائية:"\n'
-        f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of inquiries via app/website\n'
-        f'  • Cite operational excellence: {sla_rate:.1f}% SLA closure rate\n'
-        '  • Use a pivot word (لكن) to acknowledge the gap remains\n'
-        '\n'
-        'Sentence 2: The core challenge and proof.\n'
-        f'  • Identify what needs fixing: {critical_gap_count} critical gaps in workflows/processes\n'
-        f'  • Reference the primary gap: "{top_gap_label}"\n'
-        '  • Frame it as fixable without adding staff (system improvements, not headcount)\n'
-        '\n'
-        'Sentence 3: The path forward (concrete and actionable).\n'
-        f'  • State the solution is in: closing functional gaps + proactive notification + data quality\n'
-        f'  • Cite impact: {proactive_cancellable}+ inquiries can be prevented by proactive action\n'
-        '  • No speculation, no invented percentages\n'
-        '\n'
+        'pivot_table (three transformation pillars — المحاور الثلاثة للتحول):\n'
         f'{pivot_json}\n'
+        '\n'
+        'kpi_impact (aggregate impact strip — الأثر المجمّع المتوقع):\n'
         f'{kpi_json}\n'
         '\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        'OUTPUT FORMAT — valid JSON only\n'
+        'YOUR TASK — write ONLY the section_body\n'
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+        '\n'
+        'A. section_body — the opening paragraph of the Conclusion section\n'
+        '   Exactly 3 sentences, formal Arabic. Rules:\n'
+        '\n'
+        + sentence1_instruction +
+        '\n'
+        '   Sentence 2 — core insight:\n'
+        f'     • State the reclassification finding ({reclass_rate:.1f}%, {reclass_count} cases)\n'
+        f'       as proof that the problem is not missing channels but missing functions.\n'
+        '     • Name the top friction point and its case count.\n'
+        '\n'
+        '   Sentence 3 — the pivot to action:\n'
+        '     • The analyses in this report prove the solution lies in closing functional\n'
+        '       gaps, activating proactive notification, and correcting data quality.\n'
+        f'     • Reference proactive_cancellable ({proactive_cancellable}+) and critical_gap_count ({critical_gap_count}).\n'
+        '     • Must NOT mention adding human resources.\n'
+        '\n'
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+        'OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         '{\n'
         '  "section": "conclusion",\n'
@@ -400,13 +446,14 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         f'  "kpi_impact": {kpi_json}\n'
         '}\n'
         '\n'
-        'CONSTRAINTS:\n'
-        '  • section_body: exactly 3 sentences, formal Arabic\n'
-        '  • Every metric must match the DATA section above\n'
-        '  • MUST contain لكن — tension between achievement and work ahead\n'
-        '  • No double quotes (") — use « » or leave unquoted\n'
-        '  • No invented figures or metrics\n'
-        '  • Tables: copy VERBATIM, no changes\n'
+        'RULES:\n'
+        '  - pivot_table and kpi_impact: copy VERBATIM — do NOT change any value.\n'
+        '  - section_body: Arabic only.\n'
+        '  - Every number in prose must match a pre-computed input above.\n'
+        '  - No markdown, no extra keys, no extra nesting.\n'
+        '  - CRITICAL: Do NOT use double-quote characters (\") inside any string value. '
+        'Use angle brackets « » instead of double quotes when citing names.\n'
+        '  - Do not invent figures not present in INPUTS.\n'
     )
 
     # ── API call ──────────────────────────────────────────────────────────────

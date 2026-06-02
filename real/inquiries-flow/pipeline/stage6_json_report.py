@@ -372,7 +372,7 @@ class JSONReportBuilder:
         categories = ["شكوى", "استفسار", "طلب", "شكر وثناء"]
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "التصنيف الأصلي مقارنةً بالتصنيف الصحيح",
             "categories": categories,
             "series": [
@@ -427,7 +427,7 @@ class JSONReportBuilder:
         values = [float(v) for v in counts.values.tolist()]
 
         return {
-            "type": "column",
+            "type": "bar",
             "title": "توزيع الطلبات على الخدمات",
             "categories": categories,
             "series": [
@@ -1395,7 +1395,7 @@ class JSONReportBuilder:
 
         # ── Use Cases table dict ──────────────────────────────────────────────
         use_cases_table_dict = {
-            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع", "تقييم التنفيذ"],
+            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية"), "تقييم التنفيذ"],
             "rows":           display_rows,
             "row_count":      len(display_rows),
             "col_count":      4,
@@ -1749,7 +1749,13 @@ class JSONReportBuilder:
         # The old build_faq_section() was a duplicate with lower-quality content. Digital transformation
         # section provides FAQs with better operational guidance and contextual information.
 
-        report["charts"] = []
+        # Charts
+        charts = []
+        chart = self.build_classification_chart()
+        if chart:
+            charts.append(chart)
+
+        report["charts"] = charts
         report["sections"] = sections
 
         # Issue 3 Fix: Recalculate total_tables at the end by walking all sections

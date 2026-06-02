@@ -747,7 +747,6 @@ def _build_pre_computed_findings(
     sla_closed: int,
     sla_rate: float,
     rc_totals_auth: dict = None,
-    rc_friction_point_counts: dict = None,
 ) -> list:
     """
     Pre-compute the findings table deterministically from state data.
@@ -810,7 +809,7 @@ def _build_pre_computed_findings(
         })
 
     # ROW 4 — Multiple friction points grouped by shared root cause
-    # FIX 6: Use friction point COUNT from full journey_map, not truncated list
+    # FIX: Use friction point COUNT, not case count, as the leading number
     if len(friction_points) >= 2:
         grouped_by_cause = {}
         for fp in friction_points[1:]:
@@ -821,15 +820,8 @@ def _build_pre_computed_findings(
 
         # Pick the largest group
         largest_group = max(grouped_by_cause.values(), key=lambda g: sum(f['case_count'] for f in g))
+        friction_point_count_in_group = len(largest_group)
         group_cause = largest_group[0]['root_cause']
-
-        # FIX 6: Get friction point count from rc_friction_point_counts (full journey_map data)
-        # rather than len(largest_group) which is limited to the first-10 friction slice
-        if rc_friction_point_counts and group_cause in rc_friction_point_counts:
-            friction_point_count_in_group = rc_friction_point_counts[group_cause]
-        else:
-            friction_point_count_in_group = len(largest_group)
-
         # Use the full authoritative journey_map total when available (covers frictions beyond
         # the first-10 slice used to build friction_points).
         if rc_totals_auth and group_cause in rc_totals_auth:
@@ -992,14 +984,11 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         # number as the upper bound for valid finding headlines.
         friction_count = sum(1 for f in (state.journey_map or []) if f.case_count > 0)
 
-        # Authoritative per-root-cause totals and friction point counts from the full journey_map
-        # (not the first-10 slice). Passed to _build_pre_computed_findings for accurate Row 4.
+        # Authoritative per-root-cause totals from the full journey_map (not the first-10 slice).
+        # Passed to _build_pre_computed_findings so row 4 uses the correct grouped case count.
         rc_totals_auth: dict = defaultdict(int)
-        rc_friction_point_counts: dict = defaultdict(int)  # FIX 6: New parameter
         for _f in (state.journey_map or []):
             rc_totals_auth[_f.root_cause_category] += _f.case_count
-            if _f.case_count > 0:  # Only count frictions with actual cases (FIX 6)
-                rc_friction_point_counts[_f.root_cause_category] += 1
 
         pre_computed_findings = _build_pre_computed_findings(
             total_cases=total_cases,
@@ -1014,7 +1003,6 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             sla_closed=sla_closed,
             sla_rate=sla_rate,
             rc_totals_auth=rc_totals_auth,
-            rc_friction_point_counts=rc_friction_point_counts,  # FIX 6
         )
 
         # Extract gaps with enhanced guidebook intelligence
@@ -1941,12 +1929,6 @@ Rules:
                 "الطبيعة": f"يغطي {guidebook_topics_str}، مع التحقق من الأسئلة الشائعة وتحليل الفجوات",
                 "الحجم": f"{guidebook_pages} صفحة، {state.validated_faqs_count} أسئلة مصدقة",
                 "الفترة": guidebook_year
-            },
-            {
-                "المصدر": "منهجية إدارة الاستفسارات",
-                "الطبيعة": "وثيقة رسمية تحدد أنواع الاستفسارات ومعايير المعالجة وKPIs",
-                "الحجم": "6 صفحات",
-                "الفترة": "-"
             }
         ]
 

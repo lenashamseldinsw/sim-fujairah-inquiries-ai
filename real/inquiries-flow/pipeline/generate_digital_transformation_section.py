@@ -107,6 +107,38 @@ _RC_NOTIFICATION_CHANNEL: Dict[str, str] = {
 _MAX_FAQ_ROWS = 7
 
 
+def _compute_notification_impact(cases_eliminated: int, total_cases: int) -> str:
+    """
+    Pre-compute expected impact statement for notification row.
+
+    Derives concrete percentage reduction and case count from cases_eliminated.
+    This value is LOCKED — the LLM must copy it verbatim in the final prose cell.
+
+    Args:
+        cases_eliminated: Number of cases this notification would prevent
+        total_cases: Total cases in the dataset (denominator for percentage)
+
+    Returns:
+        Locked impact statement with concrete numbers (e.g. "إلغاء 15 حالة (30% من الحالات)")
+    """
+    if cases_eliminated == 0 or total_cases == 0:
+        return "لا يوجد تأثير متوقع على هذه العينة"
+
+    pct = round(cases_eliminated / total_cases * 100, 1) if total_cases > 0 else 0
+
+    # Format case count in Arabic (singular, dual, plural)
+    if cases_eliminated == 1:
+        cases_text = "حالة واحدة"
+    elif cases_eliminated == 2:
+        cases_text = "حالتان"
+    elif 3 <= cases_eliminated <= 10:
+        cases_text = f"{cases_eliminated} حالات"
+    else:
+        cases_text = f"{cases_eliminated} حالة"
+
+    return f"إلغاء {cases_text} ({pct}% من إجمالي الحالات)"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Module-level helpers
 # Also paste into stage6_json_report.py for the JSON builder.
@@ -117,53 +149,72 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     Pre-computed rows for Section 6.1 FAQ table.
 
     Uses validated_faqs (Stage 5) if available; falls back to faq_candidates (Stage 4).
-    Sorted by frequency descending. Capped at _MAX_FAQ_ROWS.
+    Sorted by actual sub_classification case count (not LLM frequency estimate).
+    Capped at _MAX_FAQ_ROWS.
 
-    Comments #21 and #22 fix: Derive التكرار directly from state.all_classified using the
-    FAQ's associated sub_classification, not from the LLM-supplied frequency which over/undercounts.
+    Task 12 Fix: Cap FAQ frequency against actual sub_classification case count from
+    state.all_classified to prevent Stage 4 LLM over-counting from inflating the table.
+    Also sort by actual counts, not LLM estimates, so FAQs appear in order of impact.
 
     Schema returned: # | التكرار
     (السؤال and الإجابة المقترحة are written by the LLM from faq context)
     """
     source = state.validated_faqs if state.validated_faqs else state.faq_candidates
-    # Sort by frequency descending (for ranking only)
-    sorted_faqs = sorted(source, key=lambda f: f.frequency, reverse=True)
 
-    # Build ground-truth counts per sub_classification from all_classified
+    # Build sub_classification counts from all_classified (ground truth)
+    # MUST be built before sorting so we can use it as the sort key
     sub_counts: Dict[str, int] = defaultdict(int)
-    top_level_counts: Dict[str, int] = defaultdict(int)
     for case in (state.all_classified or []):
         if case.sub_classification:
             sub_counts[case.sub_classification] += 1
-        if case.top_level:
-            top_level_counts[case.top_level] += 1
+
+    # Sort by actual sub_classification count, not by LLM frequency estimate
+    # This ensures FAQ ranking reflects actual case distribution
+    def _sort_key(faq):
+        sub = getattr(faq, "sub_classification", None)
+        return sub_counts.get(sub, faq.frequency) if sub else faq.frequency
+
+    sorted_faqs = sorted(source, key=_sort_key, reverse=True)
 
     rows = []
     for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1):
         raw_freq = faq.frequency
 
-        # Comments #21/#22 fix: Prefer explicit sub_classification attribute from LLM
-        faq_sub = getattr(faq, "sub_classification", "") or ""
-        faq_top = getattr(faq, "top_level", "") or ""
+        # Look up sub_classification from FAQ to get the authoritative case count
+        faq_sub_class = getattr(faq, "sub_classification", None)
 
-        if faq_sub and faq_sub in sub_counts:
-            # Authoritative: use the actual count for that sub-classification (Comments #21/#22)
-            display_freq = sub_counts[faq_sub]
-        elif faq_top and faq_top in top_level_counts:
-            # Fallback: cap against the top-level count
-            display_freq = min(raw_freq, top_level_counts[faq_top])
+        if faq_sub_class and faq_sub_class in sub_counts:
+            # Use the actual sub_classification count as the authoritative frequency
+            capped_freq = sub_counts[faq_sub_class]
+            source = "sub_classification"
+        elif faq_sub_class and not (faq_sub_class in sub_counts):
+            # FAQ has sub_classification but it doesn't match any cases (data mismatch)
+            # Fall back to raw frequency capped against max sub-count
+            max_sub_count = max(sub_counts.values()) if sub_counts else raw_freq
+            capped_freq = min(raw_freq, max_sub_count)
+            source = "fallback (no sub_class match)"
+            if not faq_sub_class:
+                print(
+                    f"[DigitalTransform] WARNING: FAQ #{i} has sub_classification='{faq_sub_class}' "
+                    f"but no matching cases. Using fallback cap."
+                )
+        elif sub_counts:
+            # No sub_classification on FAQ — fall back to max sub-count as loose upper bound
+            max_sub_count = max(sub_counts.values())
+            capped_freq = min(raw_freq, max_sub_count)
+            source = "fallback (no sub_class)"
         else:
-            # No match: use raw LLM frequency as-is (last resort)
-            display_freq = raw_freq
+            capped_freq = raw_freq
+            source = "no sub_counts"
 
-        if display_freq != raw_freq:
+        if capped_freq != raw_freq and source != "no sub_counts":
             print(
-                f"[DigitalTransform] FAQ frequency replaced: rank={i}, "
-                f"sub_classification={faq_sub!r}, LLM={raw_freq} → ground_truth={display_freq}"
+                f"[DigitalTransform] FAQ frequency: rank={i}, "
+                f"sub_classification={faq_sub_class!r}, original={raw_freq} → capped={capped_freq} ({source})"
             )
 
-        # Display: show exact integer (no "+" suffix)
-        freq_display = str(display_freq)
+        # Display: show exact integer (no "+" suffix for capped values)
+        freq_display = str(capped_freq)
 
         rows.append({
             "#":        str(i),
@@ -177,11 +228,24 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
     Enriched FAQ context for the LLM prompt (Section 6.1).
 
     Provides raw Q&A text so the LLM can sharpen phrasing and add
-    operational context from the resolved cases. No new computation —
-    pure read of Stage 4/5 outputs.
+    operational context from the resolved cases. Sorted by actual sub_classification
+    case count to match the display order. No new computation — pure read of Stage 4/5 outputs.
     """
     source = state.validated_faqs if state.validated_faqs else state.faq_candidates
-    sorted_faqs = sorted(source, key=lambda f: f.frequency, reverse=True)
+
+    # Build sub_classification counts (same as in _build_faq_rows_for_transform)
+    sub_counts: Dict[str, int] = defaultdict(int)
+    for case in (state.all_classified or []):
+        if case.sub_classification:
+            sub_counts[case.sub_classification] += 1
+
+    # Sort by actual sub_classification count for consistency with display order
+    def _sort_key(faq):
+        sub = getattr(faq, "sub_classification", None)
+        return sub_counts.get(sub, faq.frequency) if sub else faq.frequency
+
+    sorted_faqs = sorted(source, key=_sort_key, reverse=True)
+
     return [
         {
             "rank":        i,
@@ -189,6 +253,7 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
             "question_ar": faq.question_ar or faq.question,
             "answer_ar":   faq.answer_ar or faq.answer,
             "top_level":   getattr(faq, "top_level", ""),
+            "sub_classification": getattr(faq, "sub_classification", ""),
         }
         for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1)
     ]
@@ -205,10 +270,11 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     Sort: by cases_eliminated descending (so highest-impact row is first).
 
-    Schema returned: نوع الإشعار | الحالات المُلغاة | القناة
-    (محتوى الإشعار and الأثر المتوقع are written by the LLM)
+    Schema returned: نوع الإشعار | الحالات المُلغاة | القناة | الأثر المتوقع (LOCKED)
+    (محتوى الإشعار is written by the LLM; الأثر المتوقع is pre-computed and locked)
     """
     rows: List[Dict[str, str]] = []
+    total_cases = len(state.all_classified) or state.total_cases
 
     # ── Primary: notification_opportunities from Stage 4 ─────────────────────
     if state.notification_opportunities:
@@ -222,6 +288,11 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
             cases = n.get("cases_eliminated", 0)
             channel_raw = n.get("channel", "")
             channel = _CHANNEL_DISPLAY.get(channel_raw, channel_raw or "SMS / إشعار التطبيق")
+            # Pre-compute expected impact with concrete numbers (LOCKED field)
+            impact_statement = _compute_notification_impact(
+                cases if isinstance(cases, int) else 0,
+                total_cases
+            )
             rows.append({
                 "نوع الإشعار":    notif_type,
                 "الحالات المُلغاة": (
@@ -232,6 +303,7 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
                     else f"{cases}+ حالة"
                 ),
                 "القناة":          channel,
+                "الأثر المتوقع":   impact_statement,  # LOCKED — LLM must copy verbatim
             })
         return rows
 
@@ -282,10 +354,13 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
             else f"{total_count} حالات" if 3 <= total_count <= 10
             else f"{total_count} حالة"
         )
+        # Pre-compute expected impact with concrete numbers (LOCKED field)
+        impact_statement = _compute_notification_impact(total_count, total_cases)
         rows.append({
             "نوع الإشعار":    notif_type,
             "الحالات المُلغاة": cases_str,
             "القناة":          channel,
+            "الأثر المتوقع":   impact_statement,  # LOCKED — LLM must copy verbatim
         })
 
     # Always include renewal reminder row if not already present
@@ -294,10 +369,12 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
         any(k in r["نوع الإشعار"] for k in renewal_labels) for r in rows
     )
     if not has_renewal:
+        # Renewal reminder is speculative (no direct case count) — use placeholder
         rows.append({
             "نوع الإشعار":    "تذكير تجديد الرخص والملكيات",
             "الحالات المُلغاة": "متعدد",
             "القناة":          "SMS / إشعار التطبيق",
+            "الأثر المتوقع":   "منع حالات تأخر التجديد المتكررة",  # LOCKED placeholder
         })
 
     return rows
@@ -329,6 +406,7 @@ def _build_notification_prompt_context(state: PipelineState, notif_rows: List[Di
         notif_type = row["نوع الإشعار"]
         cases_str  = row["الحالات المُلغاة"]
         channel    = row["القناة"]
+        impact_locked = row.get("الأثر المتوقع", "")
 
         # Try to match to a proactive gap for extra context
         gap_extra: Optional[Dict[str, Any]] = None
@@ -345,6 +423,7 @@ def _build_notification_prompt_context(state: PipelineState, notif_rows: List[Di
             "notification_type": notif_type,
             "cases_eliminated":  cases_str,
             "channel":           channel,
+            "impact_locked":     impact_locked,  # LOCKED — must be copied verbatim
         }
         if gap_extra:
             entry["gap_context"] = gap_extra
@@ -391,10 +470,10 @@ def generate_digital_transformation_section(
     earlier pipeline stages), then asks the LLM to write:
       • section intro paragraph (2 sentences)
       • 6.1: السؤال + الإجابة المقترحة for each FAQ row
-      • 6.2: محتوى الإشعار (مثال) + الأثر المتوقع for each notification row
+      • 6.2: محتوى الإشعار (مثال) for each notification row
 
     Reinjection guarantees pre-computed values (rank, frequency, notification type,
-    cases eliminated, channel) are never replaced by LLM output.
+    cases eliminated, channel, الأثر المتوقع) are never replaced by LLM output.
 
     Raises on any failure — no fallbacks, no None returns.
 
@@ -417,7 +496,7 @@ def generate_digital_transformation_section(
           "الحالات المُلغاة": "...",   ← pre-computed
           "محتوى الإشعار (مثال)": "...", ← LLM-written sample SMS/push text
           "القناة": "...",             ← pre-computed
-          "الأثر المتوقع": "..."       ← LLM-written impact statement
+          "الأثر المتوقع": "..."       ← pre-computed (LOCKED — copy verbatim)
         }
       ]
     }
@@ -500,8 +579,8 @@ def generate_digital_transformation_section(
         f'{json.dumps(faq_rows, ensure_ascii=False, indent=2)}\n'
         '\n'
         'pre_computed_notification_table — Section 6.2\n'
-        '(نوع الإشعار, الحالات المُلغاة, القناة are LOCKED — copy verbatim;\n'
-        ' ADD محتوى الإشعار (مثال) and الأثر المتوقع):\n'
+        '(نوع الإشعار, الحالات المُلغاة, القناة, الأثر المتوقع are LOCKED — copy verbatim;\n'
+        ' ADD محتوى الإشعار (مثال) only):\n'
         f'{json.dumps(notif_rows, ensure_ascii=False, indent=2)}\n'
         '\n'
         '─────────────────────────────────────────────\n'
@@ -534,9 +613,10 @@ def generate_digital_transformation_section(
         '   - Max 30 words. Wrap in Arabic quotation marks «».\n'
         '\n'
         'E. "الأثر المتوقع" for EVERY row in pre_computed_notification_table\n'
-        '   - State the concrete expected impact (% reduction, case count eliminated, etc.).\n'
-        '   - Use الحالات المُلغاة figure from the pre-computed row as the basis.\n'
-        '   - Max 20 words. Arabic only.\n'
+        '   - **LOCKED FIELD — copy the الأثر المتوقع value verbatim from the pre-computed row.**\n'
+        '   - Do NOT rewrite or paraphrase this field.\n'
+        '   - Do NOT generate a different impact statement.\n'
+        '   - The value is pre-computed from actual case counts and must not be changed.\n'
         '\n'
         '─────────────────────────────────────────────\n'
         'OUTPUT — single JSON object, no markdown fences, no extra keys\n'
@@ -657,27 +737,22 @@ def generate_digital_transformation_section(
     merged_notif_table = []
     for i, (pre_row, llm_row) in enumerate(zip(notif_rows, llm_notif_rows)):
         sample_msg = llm_row.get("محتوى الإشعار (مثال)", "")
-        impact     = llm_row.get("الأثر المتوقع", "")
 
         if not sample_msg:
             raise RuntimeError(
                 f"[DigitalTransform] Missing 'محتوى الإشعار (مثال)' in notification_table "
                 f"row {i} (type: '{pre_row['نوع الإشعار']}')"
             )
-        if not impact:
-            raise RuntimeError(
-                f"[DigitalTransform] Missing 'الأثر المتوقع' in notification_table "
-                f"row {i} (type: '{pre_row['نوع الإشعار']}')"
-            )
 
         # Column order matches sample output:
         # نوع الإشعار | الحالات المُلغاة | محتوى الإشعار (مثال) | القناة | الأثر المتوقع
+        # All other columns are LOCKED — taken from pre_row, not llm_row
         merged_notif_table.append({
             "نوع الإشعار":           pre_row["نوع الإشعار"],
             "الحالات المُلغاة":      pre_row["الحالات المُلغاة"],
             "محتوى الإشعار (مثال)": sample_msg,
             "القناة":                pre_row["القناة"],
-            "الأثر المتوقع":         impact,
+            "الأثر المتوقع":         pre_row["الأثر المتوقع"],  # LOCKED — always from pre_row
         })
 
     result["notification_table"] = merged_notif_table

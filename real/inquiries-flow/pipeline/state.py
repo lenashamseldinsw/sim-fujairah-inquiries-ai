@@ -64,8 +64,8 @@ class FAQCandidate(BaseModel):
     validation_status: str  # OK | CONFLICT
     question_ar: Optional[str] = None
     answer_ar: Optional[str] = None
-    top_level: Optional[str] = None  # Associated top-level category (شكوى, طلب, استفسار)
-    sub_classification: Optional[str] = None  # Associated sub-classification (for authoritative frequency lookup)
+    top_level: Optional[str] = None  # Top-level category (شكوى, استفسار, etc.)
+    sub_classification: Optional[str] = None  # Specific sub-classification for frequency capping
 
 
 class GapRow(BaseModel):
