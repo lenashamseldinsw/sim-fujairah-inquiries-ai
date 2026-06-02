@@ -157,6 +157,44 @@ def arabic_case_count(n) -> str:
     return f"{n} حالة"
 
 
+def normalize_friction_label(label: str, reconciled_count: int) -> str:
+    """
+    Replace any leading count phrase in a friction/gap label with the reconciled case count.
+
+    Strips patterns like:
+      "13 حالة — نص الاحتكاك"   →  "11 حالة — نص الاحتكاك"  (if reconciled_count=11)
+      "٩ حالات — نص الاحتكاك"  →  "11 حالة — نص الاحتكاك"
+      "نص بدون رقم"            →  "نص بدون رقم"  (unchanged)
+
+    Args:
+        label: Original friction/gap label (may contain embedded count)
+        reconciled_count: Correct case count from state (post-reconciliation)
+
+    Returns:
+        Normalized label with correct count, or unchanged label if no count pattern detected
+    """
+    if not label:
+        return label
+
+    # Match an optional leading number (Western or Arabic-Indic digits) followed
+    # by حالة (singular) or حالات (plural) and an optional separator
+    # Note: can't use حالات? because "حالة" ends with ة while حالات ends with ات
+    pattern = r'^[\d٠-٩]+\s*(?:حالة|حالات)\s*[—\-–]?\s*'
+    cleaned = re.sub(pattern, '', label).strip()
+
+    if not cleaned:
+        # Pattern matched but nothing remains; just return the count
+        return arabic_case_count(reconciled_count)
+
+    # If we found and stripped a count pattern, prepend the correct count
+    if cleaned != label.strip():
+        count_str = arabic_case_count(reconciled_count)
+        return f"{count_str} — {cleaned}"
+
+    # No count pattern found; return label as-is
+    return label
+
+
 def calculate_similarity(text1: str, text2: str) -> float:
     """
     Simple similarity metric using word overlap.

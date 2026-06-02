@@ -14,6 +14,9 @@ root_dir = Path(__file__).resolve().parent.parent.parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+# Import utilities for label normalization
+from .utils import normalize_friction_label
+
 LOGO_PATH = root_dir / "assets" / "fujairah-short-logo.png"
 
 from sword_word_builder import (
@@ -260,9 +263,35 @@ def _render_table(builder: WordBuilder, table: dict):
     if not columns or not rows:
         return
 
+    # Normalize friction-related labels (strip embedded counts, prepend reconciled count)
+    # This applies to columns that may contain LLM-generated counts that don't match
+    # the "الحالات" (case count) column
+    friction_label_columns = {"نقطة الاحتكاك", "نوع الفجوة", "السبب الجذري"}
+    has_case_count_col = "الحالات" in columns
+
+    processed_rows = []
+    for row in rows:
+        processed_row = dict(row)  # Make a copy
+
+        if has_case_count_col:
+            try:
+                case_count = int(row.get("الحالات", 0))
+            except (ValueError, TypeError):
+                case_count = 0
+
+            # Apply normalization to any friction-related columns in this row
+            for col in friction_label_columns:
+                if col in processed_row and processed_row[col]:
+                    processed_row[col] = normalize_friction_label(
+                        processed_row[col],
+                        case_count
+                    )
+
+        processed_rows.append(processed_row)
+
     # Reverse column order for RTL visual layout (rightmost = first logical column)
     rtl_columns = list(reversed(columns))
-    ordered_rows = [{col: row.get(col, "") for col in rtl_columns} for row in rows]
+    ordered_rows = [{col: row.get(col, "") for col in rtl_columns} for row in processed_rows]
 
     builder.add_table(
         ordered_rows,

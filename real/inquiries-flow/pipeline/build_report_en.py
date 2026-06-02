@@ -14,6 +14,9 @@ root_dir = Path(__file__).resolve().parent.parent.parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+# Import utilities for label normalization
+from .utils import normalize_friction_label
+
 LOGO_PATH = root_dir / "assets" / "fujairah-short-logo.png"
 
 from sword_word_builder import (
@@ -258,8 +261,39 @@ def _render_table(builder: WordBuilder, table: dict):
     if not columns or not rows:
         return
 
+    # Normalize friction-related labels (strip embedded counts, prepend reconciled count)
+    # This applies to columns that may contain LLM-generated counts that don't match
+    # the "Cases" or "الحالات" (case count) column
+    # Note: normalize_friction_label works with Arabic patterns; English patterns would need
+    # a separate handler, but the translation is done after reconciliation so this shouldn't occur
+    friction_label_columns = {"نقطة الاحتكاك", "نوع الفجوة", "السبب الجذري",
+                              "Friction Point", "Gap Type", "Root Cause"}  # Both Arabic and English
+    has_case_count_col = "الحالات" in columns or "Cases" in columns
+
+    processed_rows = []
+    for row in rows:
+        processed_row = dict(row)  # Make a copy
+
+        if has_case_count_col:
+            # Try to get case count from either Arabic or English column
+            case_count_str = row.get("الحالات") or row.get("Cases", "0")
+            try:
+                case_count = int(case_count_str)
+            except (ValueError, TypeError):
+                case_count = 0
+
+            # Apply normalization to any friction-related columns in this row
+            for col in friction_label_columns:
+                if col in processed_row and processed_row[col]:
+                    processed_row[col] = normalize_friction_label(
+                        processed_row[col],
+                        case_count
+                    )
+
+        processed_rows.append(processed_row)
+
     # LTR: preserve natural column order
-    ordered_rows = [{col: row.get(col, "") for col in columns} for row in rows]
+    ordered_rows = [{col: row.get(col, "") for col in columns} for row in processed_rows]
 
     builder.add_table(
         ordered_rows,
