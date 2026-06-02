@@ -598,11 +598,14 @@ def run_stage5(
 
                     state.gap_table = gap_rows
 
-                # Reconcile gap_table case counts against all_classified (Root Cause 1 fix)
+                # Reconcile gap_table case counts against all_classified with BUDGET TRACKING
+                # Root cause fix: prevent double-counting when multiple gaps match same sub_classification
                 # Ground truth: sub_classification → actual case count
                 actual_sub_counts = defaultdict(int)
                 for case in state.all_classified:
                     actual_sub_counts[case.sub_classification] += 1
+
+                original_gap_total = sum(g.case_count for g in state.gap_table)
 
                 # Bridge: journey_map cluster text → set of sub_classifications it covers.
                 # journey_map entries have sub_classification set exactly (enforced by Stage 4 prompt).
@@ -621,9 +624,15 @@ def run_stage5(
                         if key:
                             cluster_to_subs[key].add(friction.sub_classification)
 
-                # Re-derive each gap row's case_count by summing actual counts of all
-                # sub_classifications whose journey_map cluster overlaps with the gap topic.
-                for gap in state.gap_table:
+                # BUDGET TRACKING: Create mutable budget from actual counts
+                # Each gap claims from this budget; once claimed, it's gone (no double-counting)
+                sub_budget = dict(actual_sub_counts)
+
+                # Sort gaps by case_count descending — most impactful gets first claim on budget
+                sorted_gaps = sorted(state.gap_table, key=lambda g: g.case_count, reverse=True)
+
+                # Re-derive each gap row's case_count with budget deduction
+                for gap in sorted_gaps:
                     topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
                     matched_subs: set = set()
 
@@ -632,16 +641,56 @@ def run_stage5(
                             matched_subs.update(subs)
 
                     if matched_subs:
-                        reconciled = sum(actual_sub_counts.get(s, 0) for s in matched_subs)
-                        if reconciled > 0 and reconciled != gap.case_count:
-                            print(
-                                f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
-                                f"{gap.case_count} → {reconciled} "
-                                f"(subs: {matched_subs})"
-                            )
+                        # Compute available budget: sum of remaining allocations in matched subs
+                        available_budget = sum(sub_budget.get(s, 0) for s in matched_subs)
+
+                        if available_budget > 0:
+                            reconciled = available_budget
+                            if reconciled != gap.case_count:
+                                print(
+                                    f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                    f"{gap.case_count} → {reconciled} "
+                                    f"(subs: {matched_subs}, available_budget: {available_budget})"
+                                )
                             gap.case_count = reconciled
 
-                print(f"[Stage5] ✓ gap_table case_counts reconciled against all_classified")
+                            # DEDUCT from budget: zero out all matched subs (they've been claimed)
+                            for sub in matched_subs:
+                                sub_budget[sub] = 0
+                        else:
+                            # No budget left for this gap — all matched subs already claimed by higher-priority gaps
+                            print(
+                                f"[Stage5] BUDGET EXHAUSTED for gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                f"matched_subs {matched_subs} all claimed by earlier gaps"
+                            )
+                            gap.case_count = 0
+
+                # Final reconciled total
+                reconciled_gap_total = sum(g.case_count for g in state.gap_table)
+                total_cases = state.total_cases or len(state.all_classified)
+
+                # RECONCILE_SUMMARY: Log the transformation
+                print(
+                    f"[Stage5] RECONCILE_SUMMARY: "
+                    f"LLM gap_table total: {original_gap_total} → "
+                    f"reconciled: {reconciled_gap_total} / {total_cases} cases "
+                    f"({reconciled_gap_total / total_cases * 100:.1f}%)"
+                )
+
+                # ASSERTION: Reconciled total must not exceed actual cases
+                if reconciled_gap_total > total_cases:
+                    raise RuntimeError(
+                        f"[Stage5] VALIDATION FAILED: Gap table reconciled total {reconciled_gap_total} "
+                        f"exceeds total cases {total_cases}. Budget tracking malfunction."
+                    )
+
+                if reconciled_gap_total > total_cases * 0.95:
+                    print(
+                        f"[Stage5] WARNING: Reconciled gap_table total {reconciled_gap_total} is {reconciled_gap_total / total_cases * 100:.1f}% of {total_cases} cases. "
+                        f"This is legitimate if gaps span different sub_classifications with minimal overlap."
+                    )
+
+                print(f"[Stage5] ✓ gap_table case_counts reconciled with budget tracking (no double-counting)")
 
                 # Validate FAQ candidates
                 if 'faq_validations' in analysis:

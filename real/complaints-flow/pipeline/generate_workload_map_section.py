@@ -387,6 +387,12 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             f'pre_computed_complaint_sub_classifications ({len(complaint_subs)} complaint types, sorted descending by count):\n'
             f'{complaint_subs_json}\n'
             '\n'
+            'CRITICAL — TASK 5 INSTRUCTION:\n'
+            '  Do NOT invent rows for sub-classifications with zero cases.\n'
+            '  Do NOT add categories not in the pre_computed list above.\n'
+            '  Your complaints_table MUST contain ONLY the sub-categories shown above.\n'
+            '  Each row must come directly from the pre_computed data — do not create new rows.\n'
+            '\n'
             'pre_computed_channel_distribution (all channels, sorted descending by count):\n'
             f'{channel_rows_json}\n'
             '\n'
@@ -530,21 +536,36 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             )
 
             # Inject missing rows from complaint_subs (pre-computed ground truth)
+            injected_count = 0
             for missing_sub in missing_subs:
                 source_row = next(
                     (row for row in complaint_subs if row.get('الفئة الفرعية') == missing_sub),
                     None
                 )
                 if source_row:
+                    # TASK 1 FIX: Skip injection if العدد == 0 (no cases in dataset for this sub-classification)
+                    count_str = source_row.get('العدد', '0')
+                    try:
+                        count_val = int(count_str) if count_str else 0
+                    except (ValueError, TypeError):
+                        count_val = 0
+
+                    if count_val == 0:
+                        print(f"[WorkloadMap] SKIPPED injection for '{missing_sub}' (no cases in data, العدد = 0)")
+                        continue
+
                     # Build row with LLM-style column names, using ground truth data
+                    # Use _digital_readiness_complaint for proper description (no [Injected] marker)
+                    description = _digital_readiness_complaint(missing_sub)
                     injected_row = {
                         "نوع الشكوى": missing_sub,
                         "العدد": source_row.get('العدد', ''),
                         "النسبة": source_row.get('النسبة', ''),
-                        "الوصف": f"[Injected] تصنيف متكرر في البيانات الفعلية"
+                        "الوصف": description
                     }
                     complaints_table.append(injected_row)
-                    print(f"[WorkloadMap] Injected missing row: {missing_sub}")
+                    injected_count += 1
+                    print(f"[WorkloadMap] Injected missing row: {missing_sub} (العدد={count_val})")
 
             # Re-sort by العدد descending (numeric sort)
             try:
@@ -557,6 +578,18 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             except (ValueError, TypeError):
                 print("[WorkloadMap] WARNING: Could not re-sort complaints_table by العدد")
                 result["complaints_table"] = complaints_table
+
+            # TASK 1 FIX: Assert case count consistency (never exceed 100%)
+            try:
+                table_total = sum(int(row.get('العدد', '0')) for row in complaints_table)
+                if table_total != total_cases:
+                    raise RuntimeError(
+                        f"[WorkloadMap] VALIDATION FAILED: complaint sub-classification table total {table_total} "
+                        f"does not match total_cases {total_cases}. "
+                        f"This indicates injected rows with incorrect counts or missing data reconciliation."
+                    )
+            except (ValueError, TypeError) as e:
+                print(f"[WorkloadMap] WARNING: Could not validate case count totals: {e}")
 
             # Verify again
             returned_subs = {row.get('نوع الشكوى', '') for row in complaints_table}

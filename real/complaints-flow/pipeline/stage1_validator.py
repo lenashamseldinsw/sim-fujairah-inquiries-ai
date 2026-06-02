@@ -337,7 +337,8 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
 
     # Normalize column names
     df_normalized = normalize_columns(df)
-    print(f"[Stage1] Normalized columns: {list(df_normalized.columns)}")
+    state.column_names = list(df_normalized.columns)  # TASK 7: Store normalized column names for documentation
+    print(f"[Stage1] Normalized columns: {state.column_names}")
     print(f"[Stage1] Required columns: {REQUIRED_COLUMNS}")
 
     # Null-description audit

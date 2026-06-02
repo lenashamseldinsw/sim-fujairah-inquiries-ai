@@ -123,6 +123,7 @@ class PipelineState(BaseModel):
     raw_df: Optional[Any] = None  # pandas DataFrame from uploaded Excel
     validated_schema: Optional[Dict[str, Any]] = None  # Schema validation result
     original_columns: List[str] = Field(default_factory=list)  # Original column names from input Excel
+    column_names: List[str] = Field(default_factory=list)  # Normalized column names from input (TASK 7: for field count documentation)
 
     # --- STAGE 2 (RULE CLASSIFIER) ---
     rule_classified: List[CaseRow] = Field(default_factory=list)  # Cases classified by rules

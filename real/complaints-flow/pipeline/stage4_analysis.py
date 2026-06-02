@@ -279,6 +279,19 @@ ANALYSIS INSTRUCTIONS:
       - root_cause_category: "policy_complexity"
       Do NOT classify as service_delivery_failure — this is a scope issue, not a failure.
 
+   7. SECURITY/CRIMINAL CASES (شكاوى أمنية وجنائية) — CRITICAL:
+      Do NOT assign all security/criminal cases to a single friction point like "تأخر استجابة ميدانية".
+      These cases are heterogeneous — each has distinct friction points:
+      - Some involve حفظ البلاغ without notification (root_cause: no_proactive_notification)
+      - Some involve processing_delay for specific sub-types (root_cause: processing_delay)
+      - Some involve scope/jurisdiction issues (root_cause: policy_complexity)
+      - Some involve wrong channel submission (root_cause: wrong_channel_used)
+      ANALYZE EACH CASE INDIVIDUALLY and assign to the specific friction that matches.
+      The case_count for any single friction point within this sub-classification must be
+      derived from individual case evidence, NOT assumed to equal the sub-classification total.
+      If you identify a single friction point that genuinely affects all 16 cases, provide
+      strong evidence: list specific case IDs, quote relevant text from each case's description.
+
    FRICTION POINT COUNTING RULES:
 
    Each case belongs to exactly ONE friction cluster. When a case has multiple potential
@@ -507,6 +520,33 @@ def _reconcile_counts(
                 reconciled_journey_map[largest_i] = f.model_copy(
                     update={"case_count": f.case_count + (ceiling - actual_total)}
                 )
+
+    # ── TASK 4 FIX: Cap single friction point claims within sub_classifications ───
+    # Prevent a single friction point from claiming >50% of a sub_classification's total
+    # UNLESS it is the ONLY friction point for that sub_classification.
+    sub_to_frictions = defaultdict(list)
+    for i, friction in enumerate(reconciled_journey_map):
+        if friction.sub_classification:
+            sub_to_frictions[friction.sub_classification].append((i, friction))
+
+    for sub, friction_list in sub_to_frictions.items():
+        if len(friction_list) < 2:
+            continue  # Only apply cap when multiple friction points match same sub
+
+        sub_actual = actual_counts.get(sub, 0)
+        max_allowed = sub_actual * 0.5  # 50% cap per friction point
+
+        for i, friction in friction_list:
+            if friction.case_count > max_allowed:
+                capped_count = round(max_allowed)
+                print(
+                    f"[Stage4] TASK 4 CAP: friction '{friction.friction_point_ar or friction.friction_point}' "
+                    f"in sub_classification '{sub}' claims {friction.case_count} cases. "
+                    f"This exceeds 50% of sub_classification total ({sub_actual} cases). "
+                    f"Multiple friction points match this sub — capping to {capped_count} cases."
+                )
+                # ENFORCE the cap: update the reconciled_journey_map entry
+                reconciled_journey_map[i] = friction.model_copy(update={"case_count": capped_count})
 
     # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
@@ -935,6 +975,24 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             state.proactive_notification_case_count,
         )
         print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
+
+        # TASK 6 FIX: Update proactive_notification_case_count to match reconciled notification_opportunities
+        # This ensures consistency across all sections (state value matches computed value from notifications)
+        if state.notification_opportunities:
+            original_count = state.proactive_notification_case_count
+            state.proactive_notification_case_count = sum(
+                int(n.get("cases_eliminated", n.get("case_count", 0)))
+                for n in state.notification_opportunities
+            )
+            if state.proactive_notification_case_count != original_count:
+                print(
+                    f"[Stage4] TASK 6 UPDATE: proactive_notification_case_count {original_count} → "
+                    f"{state.proactive_notification_case_count} (post-reconciliation from notification_opportunities)"
+                )
+            else:
+                print(
+                    f"[Stage4] ✓ proactive_notification_case_count consistent: {state.proactive_notification_case_count}"
+                )
 
         if state.journey_map:
             break  # Success — stop retrying

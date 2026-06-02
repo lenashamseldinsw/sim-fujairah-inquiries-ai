@@ -11,6 +11,7 @@ Low-confidence cases are queued for Stage 3 (LLM classifier).
 """
 
 import re
+import pandas as pd
 from typing import Tuple
 from .state import PipelineState, CaseRow
 from .json_utils import extract_methodology_context
@@ -320,11 +321,16 @@ def run_stage2(state: PipelineState) -> PipelineState:
         dept_raw = str(row.get('الإدارة_العامة', '') or row.get('الإداره_العامة', '')).strip()
         dept_clean = re.sub(r'^الفجيرة\s*-\s*', '', dept_raw).strip()
 
+        # TASK 2 FIX: Handle NaN in date_closed properly
+        # pandas NaN becomes str(NaN) = 'nan' (truthy, non-empty string) — must be ''
+        date_closed_raw = row.get('تاريخ_الإغلاق', '')
+        date_closed_value = "" if pd.isna(date_closed_raw) else str(date_closed_raw)
+
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),
             case_title=str(row.get('تفاصيل_الطلب', '')),
             date_opened=str(row.get('تاريخ_الإنشاء', '')),
-            date_closed=str(row.get('تاريخ_الإغلاق', '')),
+            date_closed=date_closed_value,
             case_channel=str(row.get('قناة_تقديم_الخدمة', '')).strip(),
             description=str(row.get('تفاصيل_الطلب', '')),
             resolution_response=str(row.get('الحل', '')),

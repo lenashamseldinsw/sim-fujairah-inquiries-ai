@@ -312,7 +312,64 @@ def _compute_proactive_cancellable_count(state: PipelineState) -> int:
         int(n.get("cases_eliminated", n.get("case_count", 0)))
         for n in state.notification_opportunities
     )
+
+    # TASK 6 FIX: Assert consistency with state.proactive_notification_case_count
+    # Both should match after Stage 4 reconciliation
+    if state.proactive_notification_case_count != total:
+        print(
+            f"[validate_llm_numbers] WARNING: proactive_notification_case_count {state.proactive_notification_case_count} "
+            f"does not match computed sum from notification_opportunities {total}. "
+            f"This may indicate state was not updated after reconciliation."
+        )
+
     return total
+
+
+def _detect_duplicate_citations(text: str) -> Dict[str, Any]:
+    """
+    TASK 9 FIX: Detect suspicious duplicate citations of the same number within 200 characters.
+
+    Example: "24 شكوى مكررة... ... 24 شكوى مرفوضة" (same 24 cited twice)
+    This may indicate the LLM is double-counting the same group as two separate groups.
+
+    Returns a dict with found_duplicates list and warning_details.
+    """
+    report = {
+        "found_duplicates": [],
+        "warning_details": []
+    }
+
+    # Find all digit sequences (case counts, percentages, etc.)
+    number_pattern = re.compile(r'\b(\d+(?:\.\d+)?)\s*(?:%|شكوى|حالة)?\b')
+    matches = list(number_pattern.finditer(text))
+
+    # For each match, check if the same number appears within 200 chars
+    for i, match1 in enumerate(matches):
+        num1 = match1.group(1)
+        pos1 = match1.start()
+
+        for match2 in matches[i+1:]:
+            num2 = match2.group(1)
+            pos2 = match2.start()
+
+            # Same number within 200 chars?
+            if num1 == num2 and (pos2 - pos1) <= 200:
+                context_start = max(0, pos1 - 40)
+                context_end = min(len(text), pos2 + 40)
+                context = text[context_start:context_end]
+
+                warning = {
+                    "number": num1,
+                    "distance_chars": pos2 - pos1,
+                    "context": context.replace('\n', ' ')[:100]
+                }
+                report["found_duplicates"].append(warning)
+                report["warning_details"].append(
+                    f"Number '{num1}' appears twice within {pos2 - pos1} characters. "
+                    f"Context: ...{context[:80]}..."
+                )
+
+    return report
 
 
 def validate_section_9_narrative(
@@ -329,6 +386,7 @@ def validate_section_9_narrative(
         "total_issues": 0,
         "percentage_validations": {},
         "case_count_validations": {},
+        "duplicate_citations": {},
         "corrections_applied": False
     }
 
@@ -341,6 +399,14 @@ def validate_section_9_narrative(
     count_text, count_report = enforce_locked_case_counts(pct_text, state, "Section 9")
     report["case_count_validations"] = count_report
     report["total_issues"] += len(count_report["found_issues"])
+
+    # TASK 9 FIX: Detect duplicate citations
+    dup_report = _detect_duplicate_citations(count_text)
+    report["duplicate_citations"] = dup_report
+    if dup_report["found_duplicates"]:
+        report["total_issues"] += len(dup_report["found_duplicates"])
+        for warning in dup_report["warning_details"]:
+            print(f"[Section 9] TASK 9 WARNING: {warning}")
 
     corrected_text = count_text
     report["corrections_applied"] = report["total_issues"] > 0

@@ -484,6 +484,20 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     traffic_complaint_count, traffic_complaint_pct = _compute_traffic_complaint_pct(state)
     severity_dist = _compute_complaint_severity(state)
 
+    # TASK 2 FIX: Assert closure rate consistency with state.closed_cases_count
+    # Both must match the same logic: count cases where date_closed is truthy and non-empty
+    if state.closed_cases_count > 0:
+        expected_rate = (state.closed_cases_count / (state.total_cases or 1)) * 100
+        rate_diff = abs(closure_rate - expected_rate)
+        if rate_diff > 0.1:
+            raise RuntimeError(
+                f"[Conclusion] VALIDATION FAILED: closure_rate {closure_rate}% "
+                f"does not match state.closed_cases_count {state.closed_cases_count} / {state.total_cases} = {expected_rate}%. "
+                f"Difference: {rate_diff:.1f}%. This indicates inconsistent counting logic."
+            )
+        else:
+            print(f"[Conclusion] ✓ Closure rate consistent: {closure_rate}% (count={closure_count}, state={state.closed_cases_count})")
+
     proactive_cancellable       = _count_proactive_cancellable(state)
     critical_gap_count          = _count_critical_gaps(state)
 
@@ -575,6 +589,12 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         '  • No double quotes (") — use « » or leave unquoted\n'
         '  • No invented figures or metrics\n'
         '  • Tables: copy VERBATIM, no changes\n'
+        '\n'
+        'TASK 9 CRITICAL NOTE:\n'
+        '  The مكررة (duplicate) cases and المرفوضة (rejected) cases share overlap in the data.\n'
+        '  Do NOT cite a number twice for the same group as if they are separate groups.\n'
+        '  Example: if 24 مكررة cases are ALSO the formally rejected cases, cite them ONCE only.\n'
+        '  Use the data numbers provided above, but ensure each case group is cited only once.\n'
     )
 
     # ── API call ──────────────────────────────────────────────────────────────

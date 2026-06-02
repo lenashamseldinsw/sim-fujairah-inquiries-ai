@@ -1415,10 +1415,17 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
             }
         ]
 
-        # HARDCODED SECTION 2.3: الحقول المحللة
+        # TASK 7 FIX: SECTION 2.3: الحقول المحللة — with dynamic field counts
+        # Identify structured vs free-text fields
+        free_text_fields = {'تفاصيل_الطلب', 'الحل'}  # Description and resolution
+        total_fields = len(state.column_names) if state.column_names else 0
+        structured_fields = total_fields - len(free_text_fields)
+
         analyzed_fields_text = (
-            "الحقول المنظمة المستخدمة في التحليل: رقم الطلب، الخدمة الرئيسية، نوع المكالمة الأصلي، حالة الطلب، قناة التواصل، والإدارة المختصة. "
-            "الحقول غير المنظمة — محور هذا التحليل: تفاصيل الشكوى ورد المعالجة. هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بعيداً عن التصنيف الشكلي في النظام."
+            f"الحقول المنظمة المستخدمة في التحليل ({structured_fields} حقل): "
+            "رقم الطلب، الخدمة الرئيسية، نوع المكالمة الأصلي، حالة الطلب، قناة التواصل، والإدارة المختصة. "
+            f"الحقول غير المنظمة ({len(free_text_fields)} حقول) — محور هذا التحليل: تفاصيل الشكوى ورد المعالجة. "
+            "هذان الحقلان يكشفان الطبيعة الحقيقية لكل حالة بعيداً عن التصنيف الشكلي في النظام."
         )
 
         return {

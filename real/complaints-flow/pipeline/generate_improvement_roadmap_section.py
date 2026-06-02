@@ -887,6 +887,16 @@ def generate_improvement_roadmap_section(
         '   - Max 50 words per cell. Arabic only.\n'
         '\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+        'TASK 8 CONSTRAINT — Improvement Targets (CRITICAL)\n'
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+        'Do NOT write improvement targets of "100%". All targets must be realistic and achievable:\n'
+        '  ✗ WRONG: "تحسين إلى 100%" or "تحقيق معدل 100%"\n'
+        '  ✓ CORRECT: "تحسين من 60% إلى 85%" or "تقليص وقت المعالجة بمقدار 50%"\n'
+        'If no realistic percentage improvement applies, describe the benefit in qualitative terms:\n'
+        '  ✓ CORRECT: "تحسين تجربة المتعامل من خلال إشعارات فورية" or "تقليل الأخطاء اليدوية"\n'
+        'When citing current rates from the data, stay below 95% in targets.\n'
+        '\n'
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         'OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         '{\n'
@@ -992,6 +1002,33 @@ def generate_improvement_roadmap_section(
             raise RuntimeError(
                 f"[ImprovementRoadmap] Row '{row_id}' has empty 'الأثر المتوقع'."
             )
+
+    # TASK 8 FIX: Replace impossible 100% improvement targets with [REVIEW_NEEDED]
+    # Scan roadmap_table and proactive_complaints_table for "100%" patterns
+    import re
+    hundred_pct_pattern = re.compile(r'100\s*%')
+
+    for idx, llm_row in enumerate(raw_data["roadmap_table"]):
+        for field in ["التوصية", "الأثر المتوقع"]:
+            content = llm_row.get(field, "")
+            if hundred_pct_pattern.search(content):
+                print(
+                    f"[ImprovementRoadmap] TASK 8 FIX: Row {idx} ('{llm_row.get('row_id', '')}') "
+                    f"'{field}' contains '100%' — replacing with [REVIEW_NEEDED]"
+                )
+                # Replace the content with review flag
+                llm_row[field] = "[REVIEW_NEEDED — LLM generated impossible 100% target]"
+
+    for idx, pc_row in enumerate(raw_data["proactive_complaints_table"]):
+        for field in ["الأثر", "الحل الاستباقي المقترح"]:
+            content = pc_row.get(field, "")
+            if hundred_pct_pattern.search(content):
+                print(
+                    f"[ImprovementRoadmap] TASK 8 FIX: Proactive complaints row {idx} "
+                    f"'{field}' contains '100%' — replacing with [REVIEW_NEEDED]"
+                )
+                # Replace the content with review flag
+                pc_row[field] = "[REVIEW_NEEDED — LLM generated impossible 100% target]"
 
     # Validate proactive complaints table rows
     for idx, pc_row in enumerate(raw_data["proactive_complaints_table"]):

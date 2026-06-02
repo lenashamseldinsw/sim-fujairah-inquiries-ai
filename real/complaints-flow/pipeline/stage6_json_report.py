@@ -426,8 +426,14 @@ class JSONReportBuilder:
             sub = case.sub_classification or "شكاوى بلا تصنيف خدمي (\"أخرى\")"
             subcategory_counts[sub] += 1
 
-        # Use the real 6 complaint sub-categories from stage2
-        categories = _SUB_CLASSIFICATIONS
+        # TASK 5 FIX: Filter categories to ONLY include those with actual cases
+        # Do NOT include zero-count categories in chart (avoids confusion about missing categories)
+        all_categories = _SUB_CLASSIFICATIONS
+        categories = [c for c in all_categories if subcategory_counts.get(c, 0) > 0]
+
+        if not categories:
+            # Fallback: if no matches, use all categories (shouldn't happen with real data)
+            categories = all_categories
 
         return {
             "type": "column",
