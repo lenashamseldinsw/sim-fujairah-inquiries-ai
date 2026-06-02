@@ -181,15 +181,30 @@ def _count_misrouted_cases(state: PipelineState) -> int:
 
 def _count_document_stall_cases(state: PipelineState) -> Tuple[int, int]:
     """
-    Return (stalled_license_count, rejected_request_count) from journey_map + gap_table.
+    Return (stalled_license_count, rejected_request_count) from all_classified + gap_table.
 
-    Stalled licenses: friction entries about "عدم استلام" / "صورة غير مستوفية"
+    Stalled licenses: cases classified as "شكوى عن عدم استلام الخدمة" or "متابعة طلب مقدم"
+    (primary source: all_classified ground truth, secondary: journey_map if empty)
+
     Rejected requests: gap_table entries with platform_bug / missing document gap_type
 
     Pure read of Stage 4/5 outputs.
     """
-    delivery_keywords = {"استلام", "توصيل", "صورة", "مستوفية", "وثيقة", "رخصة", "توقف"}
-    stalled = _count_friction_cases(state, delivery_keywords)
+    _SUBS_NON_DELIVERY = {
+        "شكوى عن عدم استلام الخدمة",
+        "متابعة طلب مقدم",
+    }
+
+    # Primary: count directly from all_classified (authoritative ground truth)
+    stalled = sum(
+        1 for c in (state.all_classified or [])
+        if c.sub_classification in _SUBS_NON_DELIVERY
+    )
+
+    # Secondary: if all_classified somehow empty, fall back to journey_map keyword match
+    if stalled == 0:
+        delivery_keywords = {"استلام", "توصيل", "صورة", "مستوفية", "وثيقة", "رخصة", "توقف"}
+        stalled = _count_friction_cases(state, delivery_keywords)
 
     # Rejected requests from gap_table where guidebook says "Missing" + document-related
     rejected = 0
@@ -295,13 +310,24 @@ def _build_ai_tool_rows(state: PipelineState) -> List[Dict[str, Any]]:
     # NOT to contested valid fines (sub_classification="اعتراض على مخالفة مرورية")
     # A vision model cannot decide if a fine is legitimately issued — only if the photo is correct.
     # So only count the "disputed photo" sub-classification.
+
+    _SUB_DISPUTED_FINE = "شكوى عن مخالفة مشكوك فيها"
+
+    # Primary: count directly from all_classified (authoritative ground truth)
     violation_cases = sum(
-        e.case_count for e in (state.journey_map or [])
-        if e.sub_classification == "شكوى عن مخالفة مشكوك فيها"
+        1 for c in (state.all_classified or [])
+        if c.sub_classification == _SUB_DISPUTED_FINE
     )
+
+    # Secondary: if all_classified somehow empty, fall back to journey_map sub_classification
     if violation_cases == 0:
-        # Fallback: if sub-classification name changed, try keyword match on "مشكوك" only
-        # (not "اعتراض" which would incorrectly include contested fine cases)
+        violation_cases = sum(
+            e.case_count for e in (state.journey_map or [])
+            if e.sub_classification == _SUB_DISPUTED_FINE
+        )
+
+    # Last resort: keyword match on journey_map (مشكوك only, never اعتراض)
+    if violation_cases == 0:
         violation_cases = sum(
             e.case_count for e in (state.journey_map or [])
             if ("مشكوك" in (e.friction_point_ar or e.friction_point or "").lower() or
