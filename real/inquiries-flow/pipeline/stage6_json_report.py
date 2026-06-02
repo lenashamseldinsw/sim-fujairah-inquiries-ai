@@ -1387,15 +1387,21 @@ class JSONReportBuilder:
         if not section_body or not use_cases_rows or not closing_note:
             return None
 
-        # Strip tool_id from display (internal use only)
+        # Construct the dynamic column name for expected impact
+        impact_column_name = "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية")
+
+        # Strip tool_id from display and rename الأثر المتوقع to match the full column name
         display_rows = []
         for row in use_cases_rows:
             display_row = {k: v for k, v in row.items() if k != "tool_id"}
+            # Rename field to match the full column name for proper Word rendering
+            if "الأثر المتوقع" in display_row:
+                display_row[impact_column_name] = display_row.pop("الأثر المتوقع")
             display_rows.append(display_row)
 
         # ── Use Cases table dict ──────────────────────────────────────────────
         use_cases_table_dict = {
-            "columns":        ["الأداة", "الوظيفة", "الأثر المتوقع على بيانات " + (convert_month_year_to_arabic(self.state.month_year) or "الفترة الحالية"), "تقييم التنفيذ"],
+            "columns":        ["الأداة", "الوظيفة", impact_column_name, "تقييم التنفيذ"],
             "rows":           display_rows,
             "row_count":      len(display_rows),
             "col_count":      4,
