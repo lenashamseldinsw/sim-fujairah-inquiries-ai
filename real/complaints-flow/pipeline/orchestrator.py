@@ -174,6 +174,12 @@ class PipelineOrchestrator:
             self.state.human_review_queue = []  # No human review cases
             self.state.reclassified_count = 0  # No LLM reclassifications if no LLM queue
             self.state.reclassification_rate = 0.0
+            # CRITICAL FIX: Recompute state.closed_cases_count from all_classified
+            # Use same logic as conclusion section: count cases where date_closed is truthy AND non-empty
+            self.state.closed_cases_count = sum(
+                1 for c in (self.state.all_classified or [])
+                if c.date_closed and str(c.date_closed).strip()
+            )
             self.state.month_year = extract_month_year_range(
                 [c.model_dump() for c in self.state.all_classified]
             )
@@ -203,6 +209,15 @@ class PipelineOrchestrator:
                 (reclassified_count / len(self.state.all_classified) * 100), 1
             ) if self.state.all_classified else 0.0
 
+            # CRITICAL FIX: Recompute state.closed_cases_count from all_classified
+            # Stage 1 computed this from raw DataFrame, but after classification pipeline,
+            # date_closed values are now in CaseRow objects. Use same logic as conclusion section:
+            # count cases where date_closed is truthy AND has non-empty string representation
+            self.state.closed_cases_count = sum(
+                1 for c in (self.state.all_classified or [])
+                if c.date_closed and str(c.date_closed).strip()
+            )
+
             # Log case counts for debugging
             print(f"[Stage3] Case count audit:")
             print(f"  total_cases (from Stage 1): {self.state.total_cases}")
@@ -210,6 +225,7 @@ class PipelineOrchestrator:
             print(f"  llm_classified: {len(self.state.llm_classified)}")
             print(f"  human_review_queue: {len(self.state.human_review_queue)}")
             print(f"  all_classified: {len(self.state.all_classified)}")
+            print(f"  closed_cases_count (recomputed from all_classified): {self.state.closed_cases_count}")
             print(f"  Sum: {len(self.state.rule_classified) + len(self.state.llm_classified) + len(self.state.human_review_queue)}")
 
             # Extract month_year range from date_opened fields
