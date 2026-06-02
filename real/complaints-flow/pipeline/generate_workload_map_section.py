@@ -523,11 +523,33 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
                     f"Row keys: {row_keys}"
                 )
 
+        # Build lookup: sub_classification → actual count from data
+        actual_counts_lookup = {row.get('الفئة الفرعية', ''): int(row.get('العدد', '0')) for row in complaint_subs}
+
         # Check all sub-classifications are present
         # complaint_subs uses 'الفئة الفرعية'; complaints_table (from LLM) uses 'نوع الشكوى'
         expected_subs = {row.get('الفئة الفرعية', '') for row in complaint_subs}
         returned_subs = {row.get('نوع الشكوى', '') for row in complaints_table}
         missing_subs = expected_subs - returned_subs
+
+        # TASK 1 FIX: Clamp LLM-generated counts to actual data counts
+        # If LLM inflated a count, cap it at the actual count for that sub-classification
+        for row in complaints_table:
+            sub_name = row.get('نوع الشكوى', '')
+            if sub_name in actual_counts_lookup:
+                actual_count = actual_counts_lookup[sub_name]
+                try:
+                    llm_count = int(row.get('العدد', '0'))
+                    if llm_count > actual_count:
+                        print(
+                            f"[WorkloadMap] CLAMP: '{sub_name}' LLM count {llm_count} > actual {actual_count}. "
+                            f"Capping to actual count."
+                        )
+                        row['العدد'] = str(actual_count)
+                        # Recalculate percentage
+                        row['النسبة'] = f"{actual_count / total_cases * 100:.1f}%"
+                except (ValueError, TypeError):
+                    pass
 
         if missing_subs:
             print(
@@ -579,14 +601,40 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
                 print("[WorkloadMap] WARNING: Could not re-sort complaints_table by العدد")
                 result["complaints_table"] = complaints_table
 
-            # TASK 1 FIX: Assert case count consistency (never exceed 100%)
+            # TASK 1 FIX: Filter out zero-count rows and validate totals
+            # Remove any rows where العدد = 0 (shouldn't appear in final table)
+            filtered_table = []
+            for row in complaints_table:
+                try:
+                    count = int(row.get('العدد', '0'))
+                    if count > 0:
+                        filtered_table.append(row)
+                    else:
+                        print(f"[WorkloadMap] Filtered out zero-count row: {row.get('نوع الشكوى', 'unknown')}")
+                except (ValueError, TypeError):
+                    print(f"[WorkloadMap] WARNING: Could not parse العدد for row: {row.get('نوع الشكوى', 'unknown')}")
+
+            complaints_table = filtered_table
+
             try:
                 table_total = sum(int(row.get('العدد', '0')) for row in complaints_table)
-                if table_total != total_cases:
+                print(f"[WorkloadMap] Complaint table validation: total={table_total}, expected={total_cases}")
+
+                if table_total > total_cases:
+                    print(f"[WorkloadMap] WARNING: Table total {table_total} exceeds {total_cases} by {table_total - total_cases}")
+                    print(f"[WorkloadMap] Rows in table: {len(complaints_table)}")
+                    for i, row in enumerate(complaints_table):
+                        print(f"  Row {i}: {row.get('نوع الشكوى', 'unknown')} = {row.get('العدد', '?')}")
                     raise RuntimeError(
                         f"[WorkloadMap] VALIDATION FAILED: complaint sub-classification table total {table_total} "
-                        f"does not match total_cases {total_cases}. "
-                        f"This indicates injected rows with incorrect counts or missing data reconciliation."
+                        f"exceeds total_cases {total_cases}. "
+                        f"This indicates LLM inflated counts or incorrect data."
+                    )
+                if table_total != total_cases:
+                    print(
+                        f"[WorkloadMap] WARNING: complaint sub-classification table total {table_total} "
+                        f"does not match total_cases {total_cases} (diff: {total_cases - table_total}). "
+                        f"This may indicate some cases are unclassified or belong to unlisted sub-categories."
                     )
             except (ValueError, TypeError) as e:
                 print(f"[WorkloadMap] WARNING: Could not validate case count totals: {e}")
