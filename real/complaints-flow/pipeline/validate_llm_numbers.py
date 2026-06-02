@@ -110,6 +110,7 @@ def enforce_locked_percentages(
         "rejection_rate": (state.rejection_rate or 0.0, ["معدل الرفض", "نسبة الرفض", "مرفوضة", "مرفوض"], 0.5),
         "digital_rate":   (state.digital_channel_rate or 0.0, ["القنوات الرقمية", "التطبيق", "الموقع الإلكتروني"], 0.5),
         "sla_on_time_rate": (_compute_sla_on_time_rate(state), ["الوقت المحدد", "في الوقت", "ضمن الوقت"], 0.5),
+        "reclassification_rate": (state.reclassification_rate or 0.0, ["التصنيف", "تصنيف خاطئ", "اقتران خلل التصنيف", "مُصنَّفة بشكل خاطئ"], 0.5),
     }
 
     # Pass 1: find every percentage
@@ -288,8 +289,25 @@ def _compute_closure_rate(state: PipelineState) -> float:
 
 
 def _compute_sla_on_time_rate(state: PipelineState) -> float:
-    """SLA on-time rate from sla_closed_on_time == 'نعم'."""
+    """
+    SLA on-time rate from sla_closed_on_time == 'نعم'.
+
+    CRITICAL: Returns 0.0 if column is entirely empty (all cases have no SLA data).
+    This prevents LLM hallucination of percentages for columns with no data.
+    """
     total = len(state.all_classified) or state.total_cases or 1
+
+    # Count cases with non-empty SLA data
+    cases_with_sla_data = sum(
+        1 for c in state.all_classified
+        if c.sla_closed_on_time and c.sla_closed_on_time.strip()
+    )
+
+    # If no cases have SLA data, column is empty — suppress metric
+    if cases_with_sla_data == 0:
+        return 0.0
+
+    # Count on-time closures among those with SLA data
     on_time = sum(
         1 for c in state.all_classified
         if c.sla_closed_on_time and c.sla_closed_on_time.strip() == 'نعم'

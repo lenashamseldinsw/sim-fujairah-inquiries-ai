@@ -62,9 +62,29 @@ from .validate_llm_numbers import validate_section_9_narrative, _compute_proacti
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _compute_sla_stats(state: PipelineState) -> tuple[int, float]:
-    """Return (sla_closed_count, sla_rate_pct) from all_classified."""
+    """
+    Return (sla_closed_count, sla_rate_pct) from all_classified.
+
+    CRITICAL: If SLA column is entirely empty (no cases have SLA data),
+    returns (0, 0.0) to prevent LLM hallucination of fake percentages.
+    """
     cases = state.all_classified or []
-    sla_closed = sum(1 for c in cases if c.sla_closed_on_time and str(c.sla_closed_on_time).strip() == 'نعم')
+
+    # Count cases with non-empty SLA data
+    cases_with_sla_data = sum(
+        1 for c in cases
+        if c.sla_closed_on_time and str(c.sla_closed_on_time).strip()
+    )
+
+    # If no cases have SLA data, column is empty — suppress metric
+    if cases_with_sla_data == 0:
+        return 0, 0.0
+
+    # Count on-time closures among those with SLA data
+    sla_closed = sum(
+        1 for c in cases
+        if c.sla_closed_on_time and str(c.sla_closed_on_time).strip() == 'نعم'
+    )
     total = len(cases) or 1
     return sla_closed, round(sla_closed / total * 100, 1)
 
@@ -538,6 +558,53 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     pivot_json  = json.dumps(pivot_rows, ensure_ascii=False, indent=2)
     kpi_json    = json.dumps(kpi_summary, ensure_ascii=False, indent=2)
 
+    # ── Build DATA section — conditionally include SLA if data exists ───────────
+    data_section = (
+        f'submission_channel_digital_pct: {submission_channel_pct_str}\n'
+        f'closure_rate: {closure_rate:.1f}%\n'
+    )
+
+    # Only include SLA if column has data (sla_rate != 0 from empty column detection)
+    sla_data_exists = sla_rate > 0.0
+    if sla_data_exists:
+        data_section += f'sla_rate: {sla_rate:.1f}%\n'
+        print(f"[Conclusion] SLA metric included: {sla_rate:.1f}%")
+    else:
+        data_section += '# NOTE: SLA column is empty in this dataset — omit SLA references\n'
+        print(f"[Conclusion] ⚠️  SLA column is empty — suppressing SLA metric from prompt")
+
+    data_section += (
+        f'zero_rejection_rate: {zero_rejection_rate:.1f}%\n'
+        f'reclassification_rate: {reclass_rate:.1f}%\n'
+        f'proactive_cancellable: {proactive_cancellable}+\n'
+        f'critical_gap_count: {critical_gap_count}\n'
+        f'top_gap_label: "{top_gap_label}"\n'
+    )
+
+    # ── Build task instructions — conditionally reference SLA ─────────────────
+    sentence1_guidance = (
+        'Sentence 1: Opening statement that frames the data paradox.\n'
+        '  • Start with: "الرسالة النهائية:"\n'
+        f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of complaints via app/website\n'
+        f'  • Cite closure achievement: {closure_rate:.1f}% of cases have closure dates\n'
+        f'  • Cite handling quality: {zero_rejection_rate:.1f}% handled without formal rejection\n'
+        '  • Use a pivot word (لكن) to acknowledge the gap remains\n'
+    )
+
+    constraints_section = (
+        'CONSTRAINTS:\n'
+        '  • section_body: exactly 3 sentences, formal Arabic\n'
+        '  • Every metric must match the DATA section above\n'
+        '  • MUST contain لكن — tension between achievement and work ahead\n'
+        '  • No double quotes (") — use « » or leave unquoted\n'
+        '  • No invented figures or metrics\n'
+        '  • Tables: copy VERBATIM, no changes\n'
+        '  • CRITICAL: Do NOT cite SLA or reclassification percentages unless instructed\n'
+    )
+
+    if not sla_data_exists:
+        constraints_section += '  • SLA metric is OMITTED — dataset has no SLA data\n'
+
     # ── Prompt ────────────────────────────────────────────────────────────────
     prompt = (
         'You are writing Section 9 (the final section) of a formal Arabic government report\n'
@@ -546,25 +613,12 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         'DATA — use ONLY these numbers, never invent\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-        f'submission_channel_digital_pct: {submission_channel_pct_str}\n'
-        f'closure_rate: {closure_rate:.1f}%\n'
-        f'sla_rate: {sla_rate:.1f}%\n'
-        f'zero_rejection_rate: {zero_rejection_rate:.1f}%\n'
-        f'proactive_cancellable: {proactive_cancellable}+\n'
-        f'critical_gap_count: {critical_gap_count}\n'
-        f'top_gap_label: "{top_gap_label}"\n'
-        '\n'
+        f'{data_section}\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         'TASK — write section_body (exactly 3 sentences)\n'
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
         '\n'
-        'Sentence 1: Opening statement that frames the data paradox.\n'
-        '  • Start with: "الرسالة النهائية:"\n'
-        f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of complaints via app/website\n'
-        f'  • Cite closure achievement: {closure_rate:.1f}% of cases have closure dates\n'
-        f'  • Cite handling quality: {zero_rejection_rate:.1f}% handled without formal rejection\n'
-        '  • Use a pivot word (لكن) to acknowledge the gap remains\n'
-        '\n'
+        f'{sentence1_guidance}\n'
         'Sentence 2: The core challenge and proof.\n'
         f'  • Identify what needs fixing: {critical_gap_count} critical gaps in workflows/processes\n'
         f'  • Reference the primary gap: "{top_gap_label}"\n'
@@ -588,13 +642,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         f'  "kpi_summary_table": {kpi_json}\n'
         '}\n'
         '\n'
-        'CONSTRAINTS:\n'
-        '  • section_body: exactly 3 sentences, formal Arabic\n'
-        '  • Every metric must match the DATA section above\n'
-        '  • MUST contain لكن — tension between achievement and work ahead\n'
-        '  • No double quotes (") — use « » or leave unquoted\n'
-        '  • No invented figures or metrics\n'
-        '  • Tables: copy VERBATIM, no changes\n'
+        f'{constraints_section}\n'
         '\n'
         'TASK 9 CRITICAL NOTE:\n'
         '  The مكررة (duplicate) cases and المرفوضة (rejected) cases share overlap in the data.\n'
@@ -605,14 +653,15 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
 
     # ── API call ──────────────────────────────────────────────────────────────
     client = anthropic.Anthropic(api_key=api_key)
+    sla_info = f"sla={sla_rate:.1f}%" if sla_data_exists else "sla=SUPPRESSED(empty_column)"
     print(
         f"[Conclusion] Calling API — total_cases={total_cases}, "
-        f"reclass={reclass_count} ({reclass_rate:.1f}%), "
-        f"closure_rate={closure_rate:.1f}%, sla_rate={sla_rate:.1f}%, submission_channel={submission_channel_pct_str}, "
-        f"digital_channel={digital_channel_rate:.1f}%, zero_rejection={zero_rejection_rate:.1f}%, "
-        f"traffic_complaints={traffic_complaint_pct:.1f}%, "
-        f"friction_digital_context={friction_digital_context_str}, "
-        f"proactive_cancellable={proactive_cancellable}, critical_gaps={critical_gap_count}"
+        f"closure={closure_count}/{total_cases}({closure_rate:.1f}%), "
+        f"reclass={reclass_count}({reclass_rate:.1f}%), "
+        f"{sla_info}, zero_rejection={zero_rejection_rate:.1f}%, "
+        f"submission_channel={submission_channel_pct_str}, "
+        f"digital={digital_channel_rate:.1f}%, traffic={traffic_complaint_pct:.1f}%, "
+        f"proactive={proactive_cancellable}, critical_gaps={critical_gap_count}"
     )
 
     message = client.messages.create(

@@ -323,8 +323,14 @@ def run_stage2(state: PipelineState) -> PipelineState:
 
         # TASK 2 FIX: Handle NaN in date_closed properly
         # pandas NaN becomes str(NaN) = 'nan' (truthy, non-empty string) — must be ''
+        # Also handle whitespace-only values (Excel cells with just spaces/tabs)
         date_closed_raw = row.get('تاريخ_الإغلاق', '')
-        date_closed_value = "" if pd.isna(date_closed_raw) else str(date_closed_raw)
+        if pd.isna(date_closed_raw):
+            date_closed_value = ""
+        else:
+            date_closed_str = str(date_closed_raw).strip()
+            # Check for string 'nan' or whitespace-only after stripping
+            date_closed_value = "" if date_closed_str.lower() == 'nan' or not date_closed_str else date_closed_str
 
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),
