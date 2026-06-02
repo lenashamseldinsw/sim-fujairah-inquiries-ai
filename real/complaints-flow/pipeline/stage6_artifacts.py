@@ -880,21 +880,36 @@ def _build_pre_computed_findings(
     - The title (الاكتشاف) is ALWAYS deterministic from state, never LLM-generated
     - Case counts are separated from friction point counts in the description
     - Friction point groupings are explicit: "نقطتا احتكاك" (2 points) vs "N حالة" (N cases)
+    - When misclassification_rate = 0%, skip the misclassification row and focus on structural findings
 
     Returns list of dicts with keys: number, title, description, importance
     """
     findings = []
 
-    # ROW 1 — Classification accuracy gap
-    findings.append({
-        "number": 1,
-        "title": f"تصنيف غير دقيق بنسبة {misclassification_rate:.1f}%",
-        "description": (
-            f"كانت {misclassification_count} من {total_cases} حالة مُصنَّفة أصلاً بشكل غير صحيح. "
-            f"تمثل هذه الفجوة أساس التحديات التشغيلية المُكتشفة في هذا التحليل."
-        ),
-        "importance": "🔴 حرجة"
-    })
+    # ROW 1 — Classification accuracy gap (CONDITIONAL: only if rate > 0)
+    if misclassification_rate > 0:
+        findings.append({
+            "number": 1,
+            "title": f"تصنيف غير دقيق بنسبة {misclassification_rate:.1f}%",
+            "description": (
+                f"كانت {misclassification_count} من {total_cases} حالة مُصنَّفة أصلاً بشكل غير صحيح. "
+                f"تمثل هذه الفجوة أساس التحديات التشغيلية المُكتشفة في هذا التحليل."
+            ),
+            "importance": "🔴 حرجة"
+        })
+        row_offset = 1
+    else:
+        # When rate is 0%, skip misclassification and focus on workload distribution
+        findings.append({
+            "number": 1,
+            "title": f"دقة التصنيف من المصدر: 100%",
+            "description": (
+                f"جميع {total_cases} حالة كانت مُصنَّفة بدقة في النظام المصدري. "
+                f"يعكس هذا جودة عالية في عملية التصنيف الأولي."
+            ),
+            "importance": "🟢 إيجابي"
+        })
+        row_offset = 1
 
     # ROW 2 — Dominant complaint type dominance
     top_2_complaints = complaint_subcategories[:2]
@@ -1190,6 +1205,43 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         else:
             sla_line = "- sla_rate: غير متاح (العمود فارغ في البيانات المصدر — لا تذكر هذا المعيار في التقرير)\n"
 
+        # ISSUE 1 FIX: Conditional framing based on whether misclassification exists
+        if misclassification_rate > 0:
+            structural_insight = (
+                f"KEY STRUCTURAL INSIGHT FOR YOUR REFERENCE:\n"
+                f"The main reclassification finding: {misclassification_rate:.1f}% of cases were initially misclassified.\n"
+                f"When corrected, {dominant_type} rises to {dominant_type_pct:.1f}% of total workload ({dominant_type_count} cases)."
+            )
+            framing_instruction = (
+                f"   - End with the most striking structural discovery: the {dominant_type} reclassification finding\n"
+                f"     ({misclassification_rate:.1f}% of cases were misclassified in the source system)."
+            )
+            style_sentence = (
+                'Third sentence must begin with "المُستجد الجوهري:" and deliver the reclassification insight, not description.'
+            )
+            core_message_instruction = (
+                f"   - Name the specific operational challenge: {misclassification_rate:.1f}% misclassification across {friction_count} distinct friction points.\n"
+                "   - Explain how correcting this gap unlocks operational improvements and data-driven decision-making."
+            )
+        else:
+            structural_insight = (
+                f"KEY STRUCTURAL INSIGHT FOR YOUR REFERENCE:\n"
+                f"Classification accuracy: All {total_cases} cases were correctly classified in the source system (100% accuracy).\n"
+                f"The primary workload driver: {dominant_type} represents {dominant_type_pct:.1f}% of total cases ({dominant_type_count} cases).\n"
+                f"The system must address {friction_count} distinct friction points affecting customer resolution."
+            )
+            framing_instruction = (
+                f"   - End with the dominant structural finding: {dominant_type} workload concentration at {dominant_type_pct:.1f}%,\n"
+                "     revealing the primary improvement opportunity for customer experience enhancement."
+            )
+            style_sentence = (
+                "Keep the third sentence focused on friction point data. Do NOT use 'المُستجد الجوهري:' as a sentence opener — use it only if naturally discussing key insights about workload distribution."
+            )
+            core_message_instruction = (
+                f"   - Identify the primary systemic opportunity: {friction_count} friction points creating customer friction across all {total_cases} cases.\n"
+                "   - Explain how addressing these gaps unlocks operational efficiency and proactive customer engagement."
+            )
+
         # Build the prompt with PRE-COMPUTED findings table (locked, not LLM-generated)
         prompt = f"""You are an expert CX strategist writing the executive summary of a formal Arabic government report on complaint analysis.
 
@@ -1202,9 +1254,7 @@ INPUTS PROVIDED:
 - gap_table: {json.dumps(gap_table, ensure_ascii=False)}
 - guidebook_coverage_metrics: {json.dumps(guidebook_coverage_metrics, ensure_ascii=False)}
 {sla_line}
-KEY STRUCTURAL INSIGHT FOR YOUR REFERENCE:
-The main reclassification finding: {misclassification_rate:.1f}% of cases were initially misclassified.
-When corrected, {dominant_type} rises to {dominant_type_pct:.1f}% of total workload ({dominant_type_count} cases).
+{structural_insight}
 
 YOUR TASK — WRITE ONLY TWO SECTIONS:
 ─────────────────────────────────────────────
@@ -1214,15 +1264,13 @@ YOUR TASK — WRITE ONLY TWO SECTIONS:
    - State how many complaint cases were analyzed, from which CRM source, and for which period
    - Name both data sources: "تصدير نظام إدارة علاقات العملاء" and "دليل الخدمات والأسئلة الشائعة"
    - Declare the report's purpose: transforming data into actionable decisions, not just presenting numbers
-   - End with the most striking structural discovery: the {dominant_type} reclassification finding
-   Style: Open with "يُقدّم هذا التقرير...". Third sentence must begin with
-   "المُستجد الجوهري:" and deliver insight, not description.
+{framing_instruction}
+   Style: Open with "يُقدّم هذا التقرير...". {style_sentence}
 
 2. الرسالة الجوهرية (CORE MESSAGE)
    One paragraph placed AFTER the locked findings table below. Must:
    - Begin with "الرسالة الجوهرية:"
-   - Name the specific systemic failure: {misclassification_rate:.1f}% misclassification + {friction_count} distinct friction points
-   - State what fixing it unlocks, using specific numbers from the inputs
+{core_message_instruction}
    - End with a forward-looking statement about data-driven strategy
 
    Style: 3 sentences maximum. No bullet points. Assertive, not descriptive.

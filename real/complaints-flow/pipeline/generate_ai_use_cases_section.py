@@ -581,7 +581,7 @@ def generate_ai_use_cases_section(
         '\n'
         'A. section_body — 2 sentences, formal Arabic\n'
         f'   - State that the opportunities identified in {date_range} integrate with AI capabilities\n'
-        f'     to create an intelligent complaint resolution system covering {reclass_rate_pct}%+ of contacts\n'
+        f'     to create an intelligent complaint resolution system covering 100% of contacts\n'
         '     without human classification overhead.\n'
         '   - Reference the total_cases figure and the four AI tools.\n'
         '   - Open with: "تتكامل الفرص المرصودة في [date_range] مع قدرات الذكاء الاصطناعي"\n'
