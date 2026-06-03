@@ -183,22 +183,21 @@ def _count_document_stall_cases(state: PipelineState) -> Tuple[int, int]:
     """
     Return (stalled_license_count, rejected_request_count) from all_classified + gap_table.
 
-    Stalled licenses: cases classified as "شكوى عن عدم استلام الخدمة" or "متابعة طلب مقدم"
+    Stalled licenses: ONLY cases classified as "شكوى عن عدم استلام الخدمة"
+    (CRITICAL: Do NOT include "متابعة طلب مقدم" — that's a follow-up inquiry, not a confirmed delivery failure)
     (primary source: all_classified ground truth, secondary: journey_map if empty)
 
     Rejected requests: gap_table entries with platform_bug / missing document gap_type
 
     Pure read of Stage 4/5 outputs.
     """
-    _SUBS_NON_DELIVERY = {
-        "شكوى عن عدم استلام الخدمة",
-        "متابعة طلب مقدم",
-    }
+    # EXPERT CRITERION: Only count confirmed non-delivery cases, not follow-up inquiries
+    _SUB_NON_DELIVERY = "شكوى عن عدم استلام الخدمة"
 
     # Primary: count directly from all_classified (authoritative ground truth)
     stalled = sum(
         1 for c in (state.all_classified or [])
-        if c.sub_classification in _SUBS_NON_DELIVERY
+        if c.sub_classification == _SUB_NON_DELIVERY
     )
 
     # Secondary: if all_classified somehow empty, fall back to journey_map keyword match

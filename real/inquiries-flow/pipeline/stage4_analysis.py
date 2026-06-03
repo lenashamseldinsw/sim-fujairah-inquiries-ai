@@ -495,6 +495,22 @@ def _reconcile_counts(
             for idx, friction in friction_group:
                 reconciled_journey_map[idx] = friction.model_copy(update={"case_count": 0})
 
+    # ── FINAL ENFORCEMENT: Hard ceiling per sub_classification ───────────────────────
+    # After all reconciliation, enforce hard cap: no friction point can exceed
+    # the actual count of cases with that sub_classification.
+    # This is the authoritative ceiling and must be respected absolutely.
+    for i, friction in enumerate(reconciled_journey_map):
+        sub = friction.sub_classification
+        if sub and sub in actual_counts:
+            actual_count = actual_counts[sub]
+            if friction.case_count > actual_count:
+                print(
+                    f"[Stage4] HARD CEILING CLAMP: friction '{friction.friction_point_ar or friction.friction_point}' "
+                    f"(sub='{sub}'): {friction.case_count} → {actual_count} "
+                    f"(authoritative sub_classification total)"
+                )
+                reconciled_journey_map[i] = friction.model_copy(update={"case_count": actual_count})
+
     # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
     # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
     # Distribute the capped budget proportionally across all notification opportunities.

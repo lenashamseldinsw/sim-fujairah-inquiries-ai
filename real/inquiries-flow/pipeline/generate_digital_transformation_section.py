@@ -259,6 +259,25 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
     ]
 
 
+def _count_delivery_stall_cases(state: PipelineState) -> int:
+    """
+    Count cases with ONLY the specific document delivery failure sub-classification.
+
+    The expert's criterion is strict: only cases where the sub_classification is
+    EXACTLY "شكوى عن عدم استلام الخدمة". Do NOT include "متابعة طلب مقدم" — only
+    confirmed delivery failures.
+
+    This is the authoritative count for the notification table row about document delivery alerts.
+    Used to compute الحالات المُلغاة and to calibrate الأثر المتوقع percentages.
+    """
+    DELIVERY_FAILURE_SUB_CLASS = "شكوى عن عدم استلام الخدمة"
+    count = 0
+    for case in (state.all_classified or []):
+        if case.sub_classification == DELIVERY_FAILURE_SUB_CLASS:
+            count += 1
+    return count
+
+
 def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Pre-computed rows for Section 6.2 proactive notification table.
@@ -272,9 +291,15 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     Schema returned: نوع الإشعار | الحالات المُلغاة | القناة | الأثر المتوقع (LOCKED)
     (محتوى الإشعار is written by the LLM; الأثر المتوقع is pre-computed and locked)
+
+    SPECIAL HANDLING for delivery notification rows:
+    - If a notification is about document delivery alerts (e.g., SMS notification for delivery tracking),
+      its cases_eliminated MUST be capped at the actual count of "شكوى عن عدم استلام الخدمة" cases.
+    - This ensures the notification table row about delivery aligns with Section 7 Tool 3 impact.
     """
     rows: List[Dict[str, str]] = []
     total_cases = len(state.all_classified) or state.total_cases
+    delivery_stall_count = _count_delivery_stall_cases(state)
 
     # ── Primary: notification_opportunities from Stage 4 ─────────────────────
     if state.notification_opportunities:
@@ -286,6 +311,23 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
         for n in sorted_notifs:
             notif_type = n.get("notification_type") or n.get("content_summary") or ""
             cases = n.get("cases_eliminated", 0)
+
+            # ── SPECIAL CAP: delivery notification rows ──────────────────────────────
+            # If this notification is about document delivery, cap cases_eliminated at
+            # the authoritative count from all_classified. This prevents inconsistency
+            # between Section 6.2 (notifications) and Section 7 (Tool 3 impact).
+            if (isinstance(cases, int) and
+                notif_type and
+                (("توصيل" in notif_type.lower() or "وثيقة" in notif_type.lower() or
+                  "استلام" in notif_type.lower()))):
+                if cases > delivery_stall_count and delivery_stall_count > 0:
+                    print(
+                        f"[DigitalTransform] DELIVERY NOTIFICATION CAP: "
+                        f"'{notif_type}' cases_eliminated {cases} → {delivery_stall_count} "
+                        f"(authoritative delivery_stall count from all_classified)"
+                    )
+                    cases = delivery_stall_count
+
             channel_raw = n.get("channel", "")
             channel = _CHANNEL_DISPLAY.get(channel_raw, channel_raw or "SMS / إشعار التطبيق")
             # Pre-compute expected impact with concrete numbers (LOCKED field)
