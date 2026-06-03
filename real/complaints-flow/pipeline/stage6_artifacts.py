@@ -1231,11 +1231,12 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
                 f"The system must address {friction_count} distinct friction points affecting customer resolution."
             )
             framing_instruction = (
-                f"   - End with the dominant structural finding: {dominant_type} workload concentration at {dominant_type_pct:.1f}%,\n"
-                "     revealing the primary improvement opportunity for customer experience enhancement."
+                f"   - End with context on the workload: {dominant_type} represents {dominant_type_pct:.1f}%.\n"
+                "     Frame this as background, not a 'major discovery' — the real insight is the friction points below."
             )
             style_sentence = (
-                "Keep the third sentence focused on friction point data. Do NOT use 'المُستجد الجوهري:' as a sentence opener — use it only if naturally discussing key insights about workload distribution."
+                "Do NOT use the phrase 'المُستجد الجوهري:' anywhere in your response. "
+                "Instead open sentence 3 with 'وتكشف البيانات أن' or 'ويُظهر التحليل أن' when discussing workload distribution or friction points."
             )
             core_message_instruction = (
                 f"   - Identify the primary systemic opportunity: {friction_count} friction points creating customer friction across all {total_cases} cases.\n"
