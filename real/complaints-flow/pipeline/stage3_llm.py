@@ -457,6 +457,7 @@ def run_stage3(state: PipelineState, api_key: str, progress_callback=None) -> Pi
             case_number=cn,
             case_title=orig_case.get("case_title", ""),
             date_opened=orig_case.get("date_opened", ""),
+            date_closed=orig_case.get("date_closed", ""),  # CRITICAL: Carry forward closure date from Stage 2
             case_channel=orig_case.get("case_channel", ""),
             description=orig_case.get("description", ""),
             resolution_response=orig_case.get("resolution_response", ""),

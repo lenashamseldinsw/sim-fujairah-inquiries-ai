@@ -669,6 +669,68 @@ def run_stage5(
                 reconciled_gap_total = sum(g.case_count for g in state.gap_table)
                 total_cases = state.total_cases or len(state.all_classified)
 
+                # RESYNC proactive_notification_case_count from notification_opportunities BEFORE using it to scale gap_table
+                # Why: Stage 4 may have set a stale value; we must use the authoritative post-reconciliation count
+                if state.notification_opportunities:
+                    authoritative_proactive = sum(
+                        int(n.get("cases_eliminated", n.get("case_count", 0)))
+                        for n in state.notification_opportunities
+                    )
+                    if authoritative_proactive != (state.proactive_notification_case_count or 0):
+                        print(
+                            f"[Stage5] Resyncing proactive count: {state.proactive_notification_case_count} → {authoritative_proactive} "
+                            f"(from notification_opportunities)"
+                        )
+                        state.proactive_notification_case_count = authoritative_proactive
+
+                # RECONCILE PROACTIVE NOTIFICATION COUNTS: Ensure gap_table proactive values sum to authoritative count
+                # Issue: gap_table has LLM-generated proactive_notification_opportunity per gap,
+                # but these may not sum to state.proactive_notification_case_count (from reconciled notification_opportunities).
+                # Fix: Normalize gap_table proactive counts to use the authoritative total.
+                if state.gap_table and state.proactive_notification_case_count and state.proactive_notification_case_count > 0:
+                    gap_proactive_total = sum(
+                        int(g.proactive_notification_opportunity or 0)
+                        for g in state.gap_table
+                    )
+
+                    if gap_proactive_total != state.proactive_notification_case_count:
+                        # Scale gap proactive counts proportionally to match authoritative total
+                        print(
+                            f"[Stage5] PROACTIVE RECONCILE: gap_table total {gap_proactive_total} → "
+                            f"{state.proactive_notification_case_count} (authoritative from notification_opportunities)"
+                        )
+
+                        if gap_proactive_total > 0:
+                            scale_factor = state.proactive_notification_case_count / gap_proactive_total
+                            for gap in state.gap_table:
+                                if gap.proactive_notification_opportunity:
+                                    original = gap.proactive_notification_opportunity
+                                    gap.proactive_notification_opportunity = int(round(
+                                        gap.proactive_notification_opportunity * scale_factor
+                                    ))
+                                    if gap.proactive_notification_opportunity != original:
+                                        print(
+                                            f"[Stage5]   Gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                            f"proactive {original} → {gap.proactive_notification_opportunity}"
+                                        )
+                        else:
+                            # No proactive counts in gaps but state says there are opportunities
+                            # Distribute the authoritative count evenly across eligible gaps
+                            proactive_gaps = [g for g in state.gap_table if g.proactive_notification_opportunity]
+                            if proactive_gaps:
+                                per_gap = state.proactive_notification_case_count // len(proactive_gaps)
+                                remainder = state.proactive_notification_case_count % len(proactive_gaps)
+                                for i, gap in enumerate(proactive_gaps):
+                                    gap.proactive_notification_opportunity = per_gap + (1 if i < remainder else 0)
+                                    print(
+                                        f"[Stage5]   Gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                        f"proactive allocated {gap.proactive_notification_opportunity}"
+                                    )
+                    else:
+                        print(
+                            f"[Stage5] ✓ proactive_notification counts consistent: {gap_proactive_total} matches authoritative {state.proactive_notification_case_count}"
+                        )
+
                 # RECONCILE_SUMMARY: Log the transformation
                 print(
                     f"[Stage5] RECONCILE_SUMMARY: "

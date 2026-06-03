@@ -208,6 +208,9 @@ def _compute_closure_rate(state: PipelineState) -> tuple[int, float]:
     Uses SAME logic as _build_resolution_analysis_rows in generate_workload_map_section.py
     to ensure Section 3.3 (closure count) and conclusion (closure rate) are consistent.
 
+    FIX 4: Falls back to authoritative count from state.closed_cases_count if mismatch
+    (indicates LLM batch timeout caused date_closed loss).
+
     Returns (count, percentage) for cases that have been closed (closure date populated).
     This is separate from SLA compliance and measures closure completion.
     """
@@ -220,6 +223,16 @@ def _compute_closure_rate(state: PipelineState) -> tuple[int, float]:
         1 for c in cases
         if c.date_closed and str(c.date_closed).strip()
     )
+
+    # FIX 4: Use authoritative count if mismatch (LLM timeout lost dates)
+    if state.closed_cases_count and closed_count != state.closed_cases_count:
+        print(
+            f"[Conclusion] Closure count mismatch: computed={closed_count}, "
+            f"authoritative={state.closed_cases_count}. Using authoritative."
+        )
+        closed_count = state.closed_cases_count
+        total = state.total_cases or total
+
     pct = round(closed_count / total * 100, 1)
     return closed_count, pct
 

@@ -419,18 +419,16 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     # This handles: NaN, whitespace-only, 'nan'/'nat'/'none' strings
     closed_col = 'تاريخ_الإغلاق'
     if closed_col in df_normalized.columns:
-        col = df_normalized[closed_col]
-
-        def is_valid_closure_date(v):
-            """Check if value is a valid closure date (matches downstream validation)."""
+        def _is_valid_date(v):
+            """FIX 3: Explicit check for None + NaN + falsy strings."""
+            if v is None:
+                return False
             if pd.isna(v):
                 return False
-            v_str = str(v).strip()
-            if not v_str or v_str.lower() in ('nan', 'nat', 'none', ''):
-                return False
-            return True
+            s = str(v).strip()
+            return bool(s) and s.lower() not in ('nan', 'nat', 'none', '')
 
-        state.closed_cases_count = int(col.apply(is_valid_closure_date).sum())
+        state.closed_cases_count = int(df_normalized[closed_col].apply(_is_valid_date).sum())
     else:
         state.closed_cases_count = state.total_cases
 

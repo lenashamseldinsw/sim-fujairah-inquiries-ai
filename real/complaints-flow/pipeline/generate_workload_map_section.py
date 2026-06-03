@@ -345,8 +345,8 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         # sub_classification, not just on resolution-text matching.
         resolution_rows = _build_resolution_analysis_rows(all_classified, total_cases)
 
-        # BUG 1 FIX: Verify closure count matches state.closed_cases_count (from stage1)
-        # If mismatch, it indicates serialization loss or validation logic divergence
+        # BUG 1 FIX: Enforce authoritative closure count from stage1 (NOT computed from LLM)
+        # If LLM batch timeout causes date_closed loss, substitute authoritative count
         computed_closed = sum(
             int(r['العدد']) for r in resolution_rows
             if 'مغلقة' in r.get('نوع الإغلاق', '')
@@ -354,10 +354,21 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         if state.closed_cases_count and computed_closed != state.closed_cases_count:
             print(
                 f"[WorkloadMap] ⚠️  CLOSURE COUNT MISMATCH: "
-                f"computed={computed_closed} (from resolution_rows), "
-                f"state.closed_cases_count={state.closed_cases_count} (from stage1). "
-                f"This may indicate date_closed serialization loss in llm_queue path."
+                f"computed={computed_closed}, authoritative={state.closed_cases_count}. "
+                f"Patching resolution_rows to use authoritative count (likely LLM timeout lost dates)."
             )
+            # Substitute authoritative counts into resolution_rows
+            auth_closed = state.closed_cases_count
+            auth_open = total_cases - auth_closed
+            auth_pct = lambda n: f"{n / total_cases * 100:.1f}%" if total_cases else "0%"
+
+            for r in resolution_rows:
+                if 'مغلقة' in r.get('نوع الإغلاق', ''):
+                    r['العدد'] = str(auth_closed)
+                    r['النسبة'] = auth_pct(auth_closed)
+                elif 'قيد' in r.get('نوع الإغلاق', ''):
+                    r['العدد'] = str(auth_open)
+                    r['النسبة'] = auth_pct(auth_open)
         else:
             print(
                 f"[WorkloadMap] ✓ Closure count consistent: "

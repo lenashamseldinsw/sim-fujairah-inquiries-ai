@@ -99,7 +99,9 @@ def classify_case(case_row: dict, additional_oor_keywords: list = None) -> Tuple
     """
     if additional_oor_keywords is None:
         additional_oor_keywords = []
-    status = str(case_row.get('الحالة', '')).strip()
+    # FIX: normalize None status to empty string (str(None) = "None" breaks classification)
+    _s = case_row.get('الحالة', '')
+    status = '' if (_s is None or (isinstance(_s, float) and pd.isna(_s))) else str(_s).strip()
     service = str(case_row.get('الخدمة', '')).strip()
     title = str(case_row.get('تفاصيل_الطلب', ''))
     resolution = str(case_row.get('الحل', ''))
@@ -107,13 +109,11 @@ def classify_case(case_row: dict, additional_oor_keywords: list = None) -> Tuple
     title_norm = normalize_arabic(title)
     res_norm = normalize_arabic(resolution)
 
-    # --- PRIORITY 0: Preserve raw نوع_الشكوى if it matches a known category ---
-    # BUG 2 FIX: If raw data explicitly classifies the case, preserve that classification
-    # This prevents loss of "خارج الاختصاص" and other explicit categorizations
-    raw_nowa_shikwa = str(case_row.get('نوع_الشكوى', '')).strip()
-    if raw_nowa_shikwa and raw_nowa_shikwa in ALL_COMPLAINT_SUB_CATEGORIES:
-        return ('شكوى', raw_nowa_shikwa,
-                f'مُحفوظ من نوع_الشكوى الخام: {raw_nowa_shikwa}', 0.99)
+    # REMOVED: PRIORITY 0 preservation of raw نوع_الشكوى
+    # Why: This caused case 211919 to be locked into wrong classification (خارج الاختصاص)
+    # when it should be (بلا تصنيف خدمي) based on actual content analysis.
+    # The raw field can be stale or incorrectly pre-populated from prior runs.
+    # Classification should be determined by current case content, not cached raw values.
 
     # --- PRIORITY 1: Formal rejection flag ---
     if status == 'طلب مرفوض':
@@ -298,6 +298,27 @@ def run_stage2(state: PipelineState) -> PipelineState:
     if state.raw_df is None:
         raise ValueError("raw_df not populated. Run Stage 1 first.")
 
+    # DIAGNOSTIC: Inspect date_closed column types and values before processing
+    print("[Stage2] DIAGNOSTIC: Inspecting تاريخ_الإغلاق column...")
+    date_col = state.raw_df.get('تاريخ_الإغلاق', None)
+    if date_col is not None:
+        type_counts = {}
+        for val in date_col:
+            vtype = type(val).__name__
+            type_counts[vtype] = type_counts.get(vtype, 0) + 1
+        print(f"[Stage2]   Value type distribution: {type_counts}")
+
+        # Show first few values and their pd.isna() status
+        print("[Stage2]   Sample values (case#, raw_value, type, pd.isna()):")
+        for idx, (i, row) in enumerate(state.raw_df.iterrows()):
+            if idx >= 5:  # Show first 5
+                break
+            case_num = str(row.get('رقم_الطلب', ''))
+            val = row.get('تاريخ_الإغلاق', '')
+            vtype = type(val).__name__
+            is_na = pd.isna(val)
+            print(f"[Stage2]     {case_num}: {repr(val)} (type={vtype}, pd.isna={is_na})")
+
     # Extract additional out-of-jurisdiction keywords from methodology if present
     additional_oor_kw = []
     if state.complaints_methodology:
@@ -321,6 +342,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
     rule_classified = []
     llm_queue = []
     rejected_count = 0
+    diagnostic_count = 0  # Limit diagnostic output to first 50 cases
 
     for idx, row in state.raw_df.iterrows():
         top_level, sub_classification, reason, confidence = classify_case(row.to_dict(), additional_oor_kw)
@@ -329,10 +351,19 @@ def run_stage2(state: PipelineState) -> PipelineState:
         dept_raw = str(row.get('الإدارة_العامة', '') or row.get('الإداره_العامة', '')).strip()
         dept_clean = re.sub(r'^الفجيرة\s*-\s*', '', dept_raw).strip()
 
+        # FIX: Extract and normalize case_status (None → '')
+        _s = row.get('الحالة', '')
+        case_status = '' if (_s is None or (isinstance(_s, float) and pd.isna(_s))) else str(_s).strip()
+
         # TASK 2 FIX: Handle date_closed serialization properly
         # Must preserve datetime objects as ISO strings (not datetime objects)
         # to avoid loss during JSON serialization/deserialization in llm_queue path
         date_closed_raw = row.get('تاريخ_الإغلاق', '')
+        case_num = str(row.get('رقم_الطلب', ''))
+
+        # DIAGNOSTIC: Log the raw value and its type for date_closed
+        raw_type = type(date_closed_raw).__name__
+        is_na = pd.isna(date_closed_raw)
 
         if pd.isna(date_closed_raw):
             date_closed_value = ""
@@ -350,6 +381,25 @@ def run_stage2(state: PipelineState) -> PipelineState:
                 date_closed_value = ""
             else:
                 date_closed_value = date_closed_str
+
+        # DIAGNOSTIC: Log EVERY case with date processing details (first 50 cases)
+        if diagnostic_count < 50:
+            str_raw = str(date_closed_raw) if date_closed_raw is not None else 'None'
+            print(
+                f"[Stage2] Case {case_num}: "
+                f"raw={repr(date_closed_raw)[:50]} (type={raw_type}, pd.isna={is_na}, str={repr(str_raw)[:30]}) "
+                f"→ value={repr(date_closed_value)[:30]}"
+            )
+            diagnostic_count += 1
+
+        # Also log if we're losing a non-empty date
+        if date_closed_raw is not None and not pd.isna(date_closed_raw):
+            str_raw = str(date_closed_raw).strip()
+            if str_raw and str_raw.lower() not in ('nan', 'nat', 'none', '') and not date_closed_value:
+                print(
+                    f"[Stage2] ⚠ LOST DATE: Case {case_num} had date in raw but lost it — "
+                    f"raw={repr(date_closed_raw)} → value={repr(date_closed_value)}"
+                )
 
         case = CaseRow(
             case_number=str(row.get('رقم_الطلب', '')),
@@ -381,7 +431,7 @@ def run_stage2(state: PipelineState) -> PipelineState:
             employee_number=str(row.get('الرقم_الوظيفي', '')),
             sla_closed_on_time=str(row.get('إغلاق_الطلب_خلال_الوقت_المحدد', '')),
             emirate=str(row.get('الإمارة', '')),
-            case_status=str(row.get('الحالة', '')).strip(),  # Original status from input
+            case_status=case_status,  # Use normalized status (None → '') from classify_case logic
         )
 
         # Track rejection
@@ -397,5 +447,24 @@ def run_stage2(state: PipelineState) -> PipelineState:
     state.rule_classified = rule_classified
     state.llm_queue = llm_queue
     state.zero_rejection_flag = (rejected_count == 0)
+
+    # DIAGNOSTIC: Summary of closure status after Stage 2
+    closed_count = sum(1 for c in rule_classified if c.date_closed and str(c.date_closed).strip())
+    open_count = sum(1 for c in rule_classified if not c.date_closed or not str(c.date_closed).strip())
+
+    print(
+        f"[Stage2] CLOSURE SUMMARY: {len(rule_classified)} rule_classified, "
+        f"{closed_count} closed ({100*closed_count/len(rule_classified):.1f}%), "
+        f"{open_count} open"
+    )
+
+    # Also check llm_queue for comparison
+    if llm_queue:
+        llm_closed = sum(1 for c in llm_queue if c.get('date_closed') and str(c.get('date_closed')).strip())
+        llm_open = len(llm_queue) - llm_closed
+        print(
+            f"[Stage2] LLM_QUEUE: {len(llm_queue)} cases, "
+            f"{llm_closed} closed, {llm_open} open"
+        )
 
     return state

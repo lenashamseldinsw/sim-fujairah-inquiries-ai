@@ -285,6 +285,13 @@ def _compute_closure_rate(state: PipelineState) -> float:
         1 for c in cases
         if c.date_closed and str(c.date_closed).strip()
     )
+
+    # CRITICAL: Fallback to authoritative count if mismatch detected
+    if state.closed_cases_count and closed != state.closed_cases_count:
+        print(f"[Validator] Closure count mismatch: computed={closed}, authoritative={state.closed_cases_count}. Using authoritative.")
+        closed = state.closed_cases_count
+        total = state.total_cases or total
+
     return round((closed / total * 100), 1) if total > 0 else 0.0
 
 
