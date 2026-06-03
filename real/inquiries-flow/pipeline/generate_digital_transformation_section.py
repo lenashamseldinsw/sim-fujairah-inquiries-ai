@@ -312,21 +312,21 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
             notif_type = n.get("notification_type") or n.get("content_summary") or ""
             cases = n.get("cases_eliminated", 0)
 
-            # ── SPECIAL CAP: delivery notification rows ──────────────────────────────
-            # If this notification is about document delivery, cap cases_eliminated at
-            # the authoritative count from all_classified. This prevents inconsistency
-            # between Section 6.2 (notifications) and Section 7 (Tool 3 impact).
+            # ── SPECIAL OVERRIDE: delivery notification rows ──────────────────────────
+            # If this notification is about document delivery, ALWAYS use the authoritative
+            # count from all_classified, regardless of whether Stage 4 over- or under-reported it.
+            # This ensures Section 6.2 notification row always aligns with Section 7 Tool 3 impact.
             if (isinstance(cases, int) and
                 notif_type and
-                (("توصيل" in notif_type.lower() or "وثيقة" in notif_type.lower() or
-                  "استلام" in notif_type.lower()))):
-                if cases > delivery_stall_count and delivery_stall_count > 0:
+                any(kw in notif_type for kw in {"توصيل", "وثيقة", "استلام"}) and
+                delivery_stall_count > 0):
+                if cases != delivery_stall_count:
                     print(
-                        f"[DigitalTransform] DELIVERY NOTIFICATION CAP: "
-                        f"'{notif_type}' cases_eliminated {cases} → {delivery_stall_count} "
+                        f"[DigitalTransform] DELIVERY OVERRIDE: "
+                        f"'{notif_type}' {cases} → {delivery_stall_count} "
                         f"(authoritative delivery_stall count from all_classified)"
                     )
-                    cases = delivery_stall_count
+                cases = delivery_stall_count
 
             channel_raw = n.get("channel", "")
             channel = _CHANNEL_DISPLAY.get(channel_raw, channel_raw or "SMS / إشعار التطبيق")
