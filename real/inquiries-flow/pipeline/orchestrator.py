@@ -41,17 +41,21 @@ class PipelineOrchestrator:
         self.guidebook_path: Optional[str] = None
 
     def initialize_state(self, session_id: str) -> None:
-        """Initialize or load state for a session."""
+        """Initialize state for a session.
+
+        Always starts fresh with a clean PipelineState() to avoid loading stale state
+        from previous runs (which caused incorrect calculations on Streamlit Community
+        Cloud). State files are still saved for within-run crash recovery but are never
+        loaded on subsequent runs.
+        """
         self.state_file = self.temp_dir / f"{session_id}_state.json"
 
+        # Always start fresh — never load cached state from previous runs
+        # Stale state on Streamlit Community Cloud caused incorrect metric calculations
         if self.state_file.exists():
-            try:
-                self.state = load_state_from_json(str(self.state_file))
-            except Exception as e:
-                print(f"Failed to load state: {e}. Starting fresh.")
-                self.state = PipelineState()
-        else:
-            self.state = PipelineState()
+            self.state_file.unlink()
+
+        self.state = PipelineState()
 
     def save_state(self) -> None:
         """Save current state to JSON."""
