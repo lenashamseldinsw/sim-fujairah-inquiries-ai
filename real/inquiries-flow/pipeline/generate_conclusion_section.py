@@ -49,6 +49,7 @@ import anthropic
 
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
+from .generate_digital_gaps_section import _DIGITAL_SUBMISSION_CHANNELS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -67,17 +68,19 @@ def _compute_submission_channel_pct(state: PipelineState) -> tuple[float, str]:
     """
     Compute the submission channel percentage from case_channel data.
 
-    This is the real, always-available channel figure — how many cases came via
-    "تطبيق" (app) or "موقع" (website). This percentage is never zero for this dataset.
+    Uses _DIGITAL_SUBMISSION_CHANNELS constant from generate_digital_gaps_section
+    to ensure consistency across all report sections (includes NCRM channel).
 
-    Returns (percentage, formatted string like "75.2%").
+    Returns (percentage, formatted string like "96.0%").
     """
     cases = state.all_classified or []
     total = len(cases) or 1
 
     digital_submissions = sum(
         1 for c in cases
-        if c.case_channel and ("تطبيق" in str(c.case_channel) or "موقع" in str(c.case_channel))
+        if c.case_channel and any(
+            kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS
+        )
     )
     pct = round(digital_submissions / total * 100, 1)
     return pct, f"{pct}%"
@@ -132,15 +135,28 @@ def _count_proactive_cancellable(state: PipelineState) -> int:
     """
     Count cases cancellable by proactive notification.
 
-    Sums notification_opportunities.cases_eliminated from state (set in Stage 4).
-    Falls back to counting journey_map entries with root_cause_category ==
-    'no_proactive_notification' if notification_opportunities is empty.
+    Prefers final_notif_eliminatable (set after Section 6.2 table is built).
+    Falls back through reconciled counts → raw notification_opportunities.
+    (Issue 6 fix)
     """
+    # Prefer the final reconciled count (set after section 6.2 table is built)
+    if state.final_notif_eliminatable > 0:
+        return state.final_notif_eliminatable
+
+    # Fallback to reconciled notification counts
+    if state.reconciled_notification_counts:
+        total = sum(state.reconciled_notification_counts.values())
+        if total > 0:
+            return total
+
+    # Last resort: raw notification_opportunities (Stage 4 estimate)
     opps = state.notification_opportunities or []
     if opps:
-        return sum(int(o.get('cases_eliminated', 0)) for o in opps)
+        total = sum(int(o.get('cases_eliminated', 0)) for o in opps)
+        if total > 0:
+            return total
 
-    # Fallback: journey_map proactive friction points
+    # Final fallback: journey_map proactive friction points
     jm = state.journey_map or []
     return sum(j.case_count for j in jm if j.root_cause_category == 'no_proactive_notification')
 

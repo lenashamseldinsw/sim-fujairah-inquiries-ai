@@ -1731,6 +1731,17 @@ class JSONReportBuilder:
         if digital_transform_section:
             sections.append(digital_transform_section)
 
+        # Extract final notification table total (Issue 6 fix)
+        if digital_transform_section and "notification_table" in digital_transform_section:
+            import re as _re
+            total = 0
+            for r in digital_transform_section.get("notification_table", []):
+                digits = _re.sub(r"[^\d]", "", str(r.get("الحالات المُلغاة", "0")))
+                if digits:
+                    total += int(digits)
+            self.state.final_notif_eliminatable = total
+            print(f"[Stage6] Set final_notif_eliminatable = {self.state.final_notif_eliminatable}")
+
         # 7. AI Use Cases
         ai_use_cases_section = self.build_ai_use_cases_section(lang=lang, section_number=7)
         if ai_use_cases_section:

@@ -351,7 +351,7 @@ def _reconcile_counts(
     all_classified: list,
     notification_opportunities: list,
     proactive_case_count: int,
-) -> tuple[list, list, list]:
+) -> tuple[list, list, list, dict]:
     """
     Reconcile LLM-supplied case_counts with authoritative counts from all_classified.
 
@@ -373,7 +373,8 @@ def _reconcile_counts(
         proactive_case_count: Authoritative count of cases that can be eliminated by proactive notification
 
     Returns:
-        Tuple of (reconciled_journey_map, reconciled_patterns, reconciled_notification_opportunities)
+        Tuple of (reconciled_journey_map, reconciled_patterns, reconciled_notification_opportunities, per_type_counts)
+        where per_type_counts is Dict[str, int] mapping notification_type → cases_eliminated (Issue 3 fix)
     """
     # Build lookup: sub_classification → count (ground truth)
     actual_counts = defaultdict(int)
@@ -549,7 +550,14 @@ def _reconcile_counts(
         f"(authoritative per-case count from LLM)"
     )
 
-    return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
+    # Extract final per-type counts for cross-section consistency (Issue 3 fix)
+    reconciled_counts_by_type: Dict[str, int] = {}
+    for n in reconciled_notifications:
+        ntype = n.get("notification_type") or n.get("content_summary") or ""
+        if ntype:
+            reconciled_counts_by_type[ntype] = n.get("cases_eliminated", 0)
+
+    return (reconciled_journey_map, reconciled_patterns, reconciled_notifications, reconciled_counts_by_type)
 
 
 FAQ_ONLY_TOOL = {
@@ -751,7 +759,10 @@ def _retry_journey_map_only(
         ]
 
         # Reconcile counts against ground truth
-        state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
+        (state.journey_map,
+         state.patterns,
+         state.notification_opportunities,
+         state.reconciled_notification_counts) = _reconcile_counts(
             state.journey_map,
             state.patterns,
             state.all_classified,
@@ -964,7 +975,10 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
 
         # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
         print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
-        state.journey_map, state.patterns, state.notification_opportunities = _reconcile_counts(
+        (state.journey_map,
+         state.patterns,
+         state.notification_opportunities,
+         state.reconciled_notification_counts) = _reconcile_counts(
             state.journey_map,
             state.patterns,
             state.all_classified,

@@ -85,6 +85,10 @@ _ROOT_CAUSE_LABELS: Dict[str, str] = {
 # Sort order for severity (Critical first)
 _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
+# Single authoritative definition of digital submission channels
+# Used in all sections and conclusion to ensure consistency
+_DIGITAL_SUBMISSION_CHANNELS = {"تطبيق", "موقع", "NCRM", "ncrm"}
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Module-level helpers
@@ -93,18 +97,20 @@ _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
 def _compute_submission_channel_pct(state: PipelineState) -> float:
     """
-    % of cases submitted via digital channels (app or website).
+    % of cases submitted via digital channels (app, website, or NCRM).
 
     This is the submission channel metric — how many customers submitted their case
-    through "تطبيق" (app) or "موقع" (website) rather than phone/in-person.
-    This percentage is never zero for this dataset.
+    through "تطبيق" (app), "موقع" (website), or "NCRM" rather than phone/in-person.
+    Single source of truth for all sections using _DIGITAL_SUBMISSION_CHANNELS.
     """
     cases = state.all_classified or []
     total = len(cases) or 1
 
     digital_submissions = sum(
         1 for c in cases
-        if c.case_channel and ("تطبيق" in str(c.case_channel) or "موقع" in str(c.case_channel))
+        if c.case_channel and any(
+            kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS
+        )
     )
     return round(digital_submissions / total * 100, 1)
 
@@ -185,33 +191,54 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
 
 def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
-    Pre-computed rows for Section 5.2 table.
+    Pre-computed rows for Section 5.2 root-cause table.
 
-    De-duplicates journey_map by root_cause_category (summing case counts).
-    Picks the highest-count friction point as the example text.
-    Sort: descending by total case count.
+    Case counts are derived from state.all_classified (ground truth), not from
+    summing journey_map, to prevent double-counting when multiple friction
+    points share the same root_cause_category.
+
+    Each case is counted exactly once per root_cause_category.
     Columns locked here — LLM adds الحل.
 
     Schema: # | السبب الجذري | مثال على التحدي
     """
-    rc_totals: Dict[str, int] = defaultdict(int)
+    # Step 1: Build mapping of root_cause_category → sub_classifications it covers
+    rc_to_subs: Dict[str, set] = defaultdict(set)
     rc_best_friction: Dict[str, tuple] = {}  # cat → (count, text)
 
     for f in state.journey_map:
         cat = f.root_cause_category
-        rc_totals[cat] += f.case_count
+        if f.sub_classification:
+            rc_to_subs[cat].add(f.sub_classification)
         text = f.friction_point_ar or f.friction_point
-        current_best_count = rc_best_friction.get(cat, (0, ""))[0]
-        if f.case_count >= current_best_count:
+        current_best = rc_best_friction.get(cat, (0, ""))[0]
+        if f.case_count >= current_best:
             rc_best_friction[cat] = (f.case_count, text)
 
-    sorted_rc = sorted(rc_totals.items(), key=lambda x: x[1], reverse=True)
+    # Step 2: Count actual cases per root_cause_category (ground truth)
+    # Each case is counted exactly once, even if multiple friction points
+    # share the same root_cause_category
+    rc_actual_totals: Dict[str, int] = defaultdict(int)
+    for case in (state.all_classified or []):
+        sub = case.sub_classification
+        for cat, subs in rc_to_subs.items():
+            if sub in subs:
+                rc_actual_totals[cat] += 1
+                break  # Count each case in at most one category
 
+    # Step 3: Sort by actual total count descending
+    sorted_rc = sorted(rc_actual_totals.items(), key=lambda x: x[1], reverse=True)
+
+    # Step 4: Build rows with locked case counts
     rows = []
     for i, (cat, total_count) in enumerate(sorted_rc, 1):
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
-        best_count, example_text = rc_best_friction.get(cat, (0, ""))
-        example_cell = f"{best_count} حالة — {example_text}" if example_text else str(total_count)
+        _, example_text = rc_best_friction.get(cat, (0, ""))
+
+        # Use the authoritative total (not best_count) in the example cell
+        example_cell = (
+            f"{total_count} حالة — {example_text}" if example_text else str(total_count)
+        )
         rows.append({
             "#":               str(i),
             "السبب الجذري":    label,

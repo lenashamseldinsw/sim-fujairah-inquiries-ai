@@ -310,7 +310,12 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
         )
         for n in sorted_notifs:
             notif_type = n.get("notification_type") or n.get("content_summary") or ""
-            cases = n.get("cases_eliminated", 0)
+
+            # Use reconciled count if available (Issue 3 fix), else fall back to raw value
+            cases = state.reconciled_notification_counts.get(
+                notif_type,
+                n.get("cases_eliminated", 0)
+            )
 
             # ── SPECIAL OVERRIDE: delivery notification rows ──────────────────────────
             # If this notification is about document delivery, ALWAYS use the authoritative
@@ -477,24 +482,22 @@ def _build_notification_prompt_context(state: PipelineState, notif_rows: List[Di
 
 def _total_notif_cases(notif_rows: List[Dict[str, str]], state: PipelineState) -> int:
     """
-    Compute total eliminatable cases from notification rows for section body headline.
+    Compute total eliminatable cases by summing the notification table rows.
 
-    Prefers the authoritative proactive_notification_case_count from Stage 4.
-    Falls back to summing cases_eliminated from notification_opportunities if that's unavailable.
+    This is the ONLY source of truth for the section heading — it always matches
+    the table because it IS derived from the same row data. No reading from
+    state.proactive_notification_case_count (which may differ from reconciled total).
+    (Issue 4 fix)
     """
-    if state.proactive_notification_case_count:
-        return state.proactive_notification_case_count
-
-    if state.notification_opportunities:
-        return sum(
-            n.get("cases_eliminated", 0) for n in state.notification_opportunities
-            if isinstance(n.get("cases_eliminated"), int)
-        )
-    # Fallback: proactive gap_table case counts
-    return sum(
-        g.case_count for g in (state.gap_table or [])
-        if g.proactive_notification_opportunity
-    )
+    import re as _re
+    total = 0
+    for row in notif_rows:
+        raw = row.get("الحالات المُلغاة", "0")
+        # Strip Arabic grammar words to extract just the integer
+        digits = _re.sub(r"[^\d]", "", str(raw))
+        if digits:
+            total += int(digits)
+    return total
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -581,9 +584,10 @@ def generate_digital_transformation_section(
     faq_count         = len(faq_rows)
     notif_count       = len(notif_rows)
 
-    # Total eliminatable cases string for section body ("30+" style)
+    # Total eliminatable cases string for section body (exact number, no "+")
+    # (Issue 4 fix: heading must match sum of table rows)
     notif_headline = (
-        f"{total_notif_cases}+"
+        str(total_notif_cases)
         if total_notif_cases > 0
         else "عدد من"
     )

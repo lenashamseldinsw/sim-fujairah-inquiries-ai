@@ -197,6 +197,50 @@ def _extract_keywords(text: str) -> set:
     return {w for w in words if len(w) > 2 and w not in ['من', 'في', 'على', 'عن', 'إلى', 'هذا', 'أن', 'أو']}
 
 
+def _deduplicate_roadmap_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Remove near-duplicate roadmap rows using locked field signatures.
+
+    Two rows are duplicates if they share the same root_cause_category AND
+    sub_classification (the locked structural identity). The row with the
+    higher case_count is kept; the other is dropped.
+
+    Must run BEFORE renumbering so indices stay stable.
+    (Issue 5 fix)
+    """
+    seen: Dict[str, Dict[str, Any]] = {}  # signature → row
+
+    for row in rows:
+        # Build signature from locked structural fields only
+        sig = (
+            row.get("_root_cause_category", ""),
+            row.get("_sub_classification", ""),
+            row.get("الأفق الزمني", ""),
+        )
+        sig_str = str(sig)
+
+        existing = seen.get(sig_str)
+        if existing is None:
+            seen[sig_str] = row
+        else:
+            # Keep the row with higher case_count
+            existing_count = existing.get("_case_count", 0)
+            new_count = row.get("_case_count", 0)
+            if new_count > existing_count:
+                seen[sig_str] = row
+                print(
+                    f"[Roadmap] Dedup: Replacing row sig={sig_str[:50]}... "
+                    f"with higher count {new_count}"
+                )
+
+    return list(seen.values())
+
+
+def _strip_internal_keys(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove internal (underscore-prefixed) keys from row dict."""
+    return {k: v for k, v in row.items() if not k.startswith("_")}
+
+
 def _are_semantically_similar(text1: str, text2: str, threshold: float = 0.5) -> bool:
     """
     Check if two recommendation texts describe the same action (near-duplicate detection).
@@ -392,13 +436,17 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
                 break
 
         rows.append({
-            "row_id":                 f"journey_{cluster_key.replace(' ', '_')}",
-            "horizon":                horizon,
-            "effort":                 effort,
-            "source":                 source,
-            "seed_recommendation_ar": friction_seed,
-            "seed_impact_ar":         f"تقليص {friction.case_count}+ حالة — {friction_seed[:60]}",
-            "case_count":             friction.case_count,
+            "row_id":                   f"journey_{cluster_key.replace(' ', '_')}",
+            "horizon":                  horizon,
+            "effort":                   effort,
+            "source":                   source,
+            "seed_recommendation_ar":   friction_seed,
+            "seed_impact_ar":           f"تقليص {friction.case_count}+ حالة — {friction_seed[:60]}",
+            "case_count":               friction.case_count,
+            # Internal keys for structural deduplication (Issue 5 fix)
+            "_root_cause_category":     friction.root_cause_category,
+            "_sub_classification":      friction.sub_classification,
+            "_case_count":              friction.case_count,
         })
 
     # ── SOURCE 4: AI use cases — medium/long term rows ────────────────────────
@@ -439,6 +487,14 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
             "case_count":             0,              # AI tools have estimated, not exact, counts
         })
 
+    # ── Issue 5 FIX: Deduplicate rows using locked structural fields ────────────────────
+    # Remove near-duplicate rows that share the same root_cause_category + sub_classification + horizon
+    rows = _deduplicate_roadmap_rows(rows)
+    print(
+        f"[ImprovementRoadmap._build_roadmap_rows] After structural dedup: {len(rows)} rows "
+        f"(removed duplicates using root_cause_category + sub_classification)"
+    )
+
     # ── Sort, reserve AI slots, and cap ────────────────────────────────────────
     # BUG 2 FIX: Reserve guaranteed slots for AI rows before the cap.
     # Without this, immediate/short-term rows from sources 1-3 dominate and push
@@ -460,6 +516,9 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
     # Assign sequential row numbers
     for i, row in enumerate(final_rows, 1):
         row["row_number"] = str(i)
+
+    # Strip internal keys before returning to caller
+    final_rows = [_strip_internal_keys(r) for r in final_rows]
 
     # Diagnostics: log source distribution
     print(

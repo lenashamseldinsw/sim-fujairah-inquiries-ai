@@ -131,6 +131,18 @@ class PipelineState(BaseModel):
     # --- STAGE 4 (validated FAQs from Stage 5) ---
     validated_faqs: List[FAQCandidate] = Field(default_factory=list)
 
+    # --- ISSUE 3 FIX: Reconciled notification counts ---
+    reconciled_notification_counts: Dict[str, int] = Field(default_factory=dict)
+    # Keys are notification_type strings from notification_opportunities.
+    # Values are the post-reconciliation cases_eliminated counts.
+    # Populated at end of Stage 4 reconciliation.
+
+    # --- ISSUE 6 FIX: Final notification count for conclusion ---
+    final_notif_eliminatable: int = 0
+    # Sum of cases_eliminated across all reconciled notification rows.
+    # Set by Stage 6 after notification table rows are built.
+    # This is the number used in conclusion and impact box.
+
     # --- STAGE 5 (GAP ANALYSIS) ---
     gap_table: List[GapRow] = Field(default_factory=list)
 
