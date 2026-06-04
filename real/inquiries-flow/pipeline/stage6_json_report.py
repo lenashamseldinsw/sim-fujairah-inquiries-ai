@@ -1109,38 +1109,9 @@ class JSONReportBuilder:
                             f"This may indicate a mismatch between LLM and state gap definitions."
                         )
 
-        root_cause_table_rows = dg_raw["root_cause_table"]
-
-        # SOURCE: state.journey_map (post-reconciliation) — same source as _build_root_cause_rows().
-        # Override LLM-supplied counts in root_cause_table with the authoritative grouped totals.
-        # The LLM may hallucinate or reuse stale pre-reconciliation counts.
-        if self.state.journey_map:
-            rc_totals_auth: dict = defaultdict(int)
-            for f in self.state.journey_map:
-                rc_totals_auth[f.root_cause_category] += f.case_count
-
-            # Combined label→category mapping covering both label sets:
-            # _ROOT_CAUSE_LABELS (what LLM is given via _build_root_cause_rows) AND
-            # _root_cause_label() aliases (what the LLM sometimes returns instead).
-            label_to_category: dict = {v: k for k, v in _ROOT_CAUSE_LABELS.items()}
-            label_to_category.update({
-                'غياب معلومات من الدليل':             'missing_info',
-                'معلومات موجودة لكنها صعبة الوصول':   'inaccessible_info',
-                'غياب الإشعار الاستباقي':              'no_proactive_notification',
-                'خلل تقني في المنصة':                 'platform_bug',
-                'تعقيد إجراءات السياسة':              'policy_complexity',
-            })
-
-            for row in root_cause_table_rows:
-                label = (row.get("السبب الجذري", "") or "").strip()
-                cat = label_to_category.get(label)
-                if cat and cat in rc_totals_auth:
-                    auth_total = rc_totals_auth[cat]
-                    row["الحالات"] = str(auth_total)
-                    example = row.get("مثال على التحدي", "")
-                    if example and " حالة — " in example:
-                        suffix = example.split(" حالة — ", 1)[1]
-                        row["مثال على التحدي"] = f"{auth_total} حالة — {suffix}"
+        # Issue 2 FIX: Use _build_root_cause_rows() directly (source of truth)
+        # Skip LLM output for root_cause_table entirely and use pre-computed rows
+        root_cause_table_rows = _build_root_cause_rows(self.state)
 
         section_body = dg_raw["section_body"]
 
@@ -1242,20 +1213,24 @@ class JSONReportBuilder:
         else:
             faq_intro = faq_table_intro
 
-        # SOURCE: state.notification_opportunities — post-reconciliation
-        # Compute notification impact count directly from state, not from LLM rows.
-        # The LLM rows may have pre-reconciliation data; we replace with authoritative values.
-        notif_intro_count = sum(
-            n.get('cases_eliminated', n.get('case_count', 0))
-            for n in (self.state.notification_opportunities or [])
-        )
+        # Issues 3, 4, 6 FIX: Compute notification count from actual table rows, not state.notification_opportunities
+        # This ensures the intro count, heading, and conclusion metric all use the same authoritative source
+        import re as _re
+        notif_intro_count = 0
+        for row in notif_rows:
+            raw = row.get("الحالات المُلغاة", "0")
+            # Extract integer from text like "5 حالات" or "3 حالة"
+            digits = _re.sub(r"[^\d]", "", str(raw))
+            if digits:
+                notif_intro_count += int(digits)
 
         # Recompute percentage from reconciled total_cases
         total_for_notif_pct = len(self.state.all_classified) or self.state.total_cases or 1
         notif_pct = round(notif_intro_count / total_for_notif_pct * 100, 0) if notif_intro_count > 0 else 0
 
+        # Issue 4 FIX: Use exact number, no "+" suffix (matches table sum exactly)
         notif_intro = (
-            f"تحليل البيانات يكشف أن {notif_intro_count}+ حالة تواصل "
+            f"تحليل البيانات يكشف أن {notif_intro_count} حالة تواصل "
             f"({notif_pct:.0f}% "
             "من الإجمالي) كان يمكن إلغاؤها كلياً بمنظومة إشعارات بسيطة — "
             "دون أي تغيير هيكلي في الأنظمة أو الإجراءات:"
@@ -1304,8 +1279,9 @@ class JSONReportBuilder:
         }
 
         # ── Subsection 6.2: Notification Pathway ─────────────────────────────
+        # Issue 4 FIX: Use exact count from table sum, no "+" suffix
         notif_count_label = (
-            str(notif_intro_count) + "+" if notif_intro_count > 0 else "30+"
+            str(notif_intro_count) if notif_intro_count > 0 else "عدد من"
         )
         subsection_62_title = (
             f"6.2  مسار إلغاء {notif_count_label} حالة تواصل بالإشعار الاستباقي"
@@ -1732,15 +1708,24 @@ class JSONReportBuilder:
             sections.append(digital_transform_section)
 
         # Extract final notification table total (Issue 6 fix)
-        if digital_transform_section and "notification_table" in digital_transform_section:
+        try:
             import re as _re
+            notif_rows = (
+                digital_transform_section
+                .get("subsections", [{}])[1]   # subsection 6.2 is index 1
+                .get("tables", [{}])[0]
+                .get("rows", [])
+            )
             total = 0
-            for r in digital_transform_section.get("notification_table", []):
+            for r in notif_rows:
                 digits = _re.sub(r"[^\d]", "", str(r.get("الحالات المُلغاة", "0")))
                 if digits:
                     total += int(digits)
-            self.state.final_notif_eliminatable = total
-            print(f"[Stage6] Set final_notif_eliminatable = {self.state.final_notif_eliminatable}")
+            if total > 0:
+                self.state.final_notif_eliminatable = total
+                print(f"[Stage6] Set final_notif_eliminatable = {self.state.final_notif_eliminatable}")
+        except (IndexError, AttributeError, TypeError):
+            pass
 
         # 7. AI Use Cases
         ai_use_cases_section = self.build_ai_use_cases_section(lang=lang, section_number=7)

@@ -319,6 +319,18 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         seen_recommendations.append(rec_text)
         source_counts["notification"] += 1
 
+        # Issue 5 FIX: Normalize _sub_classification to canonical taxonomy value
+        # Map notification_type to the canonical sub_classification it covers,
+        # by finding the matching journey_map friction point
+        canonical_sub = next(
+            (f.sub_classification for f in state.journey_map
+             if f.root_cause_category == "no_proactive_notification"
+             and f.sub_classification
+             and (notification_type in (f.friction_point_ar or "") or
+                  notification_type in (f.friction_point or ""))),
+            notification_type  # fallback to raw string if no match found
+        )
+
         rows.append({
             "row_id":                   row_id,
             "horizon":                  "🚨 فوري",
@@ -327,6 +339,10 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
             "seed_recommendation_ar":   rec_text,
             "seed_impact_ar":           f"إلغاء {cases_eliminated}+ حالة تواصل",
             "case_count":               cases_eliminated,
+            # Issue 5 FIX: Add internal keys for structural deduplication
+            "_root_cause_category":     "no_proactive_notification",
+            "_sub_classification":      canonical_sub,
+            "_case_count":              cases_eliminated,
         })
 
     # ── SOURCE 2: Critical gap_table rows (stage 5) ───────────────────────────
