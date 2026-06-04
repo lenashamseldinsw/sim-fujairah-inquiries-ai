@@ -22,6 +22,7 @@ Each section has:
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from collections import defaultdict
+import re as _re
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage2_rules import SUB_CLASSIFICATIONS as _SUB_CLASSIFICATIONS
 from .generate_customer_journey_section import _build_friction_rows
@@ -34,6 +35,27 @@ from .generate_ai_use_cases_section import _build_ai_tool_rows
 from .generate_improvement_roadmap_section import _build_display_roadmap_rows
 from .generate_conclusion_section import build_conclusion_section_for_json
 from .utils import calculate_similarity
+
+
+# ==============================================================================
+# Module-level helpers
+# ==============================================================================
+
+def _parse_arabic_case_count(text: str) -> int:
+    """
+    Parse Arabic grammar case count strings to int.
+
+    Handles: "حالة واحدة" (1), "حالتان"/"حالتين" (2), "3 حالات" (3+), etc.
+    Issues 3, 4, 6 fix: Correctly parses the Arabic grammar forms that appear
+    in the notification table instead of stripping all non-digits.
+    """
+    s = str(text)
+    if 'واحدة' in s or 'واحد' in s:
+        return 1
+    if 'حالتان' in s or 'حالتين' in s:
+        return 2
+    digits = _re.sub(r'[^\d]', '', s)
+    return int(digits) if digits else 0
 
 
 # ==============================================================================
@@ -1221,14 +1243,11 @@ class JSONReportBuilder:
 
         # Issues 3, 4, 6 FIX: Compute notification count from actual table rows, not state.notification_opportunities
         # This ensures the intro count, heading, and conclusion metric all use the same authoritative source
-        import re as _re
-        notif_intro_count = 0
-        for row in notif_rows:
-            raw = row.get("الحالات المُلغاة", "0")
-            # Extract integer from text like "5 حالات" or "3 حالة"
-            digits = _re.sub(r"[^\d]", "", str(raw))
-            if digits:
-                notif_intro_count += int(digits)
+        # Issues 3, 4, 6 FIX: Use _parse_arabic_case_count to handle "حالتان", "حالة واحدة" etc.
+        notif_intro_count = sum(
+            _parse_arabic_case_count(row.get("الحالات المُلغاة", "0"))
+            for row in notif_rows
+        )
 
         # Recompute percentage from reconciled total_cases
         total_for_notif_pct = len(self.state.all_classified) or self.state.total_cases or 1
@@ -1715,18 +1734,17 @@ class JSONReportBuilder:
 
         # Extract final notification table total (Issue 6 fix)
         try:
-            import re as _re
             notif_rows = (
                 digital_transform_section
                 .get("subsections", [{}])[1]   # subsection 6.2 is index 1
                 .get("tables", [{}])[0]
                 .get("rows", [])
             )
-            total = 0
-            for r in notif_rows:
-                digits = _re.sub(r"[^\d]", "", str(r.get("الحالات المُلغاة", "0")))
-                if digits:
-                    total += int(digits)
+            # Issues 3, 4, 6 FIX: Use _parse_arabic_case_count for proper Arabic grammar handling
+            total = sum(
+                _parse_arabic_case_count(r.get("الحالات المُلغاة", "0"))
+                for r in notif_rows
+            )
             if total > 0:
                 self.state.final_notif_eliminatable = total
                 print(f"[Stage6] Set final_notif_eliminatable = {self.state.final_notif_eliminatable}")

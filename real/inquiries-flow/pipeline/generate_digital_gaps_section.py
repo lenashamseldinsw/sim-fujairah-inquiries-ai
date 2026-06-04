@@ -202,14 +202,20 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     Schema: # | السبب الجذري | مثال على التحدي
     """
-    # Step 1: Build mapping of root_cause_category → sub_classifications it covers
+    # Step 1: Build mappings from journey_map
+    # - rc_to_subs: root_cause_category → set of sub_classifications (for dedup)
+    # - sub_to_rc: sub_classification → root_cause_category (for case lookup)
+    # - rc_best_friction: root_cause_category → (count, text) for example cell
     rc_to_subs: Dict[str, set] = defaultdict(set)
+    sub_to_rc: Dict[str, str] = {}  # Issue 2 fix: direct sub→cat mapping
     rc_best_friction: Dict[str, tuple] = {}  # cat → (count, text)
 
     for f in state.journey_map:
         cat = f.root_cause_category
         if f.sub_classification:
             rc_to_subs[cat].add(f.sub_classification)
+            # Issue 2 fix: map sub_classification to root_cause_category for all_classified lookup
+            sub_to_rc[f.sub_classification] = cat
         text = f.friction_point_ar or f.friction_point
         current_best = rc_best_friction.get(cat, (0, ""))[0]
         if f.case_count >= current_best:
@@ -218,16 +224,23 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     # Step 2: Count actual cases per root_cause_category (ground truth)
     # Each case is counted exactly once, even if multiple friction points
     # share the same root_cause_category
+    # Issue 2 fix: use sub_to_rc mapping so cases are counted even if rc_to_subs is sparse
     rc_actual_totals: Dict[str, int] = defaultdict(int)
     for case in (state.all_classified or []):
         sub = case.sub_classification
-        for cat, subs in rc_to_subs.items():
-            if sub in subs:
-                rc_actual_totals[cat] += 1
-                break  # Count each case in at most one category
+        # Use the direct sub→cat mapping first, then fall back to checking rc_to_subs
+        cat = sub_to_rc.get(sub)
+        if cat is None:
+            # Fallback: check if sub is in any of the rc_to_subs sets
+            for c, subs in rc_to_subs.items():
+                if sub in subs:
+                    cat = c
+                    break
+        if cat:
+            rc_actual_totals[cat] += 1
 
-    # DIAGNOSTIC: Log rc_actual_totals and rc_to_subs for debugging Issue 2
-    print(f"[RootCauseRows] rc_to_subs mapping: {dict(rc_to_subs)}")
+    # DIAGNOSTIC: Log mappings for debugging Issue 2
+    print(f"[RootCauseRows] sub_to_rc mapping: {sub_to_rc}")
     print(f"[RootCauseRows] rc_actual_totals: {dict(rc_actual_totals)}")
 
     # Step 3: Sort by actual total count descending
