@@ -272,9 +272,14 @@ def _count_delivery_stall_cases(state: PipelineState) -> int:
     """
     DELIVERY_FAILURE_SUB_CLASS = "شكوى عن عدم استلام الخدمة"
     count = 0
+    matching_subs = []
     for case in (state.all_classified or []):
         if case.sub_classification == DELIVERY_FAILURE_SUB_CLASS:
             count += 1
+        else:
+            matching_subs.append(case.sub_classification)
+    print(f"[DigitalTransform] _count_delivery_stall_cases: found {count} cases with exact sub_classification match")
+    print(f"[DigitalTransform] Other sub_classifications in dataset: {set(matching_subs)}")
     return count
 
 
@@ -321,9 +326,11 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
             # If this notification is about document delivery, ALWAYS use the authoritative
             # count from all_classified, regardless of whether Stage 4 over- or under-reported it.
             # This ensures Section 6.2 notification row always aligns with Section 7 Tool 3 impact.
+            has_delivery_keyword = any(kw in notif_type for kw in {"توصيل", "وثيقة", "استلام"})
+            print(f"[DigitalTransform] Notif '{notif_type}': cases={cases}, has_keyword={has_delivery_keyword}, delivery_stall_count={delivery_stall_count}")
             if (isinstance(cases, int) and
                 notif_type and
-                any(kw in notif_type for kw in {"توصيل", "وثيقة", "استلام"}) and
+                has_delivery_keyword and
                 delivery_stall_count > 0):
                 if cases != delivery_stall_count:
                     print(
@@ -332,6 +339,8 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
                         f"(authoritative delivery_stall count from all_classified)"
                     )
                 cases = delivery_stall_count
+            else:
+                print(f"[DigitalTransform] NO OVERRIDE for '{notif_type}' (keyword={has_delivery_keyword}, delivery_count={delivery_stall_count})")
 
             channel_raw = n.get("channel", "")
             channel = _CHANNEL_DISPLAY.get(channel_raw, channel_raw or "SMS / إشعار التطبيق")

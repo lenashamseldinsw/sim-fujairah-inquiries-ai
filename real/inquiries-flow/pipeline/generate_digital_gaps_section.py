@@ -226,6 +226,10 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
                 rc_actual_totals[cat] += 1
                 break  # Count each case in at most one category
 
+    # DIAGNOSTIC: Log rc_actual_totals and rc_to_subs for debugging Issue 2
+    print(f"[RootCauseRows] rc_to_subs mapping: {dict(rc_to_subs)}")
+    print(f"[RootCauseRows] rc_actual_totals: {dict(rc_actual_totals)}")
+
     # Step 3: Sort by actual total count descending
     sorted_rc = sorted(rc_actual_totals.items(), key=lambda x: x[1], reverse=True)
 
