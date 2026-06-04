@@ -46,6 +46,7 @@ DESIGN NOTES
 """
 
 import json
+import re
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
 
@@ -294,6 +295,66 @@ def _count_critical_gaps(state: PipelineState) -> int:
     return sum(1 for g in (state.gap_table or []) if g.severity == 'Critical')
 
 
+def _clean_tool_name(raw_text: str) -> str:
+    """
+    ── FIX 5: Extract clean tool name from LLM-generated prose ──
+
+    Removes:
+    - Parenthetical case counts like "(12 حالة)" or "(12+ شكوى)"
+    - Filler phrases like "هذه الفجوة الأعلى حجمًا"
+    - Everything after first sentence/colon
+    - Trailing whitespace
+
+    Returns: Clean tool name (max 80 chars for table display)
+
+    Examples:
+        "نظام المتابعة الاستباقية" → "نظام المتابعة الاستباقية" ✓
+        "هذه الفجوة الأعلى حجمًا (12 حالة). التطبيق الفوري..." → "" (filtered as prose)
+        "مصنِّف النصوص (12 حالة)" → "مصنِّف النصوص"
+    """
+    if not raw_text:
+        return ""
+
+    # STEP 1: Take only first sentence (before . : ، ؛ or newline)
+    first_sentence = re.split(r'[.:\n،؛]', raw_text)[0].strip()
+
+    if not first_sentence:
+        return ""
+
+    # STEP 2: Remove parenthetical case counts
+    # Examples: "(12 حالة)", "(12+ شكاوى)", "(N cases)"
+    no_counts = re.sub(r'\(\d+\+?\s*(?:حالة|شكوى|cases)[^)]*\)', '', first_sentence).strip()
+
+    # STEP 3: Remove embedded case count markers
+    # Examples: "12+ شكوى", "12 حالة"
+    no_inline_counts = re.sub(r'\d+\+?\s*(?:حالة|شكوى|cases)', '', no_counts).strip()
+
+    # STEP 4: Filter out known filler phrases that shouldn't be tool names
+    filler_phrases = [
+        "هذه الفجوة",
+        "الأعلى حجمًا",
+        "التطبيق الفوري",
+        "تطبيق نظام",
+        "تحسين",
+        "معالجة",
+        "نسبة",
+    ]
+
+    for phrase in filler_phrases:
+        if no_inline_counts.lower().startswith(phrase.lower()):
+            # This is just description, not a tool name
+            return ""
+
+    # STEP 5: Cap at 80 chars for table display
+    clean = no_inline_counts[:80]
+
+    # STEP 6: Validate that it's actually a tool name (contains meaningful Arabic)
+    if len(clean) < 3:  # Too short to be a tool name
+        return ""
+
+    return clean
+
+
 def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build the three-pillar transformation pivot table deterministically from pipeline data.
@@ -361,6 +422,7 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     # --- Pillar 3: Intelligence/AI items from ai_use_cases ---
     # Pull real AI tool names from state.report_sections_ar['ai_use_cases']
+    # FIX 5: Clean tool names to remove LLM prose
     intelligence_items = []
 
     ai_section = (state.report_sections_ar or {}).get('ai_use_cases', {})
@@ -369,9 +431,12 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     if ai_table:
         for row in ai_table[:4]:
-            tool = row.get('الأداة', '').strip()
+            raw_tool = row.get('الأداة', '')
+            tool = _clean_tool_name(raw_tool)  # FIX 5: Clean instead of using as-is
             if tool and len(intelligence_items) < 4:
                 intelligence_items.append(tool)
+            elif raw_tool and not tool:
+                print(f"[Conclusion] FIX 5: Skipped invalid tool name: '{raw_tool[:60]}'")
 
     # Fallback: ensure exactly 4 items with meaningful AI tools
     if len(intelligence_items) < 4:

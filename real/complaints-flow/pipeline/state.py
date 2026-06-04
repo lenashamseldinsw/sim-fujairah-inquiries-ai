@@ -294,6 +294,70 @@ def convert_month_year_to_arabic(english_month_year: str) -> str:
     return result
 
 
+def get_authoritative_friction_case_count(
+    state: 'PipelineState',
+    topic_text: str,
+    min_match_score: float = 0.3
+) -> Optional[int]:
+    """
+    Get the authoritative case count for a friction point/gap/opportunity
+    by matching against state.journey_map.
+
+    This is the SINGLE SOURCE OF TRUTH for friction-level case counts.
+    Used by: stage5_gap.py, generate_improvement_roadmap_section.py, stage4_analysis.py
+
+    Implements Jaccard similarity (word-overlap) matching.
+
+    Args:
+        state: PipelineState with populated journey_map
+        topic_text: Friction topic/gap topic to search for
+        min_match_score: Minimum word-overlap similarity (0.0-1.0)
+
+    Returns:
+        Authoritative case count if match found, else None
+    """
+    if not state.journey_map or not topic_text:
+        return None
+
+    topic_norm = topic_text.lower().strip()
+    if not topic_norm:
+        return None
+
+    best_match_count = None
+    best_score = 0.0
+
+    for friction in state.journey_map:
+        for text_field in [
+            friction.friction_point_ar,
+            friction.friction_point,
+            friction.cluster_ar,
+            friction.cluster,
+        ]:
+            if not text_field:
+                continue
+
+            field_norm = text_field.lower().strip()
+            if not field_norm:
+                continue
+
+            # Compute Jaccard similarity (word-overlap based)
+            topic_words = set(topic_norm.split())
+            field_words = set(field_norm.split())
+
+            if not topic_words or not field_words:
+                continue
+
+            intersection = len(topic_words & field_words)
+            union = len(topic_words | field_words)
+            score = intersection / union if union > 0 else 0.0
+
+            if score > best_score and score >= min_match_score:
+                best_score = score
+                best_match_count = friction.case_count
+
+    return best_match_count
+
+
 def extract_month_year_range(cases: list, lang: str = 'en') -> str:
     """
     Extract month_year range from date_opened fields in cases.

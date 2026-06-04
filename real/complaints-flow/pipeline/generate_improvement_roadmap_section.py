@@ -452,6 +452,9 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         })
 
     # ── SOURCE 2: Critical gap_table rows (stage 5) ───────────────────────────
+    # FIX 2: Validate case_count matches journey_map (not sub-classification totals)
+    from .state import get_authoritative_friction_case_count
+
     for gap in (state.gap_table or []):
         if gap.severity != "Critical":
             continue
@@ -496,14 +499,25 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         effort = _constrain_effort_to_horizon(effort, horizon)
 
         source = _source_for_gap(gap)
+
+        # ── FIX 2: Validate/replace case_count with journey_map count ────────
+        # Use friction-level count (journey_map) instead of gap_table count
+        # This ensures roadmap case counts match Section 4
+        validated_count = get_authoritative_friction_case_count(state, gap.topic_ar or gap.topic)
+        if validated_count and validated_count != gap.case_count:
+            display_count = validated_count
+            print(f"[Roadmap] FIX 2: gap '{cluster_key[:30]}' case_count {gap.case_count} → {display_count} (from journey_map)")
+        else:
+            display_count = gap.case_count
+
         rows.append({
             "row_id":                 f"gap_{cluster_key.replace(' ', '_')}",
             "horizon":                horizon,
             "effort":                 effort,
             "source":                 source,
             "seed_recommendation_ar": rec_text,
-            "seed_impact_ar":         f"معالجة {gap.case_count}+ شكوى مرتبطة بـ {gap.topic_ar or gap.topic}",
-            "case_count":             gap.case_count,
+            "seed_impact_ar":         f"معالجة {display_count}+ شكوى مرتبطة بـ {gap.topic_ar or gap.topic}",
+            "case_count":             display_count,
         })
 
     # ── SOURCE 3: journey_map friction clusters (stage 4) ────────────────────

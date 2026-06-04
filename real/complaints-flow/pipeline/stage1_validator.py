@@ -331,14 +331,19 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
     Input: pandas DataFrame from uploaded file (with header=4 offset applied by orchestrator)
     Output: state with raw_df and validated_schema; computed complaint metrics
     """
-    # Store original column names before normalization
+    # FIX 1: Store ORIGINAL input column count BEFORE normalization adds derived columns
+    # The raw input Excel has 21 columns; normalization may add mapping variants
     state.original_columns = df.columns.tolist()
-    print(f"[Stage1] Original columns detected: {state.original_columns}")
+    state.column_names = df.columns.tolist()  # ✅ CRITICAL: Store raw input columns, not normalized
 
-    # Normalize column names
+    structured_field_count = len(state.column_names) - 2  # Minus 2 free-text fields
+    print(f"[Stage1] Input columns: {len(state.column_names)} total")
+    print(f"[Stage1]   Structured: {structured_field_count} (all except تفاصيل_الطلب + الحل)")
+    print(f"[Stage1]   Free-text: 2 (تفاصيل_الطلب, الحل)")
+
+    # Normalize column names for processing
     df_normalized = normalize_columns(df)
-    state.column_names = list(df_normalized.columns)  # TASK 7: Store normalized column names for documentation
-    print(f"[Stage1] Normalized columns: {state.column_names}")
+    print(f"[Stage1] After normalization: {len(df_normalized.columns)} columns (may include mapping variants)")
     print(f"[Stage1] Required columns: {REQUIRED_COLUMNS}")
 
     # Null-description audit

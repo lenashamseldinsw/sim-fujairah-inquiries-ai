@@ -548,11 +548,18 @@ def _reconcile_counts(
                 # ENFORCE the cap: update the reconciled_journey_map entry
                 reconciled_journey_map[i] = friction.model_copy(update={"case_count": capped_count})
 
-    # Reconcile notification_opportunities: cap cases_eliminated against the authoritative
-    # count from Stage 4 analysis (proactive_case_count), which is based on LLM per-case analysis.
-    # Distribute the capped budget proportionally across all notification opportunities.
+    # ── FIX 4: Reconcile notification_opportunities ────────────────────────────────
+    # Cap cases_eliminated against:
+    #   1. Total cases (proactive_case_count sanity check)
+    #   2. Per-sub-classification sizes (prevent claiming more than actual sub-class has)
 
-    # Cap proactive_case_count against actual total to prevent LLM inflation
+    # Step 1: Build sub-classification counts (ground truth)
+    actual_sub_counts = defaultdict(int)
+    for case in all_classified:
+        if case.sub_classification:
+            actual_sub_counts[case.sub_classification] += 1
+
+    # Step 2: Cap proactive_case_count against actual total
     actual_total = len(all_classified)
     max_proactive_cases = min(proactive_case_count, actual_total)
 
@@ -562,30 +569,54 @@ def _reconcile_counts(
             f"exceeds total cases={actual_total}. Capping to {actual_total}."
         )
 
-    # Sum what the LLM claimed across all notification opportunities
-    llm_total = sum(
-        n.get("cases_eliminated", 0) for n in notification_opportunities
-        if isinstance(n.get("cases_eliminated"), int)
-    )
-
+    # Step 3: For each notification, cap cases_eliminated at sub-classification size
     reconciled_notifications = []
     for n in notification_opportunities:
-        llm_count = n.get("cases_eliminated", 0)
-        if not isinstance(llm_count, int) or llm_total == 0:
+        original_claimed = n.get("cases_eliminated", 0)
+
+        if original_claimed < 1:
             reconciled_notifications.append(n)
             continue
 
-        # Scale proportionally, then round to int, minimum 1 if original > 0
-        scaled = round(llm_count / llm_total * max_proactive_cases)
-        scaled = max(1, scaled) if llm_count > 0 else 0
-        # Preserve all fields (notification_type, channel, content_summary, expected_impact)
-        # Only reconcile cases_eliminated against authoritative proactive_case_count
-        reconciled_notifications.append({**n, "cases_eliminated": scaled})
+        # Try to match notification to a sub-classification
+        notification_type = n.get("notification_type", "")
+        best_sub_match = None
+        best_match_count = 0
+
+        for sub_name, sub_count in actual_sub_counts.items():
+            # Simple keyword matching: check for word overlap
+            notif_type_norm = notification_type.lower()
+            sub_norm = sub_name.lower()
+
+            # Extract meaningful words (len >= 3 to filter noise)
+            notif_words = set(w for w in notif_type_norm.split() if len(w) >= 3)
+            sub_words = set(w for w in sub_norm.split() if len(w) >= 3)
+
+            overlap = len(notif_words & sub_words)
+            if overlap > 0 and sub_count > best_match_count:
+                best_sub_match = sub_name
+                best_match_count = sub_count
+
+        # Cap cases_eliminated at sub-classification size
+        if best_sub_match and original_claimed > best_match_count:
+            capped_count = best_match_count
+            print(
+                f"[Stage4] Capping notification '{notification_type}' "
+                f"cases_eliminated: {original_claimed} → {capped_count} "
+                f"(sub-classification '{best_sub_match}' has {best_match_count} cases)"
+            )
+        else:
+            capped_count = original_claimed
+
+        # Create capped notification
+        reconciled_notif = {
+            **n,
+            "cases_eliminated": capped_count
+        }
+        reconciled_notifications.append(reconciled_notif)
 
     print(
-        f"[Stage4] Reconciled notification_opportunities: "
-        f"LLM total={llm_total} → capped to {max_proactive_cases} "
-        f"(authoritative per-case count from LLM)"
+        f"[Stage4] Reconciled notification_opportunities against sub-classification sizes"
     )
 
     return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)

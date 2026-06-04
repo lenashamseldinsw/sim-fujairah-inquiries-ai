@@ -536,43 +536,54 @@ def run_stage5(
 
                 analysis = block.input
 
-                # Parse gap table with enhanced guidebook intelligence
+                # ── FIX 3: Parse gap table and inject journey_map case counts ──
+                # Build authoritative journey_map lookup (friction-level case counts)
                 if 'gap_table' in analysis:
-                    # Build journey_map lookup by topic and cluster for case_count matching
-                    journey_map_by_topic = {}
-                    cluster_to_case_count = {}
+                    # STEP 1: Build journey_map lookup for friction-level case counts
+                    friction_case_count_lookup = {}
                     for friction in (state.journey_map or []):
-                        friction_topic = friction.friction_point or friction.friction_point_ar or ""
-                        cluster_topic = friction.cluster or friction.cluster_ar or ""
-                        if friction_topic:
-                            journey_map_by_topic[friction_topic.lower()[:50]] = friction.case_count
-                        if cluster_topic:
-                            cluster_key = cluster_topic.lower()[:50]
-                            journey_map_by_topic[cluster_key] = friction.case_count
-                            cluster_to_case_count[cluster_topic] = friction.case_count  # Exact match for reinject
+                        # Index by multiple fields for flexible matching
+                        for text_field in [
+                            friction.cluster_ar,
+                            friction.cluster,
+                            friction.friction_point_ar,
+                            friction.friction_point,
+                        ]:
+                            if text_field:
+                                norm_key = text_field.lower().strip()[:50]
+                                # Keep the minimum (most specific) matching count
+                                if norm_key not in friction_case_count_lookup:
+                                    friction_case_count_lookup[norm_key] = friction.case_count
+                                else:
+                                    friction_case_count_lookup[norm_key] = min(
+                                        friction_case_count_lookup[norm_key],
+                                        friction.case_count
+                                    )
 
+                    if friction_case_count_lookup:
+                        print(f"[Stage5] Built friction_case_count_lookup: {len(friction_case_count_lookup)} entries")
+
+                    # STEP 2: Reinject journey_map case counts into gap_table
                     gap_rows = []
                     for g in analysis.get('gap_table', []):
-                        case_count = g.get('case_count', 0)
-                        gap_topic = g.get('topic_ar') or g.get('topic') or ""
+                        gap_topic = (g.get('topic_ar') or g.get('topic') or "").strip()
+                        gap_topic_norm = gap_topic.lower()[:50]
 
-                        # PRIMARY: Reinject from locked case counts (journey_map source of truth)
-                        # Try exact match on gap topic against journey_map
-                        gap_topic_lower = gap_topic.lower()[:50]
-                        matched_count = journey_map_by_topic.get(gap_topic_lower)
+                        # Try exact match first
+                        injected_count = friction_case_count_lookup.get(gap_topic_norm)
 
                         # Try partial match if exact fails
-                        if not matched_count:
-                            for jm_key, count in journey_map_by_topic.items():
-                                if jm_key in gap_topic_lower or gap_topic_lower in jm_key:
-                                    matched_count = count
+                        if not injected_count:
+                            for fkey, fcount in friction_case_count_lookup.items():
+                                if fkey in gap_topic_norm or gap_topic_norm in fkey:
+                                    injected_count = fcount
                                     break
 
-                        # If matched, reinject locked count (overrides LLM output)
-                        if matched_count and matched_count > 0:
-                            case_count = matched_count
-                            if case_count != g.get('case_count', 0):
-                                print(f"[Stage5] REINJECT: case_count={case_count} for gap '{gap_topic[:50]}' (was {g.get('case_count', '?')})")
+                        # Use injected count if found; otherwise use LLM count (with step 3 cap)
+                        case_count = injected_count if injected_count else g.get('case_count', 0)
+
+                        if injected_count and injected_count != g.get('case_count', 0):
+                            print(f"[Stage5] FIX 3 INJECT: gap '{gap_topic[:40]}' case_count: {g.get('case_count')} → {case_count} (from journey_map)")
 
                         gap_rows.append(GapRow(
                             topic=g.get('topic', ''),
@@ -597,6 +608,22 @@ def run_stage5(
                         ))
 
                     state.gap_table = gap_rows
+
+                # ── FIX 3 (continued): Hard cap gap case_counts at max friction level ──
+                # Prevents LLM hallucination for gaps with no journey_map match
+                max_friction_count = max(
+                    (f.case_count for f in (state.journey_map or [])),
+                    default=0
+                )
+
+                if max_friction_count > 0:
+                    for gap in state.gap_table:
+                        if gap.case_count > max_friction_count:
+                            print(
+                                f"[Stage5] FIX 3 CAP: gap '{(gap.topic_ar or gap.topic)[:40]}' "
+                                f"{gap.case_count} → {max_friction_count} (exceeds max friction)"
+                            )
+                            gap.case_count = max_friction_count
 
                 # Reconcile gap_table case counts against all_classified with BUDGET TRACKING
                 # Root cause fix: prevent double-counting when multiple gaps match same sub_classification
@@ -669,9 +696,42 @@ def run_stage5(
                 reconciled_gap_total = sum(g.case_count for g in state.gap_table)
                 total_cases = state.total_cases or len(state.all_classified)
 
-                # RESYNC proactive_notification_case_count from notification_opportunities BEFORE using it to scale gap_table
-                # Why: Stage 4 may have set a stale value; we must use the authoritative post-reconciliation count
+                # ── FIX 4 (continued): Re-validate notification_opportunities in Stage 5 ──
+                # After resync, re-apply sub-count caps as safety check
                 if state.notification_opportunities:
+                    actual_sub_counts_from_classified = defaultdict(int)
+                    for case in (state.all_classified or []):
+                        if case.sub_classification:
+                            actual_sub_counts_from_classified[case.sub_classification] += 1
+
+                    for i, notif in enumerate(state.notification_opportunities or []):
+                        claimed = int(notif.get("cases_eliminated", 0))
+                        notif_type = (notif.get("notification_type") or "").lower()
+
+                        if claimed < 1:
+                            continue
+
+                        # Find best-matching sub-classification
+                        best_cap = None
+                        for sub_name, sub_count in actual_sub_counts_from_classified.items():
+                            sub_norm = sub_name.lower()
+                            notif_words = set(w for w in notif_type.split() if len(w) >= 3)
+                            sub_words = set(w for w in sub_norm.split() if len(w) >= 3)
+                            overlap = len(notif_words & sub_words)
+
+                            if overlap > 0:
+                                if best_cap is None or sub_count < best_cap:
+                                    best_cap = sub_count
+
+                        if best_cap and claimed > best_cap:
+                            print(f"[Stage5] Re-capping notification cases_eliminated: {claimed} → {best_cap}")
+                            state.notification_opportunities[i] = {
+                                **notif,
+                                "cases_eliminated": best_cap
+                            }
+
+                    # RESYNC proactive_notification_case_count from notification_opportunities
+                    # Why: Stage 4 may have set a stale value; we must use the authoritative post-reconciliation count
                     authoritative_proactive = sum(
                         int(n.get("cases_eliminated", n.get("case_count", 0)))
                         for n in state.notification_opportunities
