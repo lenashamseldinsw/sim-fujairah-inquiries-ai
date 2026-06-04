@@ -248,6 +248,15 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     # Step 4: Build rows with locked case counts
     rows = []
+    sorted_rc = sorted(
+        [(cat, rc_best_friction.get(cat, (0, ""))[0]) for cat in rc_actual_totals],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+
+    # Step 4: Build rows — count is the best single friction point for this category,
+    # so it matches section 4 friction table and section 5.1 gap table exactly.
+    rows = []
     for i, (cat, total_count) in enumerate(sorted_rc, 1):
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
         _, example_text = rc_best_friction.get(cat, (0, ""))
