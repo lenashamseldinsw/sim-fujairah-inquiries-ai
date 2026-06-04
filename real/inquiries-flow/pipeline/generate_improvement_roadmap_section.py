@@ -320,14 +320,13 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
         source_counts["notification"] += 1
 
         # Issue 5 FIX: Normalize _sub_classification to canonical taxonomy value
-        # Map notification_type to the canonical sub_classification it covers,
-        # by finding the matching journey_map friction point
+        # Match by case_count equality since each notification maps to exactly one
+        # friction point with the same (reconciled) case count
         canonical_sub = next(
             (f.sub_classification for f in state.journey_map
              if f.root_cause_category == "no_proactive_notification"
              and f.sub_classification
-             and (notification_type in (f.friction_point_ar or "") or
-                  notification_type in (f.friction_point or ""))),
+             and f.case_count == cases_eliminated),
             notification_type  # fallback to raw string if no match found
         )
 

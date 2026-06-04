@@ -1109,9 +1109,15 @@ class JSONReportBuilder:
                             f"This may indicate a mismatch between LLM and state gap definitions."
                         )
 
-        # Issue 2 FIX: Use _build_root_cause_rows() directly (source of truth)
-        # Skip LLM output for root_cause_table entirely and use pre-computed rows
+        # Issue 2 FIX: Use _build_root_cause_rows() for structural data, graft LLM's الحل
+        # Pre-computed rows have locked counts/examples; LLM's الحل column is preserved
         root_cause_table_rows = _build_root_cause_rows(self.state)
+
+        # Graft الحل from LLM output (the only column we still trust from it)
+        llm_rc_rows = dg_raw.get("root_cause_table", [])
+        llm_hal_by_label = {r.get("السبب الجذري", ""): r.get("الحل", "") for r in llm_rc_rows}
+        for row in root_cause_table_rows:
+            row["الحل"] = llm_hal_by_label.get(row["السبب الجذري"], "")
 
         section_body = dg_raw["section_body"]
 
