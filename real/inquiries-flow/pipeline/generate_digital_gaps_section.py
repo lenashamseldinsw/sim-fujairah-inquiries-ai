@@ -221,22 +221,22 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
         if f.case_count >= current_best:
             rc_best_friction[cat] = (f.case_count, text)
 
-    # Step 2: Count actual cases per root_cause_category (ground truth)
-    # Each case is counted exactly once, even if multiple friction points
-    # share the same root_cause_category
-    # Issue 2 fix: use sub_to_rc mapping so cases are counted even if rc_to_subs is sparse
+    # Step 2: Count actual cases per root_cause_category — each case counted once
+    # Dedup by case_number so each case is counted at most once per category,
+    # even if multiple sub_classifications map to the same root_cause_category
+    seen_per_cat: Dict[str, set] = defaultdict(set)
     rc_actual_totals: Dict[str, int] = defaultdict(int)
+
     for case in (state.all_classified or []):
         sub = case.sub_classification
-        # Use the direct sub→cat mapping first, then fall back to checking rc_to_subs
         cat = sub_to_rc.get(sub)
         if cat is None:
-            # Fallback: check if sub is in any of the rc_to_subs sets
             for c, subs in rc_to_subs.items():
                 if sub in subs:
                     cat = c
                     break
-        if cat:
+        if cat and case.case_number not in seen_per_cat[cat]:
+            seen_per_cat[cat].add(case.case_number)
             rc_actual_totals[cat] += 1
 
     # DIAGNOSTIC: Log mappings for debugging Issue 2

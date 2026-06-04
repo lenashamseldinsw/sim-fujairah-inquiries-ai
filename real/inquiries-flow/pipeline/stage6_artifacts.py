@@ -33,6 +33,7 @@ from .generate_digital_transformation_section import generate_digital_transforma
 from .generate_ai_use_cases_section import generate_ai_use_cases_section
 from .generate_improvement_roadmap_section import generate_improvement_roadmap_section
 from .generate_conclusion_section import generate_conclusion_section
+import re as _re
 
 # Import build_report_ar to generate Arabic Word document from JSON
 try:
@@ -73,6 +74,37 @@ SHEET_NAMES = [
     'استفسارات مالية',         # Financial Inquiries
     'إعادة التصنيف',           # Misclassified Cases
 ]
+
+
+def _sync_final_notif_eliminatable(state: PipelineState) -> None:
+    """
+    Compute state.final_notif_eliminatable from the already-generated
+    digital_transformation notification_table, so the conclusion section
+    reads the correct sum rather than the stale Stage 4 estimate.
+
+    Call this after generate_digital_transformation_section has run
+    and before generate_conclusion_section is called.
+    """
+    def _parse(text: str) -> int:
+        s = str(text)
+        if 'واحدة' in s or 'واحد' in s: return 1
+        if 'حالتان' in s or 'حالتين' in s: return 2
+        d = _re.sub(r'[^\d]', '', s)
+        return int(d) if d else 0
+
+    dt_section = (state.report_sections_ar or {}).get("digital_transformation", {})
+    notif_table = dt_section.get("raw_data", {}).get("notification_table", [])
+
+    if not notif_table:
+        print("[SyncNotif] No notification_table found in digital_transformation raw_data")
+        return
+
+    total = sum(_parse(row.get("الحالات المُلغاة", "0")) for row in notif_table)
+    if total > 0:
+        state.final_notif_eliminatable = total
+        print(f"[SyncNotif] Set final_notif_eliminatable = {total} from {len(notif_table)} notification rows")
+    else:
+        print(f"[SyncNotif] Warning: notification_table sum = 0, keeping existing value {state.final_notif_eliminatable}")
 
 
 def _fix_taxonomy_consistency(cases: List[CaseRow]) -> List[CaseRow]:
@@ -680,6 +712,11 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
     # WAVE 3: conclusion (depends on both ai_use_cases and improvement_roadmap)
     # ──────────────────────────────────────────────────────────────────────────────────
     print("[GenSections] WAVE 3: Generating Conclusion (depends on AI Use Cases + Roadmap)...")
+
+    # Before generating conclusion, sync final_notif_eliminatable from the already-generated
+    # digital_transformation section so it reads the correct table sum, not the stale estimate
+    _sync_final_notif_eliminatable(state)
+
     conclusion = generate_conclusion_section(state, api_key)
     state.report_sections_ar['conclusion'] = {
         'heading': 'تاسعاً: الخلاصة — من البيانات إلى القرار',

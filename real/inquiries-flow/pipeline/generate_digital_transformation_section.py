@@ -259,6 +259,41 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
     ]
 
 
+def _build_authoritative_notif_counts(state: PipelineState) -> Dict[str, int]:
+    """
+    Build a mapping from notification_type keywords → authoritative case count
+    from all_classified, for all notification sub_classifications.
+
+    This is the single source of truth for الحالات المُلغاة in section 6.2.
+    Replaces ad-hoc per-type overrides.
+    """
+    # Map known notification sub_classifications to the keywords Stage 4 uses
+    # in notification_type strings — ordered most-specific first
+    SUB_CLASS_KEYWORD_MAP = [
+        ("شكوى عن عدم استلام الخدمة",  {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة"}),
+        ("طلب تصريح سلاح أو ترخيص",    {"سلاح", "ترخيص", "تصريح"}),
+        ("متابعة طلب مقدم",             {"متابعة", "حالة الطلب", "تحديث الطلب", "حالة طلب"}),
+    ]
+
+    # Count each sub_classification in all_classified once
+    sub_counts: Dict[str, int] = defaultdict(int)
+    for case in (state.all_classified or []):
+        if case.sub_classification:
+            sub_counts[case.sub_classification] += 1
+
+    # Build notif_type keyword → authoritative count
+    result: Dict[str, int] = {}
+    for sub_class, keywords in SUB_CLASS_KEYWORD_MAP:
+        count = sub_counts.get(sub_class, 0)
+        if count > 0:
+            result[sub_class] = count
+            for kw in keywords:
+                result[kw] = count  # also index by keyword for fuzzy lookup
+
+    print(f"[DigitalTransform] Authoritative notif counts: {dict(sub_counts)}")
+    return result
+
+
 def _count_delivery_stall_cases(state: PipelineState) -> int:
     """
     Count cases with ONLY the specific document delivery failure sub-classification.
@@ -304,7 +339,9 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     rows: List[Dict[str, str]] = []
     total_cases = len(state.all_classified) or state.total_cases
-    delivery_stall_count = _count_delivery_stall_cases(state)
+
+    # Build authoritative counts from all_classified once
+    auth_counts = _build_authoritative_notif_counts(state)
 
     # ── Primary: notification_opportunities from Stage 4 ─────────────────────
     if state.notification_opportunities:
@@ -316,31 +353,33 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
         for n in sorted_notifs:
             notif_type = n.get("notification_type") or n.get("content_summary") or ""
 
-            # Use reconciled count if available (Issue 3 fix), else fall back to raw value
+            # Use reconciled count if available, else fall back to raw value
             cases = state.reconciled_notification_counts.get(
                 notif_type,
                 n.get("cases_eliminated", 0)
             )
 
-            # ── SPECIAL OVERRIDE: delivery notification rows ──────────────────────────
-            # If this notification is about document delivery, ALWAYS use the authoritative
-            # count from all_classified, regardless of whether Stage 4 over- or under-reported it.
-            # This ensures Section 6.2 notification row always aligns with Section 7 Tool 3 impact.
-            has_delivery_keyword = any(kw in notif_type for kw in {"توصيل", "وثيقة", "استلام"})
-            print(f"[DigitalTransform] Notif '{notif_type}': cases={cases}, has_keyword={has_delivery_keyword}, delivery_stall_count={delivery_stall_count}")
-            if (isinstance(cases, int) and
-                notif_type and
-                has_delivery_keyword and
-                delivery_stall_count > 0):
-                if cases != delivery_stall_count:
+            # ── AUTHORITATIVE OVERRIDE: all notification rows use ground truth from all_classified ─
+            # Try sub_classification match first, then keyword match on notif_type
+            auth_count = None
+            for sub_class, keywords in [
+                ("شكوى عن عدم استلام الخدمة",  {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة"}),
+                ("طلب تصريح سلاح أو ترخيص",    {"سلاح", "ترخيص", "تصريح"}),
+                ("متابعة طلب مقدم",             {"متابعة", "حالة الطلب", "تحديث الطلب", "حالة طلب"}),
+            ]:
+                if any(kw in notif_type for kw in keywords):
+                    auth_count = auth_counts.get(sub_class)
+                    break
+
+            if auth_count is not None and auth_count > 0:
+                if cases != auth_count:
                     print(
-                        f"[DigitalTransform] DELIVERY OVERRIDE: "
-                        f"'{notif_type}' {cases} → {delivery_stall_count} "
-                        f"(authoritative delivery_stall count from all_classified)"
+                        f"[DigitalTransform] OVERRIDE '{notif_type}': {cases} → {auth_count} "
+                        f"(from all_classified)"
                     )
-                cases = delivery_stall_count
+                cases = auth_count
             else:
-                print(f"[DigitalTransform] NO OVERRIDE for '{notif_type}' (keyword={has_delivery_keyword}, delivery_count={delivery_stall_count})")
+                print(f"[DigitalTransform] NO OVERRIDE for '{notif_type}' (no matching sub_classification)")
 
             channel_raw = n.get("channel", "")
             channel = _CHANNEL_DISPLAY.get(channel_raw, channel_raw or "SMS / إشعار التطبيق")
