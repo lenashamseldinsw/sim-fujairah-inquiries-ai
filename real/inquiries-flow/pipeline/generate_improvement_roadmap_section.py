@@ -197,6 +197,23 @@ def _extract_keywords(text: str) -> set:
     return {w for w in words if len(w) > 2 and w not in ['من', 'في', 'على', 'عن', 'إلى', 'هذا', 'أن', 'أو']}
 
 
+def _infer_root_cause_from_gap(gap) -> str:
+    """
+    Map a GapRow back to a root_cause_category string so gap rows
+    share the same dedup namespace as notification and journey rows.
+    """
+    gap_type = (gap.gap_type or "").lower()
+    if gap.proactive_notification_opportunity:
+        return "no_proactive_notification"
+    if "تقني" in gap_type or "platform" in gap_type or "bug" in gap_type:
+        return "platform_bug"
+    if "missing" in gap_type or "مفقود" in gap_type or "غائب" in gap_type:
+        return "missing_info"
+    if "سياس" in gap_type or "policy" in gap_type:
+        return "policy_complexity"
+    return "inaccessible_info"
+
+
 def _deduplicate_roadmap_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Remove near-duplicate roadmap rows using locked field signatures.
@@ -390,6 +407,10 @@ def _build_roadmap_rows(state: PipelineState) -> List[Dict[str, Any]]:
             "seed_recommendation_ar": rec_text,
             "seed_impact_ar":         f"معالجة {gap.case_count}+ حالة مرتبطة بـ {gap.topic_ar or gap.topic}",
             "case_count":             gap.case_count,
+            # Issue 5 FIX: Internal dedup keys (stripped before prompt by _strip_internal_keys)
+            "_root_cause_category":   _infer_root_cause_from_gap(gap),
+            "_sub_classification":    gap.sub_classification or cluster_key,
+            "_case_count":            gap.case_count,
         })
 
     # ── SOURCE 3: journey_map friction clusters (stage 4) ────────────────────

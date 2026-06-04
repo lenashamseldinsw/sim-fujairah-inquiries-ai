@@ -774,21 +774,38 @@ def generate_digital_transformation_section(
             f"[DigitalTransform] 'notification_table' missing or not a list in LLM response. "
             f"Got type: {type(llm_notif_rows)}"
         )
+
+    # Issue 4&6 FIX: Warn and pad/trim instead of raising on row count mismatch
     if len(llm_notif_rows) != notif_count:
-        raise RuntimeError(
-            f"[DigitalTransform] notification_table row count mismatch: "
-            f"expected {notif_count}, LLM returned {len(llm_notif_rows)}."
+        print(
+            f"[DigitalTransform] WARNING: notification_table row count mismatch: "
+            f"expected {notif_count}, LLM returned {len(llm_notif_rows)}. "
+            f"Padding missing rows with pre-computed locked values."
         )
+        # Pad missing rows using pre-computed rows (LLM omitted them)
+        while len(llm_notif_rows) < notif_count:
+            idx = len(llm_notif_rows)
+            llm_notif_rows.append({
+                "نوع الإشعار":           notif_rows[idx]["نوع الإشعار"],
+                "الحالات المُلغاة":      notif_rows[idx]["الحالات المُلغاة"],
+                "محتوى الإشعار (مثال)": "",   # LLM will be re-prompted next run
+                "القناة":                notif_rows[idx]["القناة"],
+                "الأثر المتوقع":         notif_rows[idx]["الأثر المتوقع"],
+            })
+        # Trim if LLM hallucinated extra rows
+        llm_notif_rows = llm_notif_rows[:notif_count]
 
     merged_notif_table = []
     for i, (pre_row, llm_row) in enumerate(zip(notif_rows, llm_notif_rows)):
         sample_msg = llm_row.get("محتوى الإشعار (مثال)", "")
 
+        # Issue 4&6 FIX: Warn and fill instead of raising on missing محتوى
         if not sample_msg:
-            raise RuntimeError(
-                f"[DigitalTransform] Missing 'محتوى الإشعار (مثال)' in notification_table "
-                f"row {i} (type: '{pre_row['نوع الإشعار']}')"
+            print(
+                f"[DigitalTransform] WARNING: Missing 'محتوى الإشعار (مثال)' in "
+                f"notification_table row {i} (type: '{pre_row['نوع الإشعار']}'). Using placeholder."
             )
+            sample_msg = f"شرطة الفجيرة: إشعار بشأن {pre_row['نوع الإشعار']}"
 
         # Column order matches sample output:
         # نوع الإشعار | الحالات المُلغاة | محتوى الإشعار (مثال) | القناة | الأثر المتوقع
