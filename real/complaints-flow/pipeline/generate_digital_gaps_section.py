@@ -271,33 +271,78 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Pre-computed rows for Section 5.1 table.
 
+    FIX 2: Derives 'الشكاوى' case count from journey_map (Section 4 source),
+    not from gap_table (Stage 5 reconciliation). This ensures Section 5.1
+    and Section 4 cite the same case counts for the same friction points.
+
     Sort: Critical first, then by case_count descending.
     Columns locked here — LLM only adds التوصية.
     القناة الرسمية في دليل الخدمات is pre-computed from guidebook_status + excerpt.
 
-    KEY FIX: نوع الفجوة is now computed dynamically from friction data, not from LLM.
+    KEY FIX: نوع الفجوة is computed dynamically from friction data, not from LLM.
     This ensures accurate classification based on actual complaint patterns, not hallucination.
 
     Schema: الخدمة | الشكاوى | القناة الرسمية في دليل الخدمات | نوع الفجوة
     """
+    def _journey_map_case_count(gap_topic: str) -> int:
+        """
+        Sum case_count across journey_map entries whose text matches this gap topic.
+        Uses the same substring matching as _compute_gap_type_from_friction so the
+        two columns are derived from the same friction-point scope.
+        Falls back to gap.case_count if no journey_map match is found.
+        """
+        topic_lower = (gap_topic or "").lower().strip()
+        if not topic_lower:
+            return None
+
+        matched = []
+        for f in state.journey_map:
+            for text in [
+                (f.friction_point_ar or "").lower(),
+                (f.friction_point or "").lower(),
+                (f.cluster_ar or "").lower(),
+                (f.cluster or "").lower(),
+            ]:
+                if topic_lower and (topic_lower in text or text in topic_lower):
+                    matched.append(f)
+                    break  # Found match in this friction entry, no need to check other text fields
+
+        if matched:
+            # Deduplicate by friction object identity before summing
+            seen_ids = set()
+            total = 0
+            for f in matched:
+                fid = id(f)
+                if fid not in seen_ids:
+                    seen_ids.add(fid)
+                    total += f.case_count
+            return total
+        return None  # Signal: no match found, caller uses gap.case_count as fallback
+
     sorted_gaps = sorted(
         state.gap_table,
         key=lambda g: (_SEVERITY_ORDER.get(g.severity, 9), -(g.case_count or 0))
     )
-    return [
-        {
-            "الخدمة":                            gap.topic_ar or gap.topic,
-            "الشكاوى":                          str(gap.case_count),
+
+    rows = []
+    for gap in sorted_gaps:
+        topic = gap.topic_ar or gap.topic
+        journey_count = _journey_map_case_count(topic)
+        display_count = journey_count if journey_count is not None else gap.case_count
+
+        rows.append({
+            "الخدمة":                            topic,
+            "الشكاوى":                          str(display_count),
             "القناة الرسمية في دليل الخدمات": _build_guidebook_channel_status(gap),
             "نوع الفجوة":                       _compute_gap_type_from_friction(
-                gap.topic_ar or gap.topic,
+                topic,
                 state,
                 guidebook_status=gap.guidebook_status or "",
                 clarity=gap.clarity_assessment or "",
             )[1],  # [1] = gap_type_ar (Arabic label)
-        }
-        for gap in sorted_gaps
-    ]
+        })
+
+    return rows
 
 
 def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:

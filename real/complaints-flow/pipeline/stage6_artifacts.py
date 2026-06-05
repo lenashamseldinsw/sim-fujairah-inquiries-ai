@@ -1476,11 +1476,11 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
             }
         ]
 
-        # TASK 7 FIX: SECTION 2.3: الحقول المحللة — with dynamic field counts
+        # FIX 1: SECTION 2.3: الحقول المحللة — use authoritative schema constant
         # Identify structured vs free-text fields
         free_text_fields = {'تفاصيل_الطلب', 'الحل'}  # Description and resolution
-        total_fields = len(state.column_names) if state.column_names else 0
-        structured_fields = total_fields - len(free_text_fields)
+        total_fields = len(COMPLAINTS_EXCEL_COLUMNS)  # Use module-level constant (21 columns)
+        structured_fields = total_fields - len(free_text_fields)  # 21 - 2 = 19
 
         analyzed_fields_text = (
             f"الحقول المنظمة المستخدمة في التحليل ({structured_fields} حقل): "

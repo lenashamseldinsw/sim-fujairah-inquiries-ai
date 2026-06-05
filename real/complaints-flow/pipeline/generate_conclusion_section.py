@@ -605,8 +605,13 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     proactive_cancellable       = _count_proactive_cancellable(state)
     critical_gap_count          = _count_critical_gaps(state)
 
-    # Distil key findings from prior sections — what the conclusion must echo
-    top_friction = state.journey_map[0] if state.journey_map else None
+    # FIX 3: Distil key findings from prior sections — what the conclusion must echo
+    # Get the largest friction point by case_count (source of truth for consistency)
+    top_friction = max(
+        state.journey_map,
+        key=lambda f: f.case_count,
+        default=None
+    ) if state.journey_map else None
     top_friction_label    = top_friction.cluster_ar or top_friction.cluster if top_friction else ""
     top_friction_count    = top_friction.case_count if top_friction else 0
 
