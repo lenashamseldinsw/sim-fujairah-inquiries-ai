@@ -359,22 +359,22 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build the three-pillar transformation pivot table from run-specific findings.
 
-    Uses deterministic enum-based classification (root_cause_category from journey_map)
-    instead of keyword matching on Arabic prose. This ensures consistent pillar
-    assignment across all report sections.
+    Architecture: pair each roadmap row with the journey_map friction at the same
+    index (both ordered by case_count descending). Use the roadmap's التوصية text
+    (action phrases) as cell content, and the friction's root_cause_category to
+    determine which pillar it belongs to. No text matching needed.
 
-      • Pillar 1 (الدقة):    roadmap التوصية phrases whose friction has
-                              root_cause in {platform_bug, wrong_channel_used,
+      • Pillar 1 (الدقة):    roadmap التوصية from rows paired with friction entries
+                              whose root_cause is in {platform_bug, wrong_channel_used,
                               policy_complexity, missing_info, inaccessible_info}
-      • Pillar 2 (الإتاحة):  roadmap التوصية phrases whose friction has
-                              root_cause in {no_proactive_notification,
+      • Pillar 2 (الإتاحة):  roadmap التوصية from rows paired with friction entries
+                              whose root_cause is in {no_proactive_notification,
                               processing_delay, service_delivery_failure}
       • Pillar 3 (الذكاء):   AI tool names from ai_use_cases (cleaned short labels)
 
-    Fallbacks: gap topics → notification types → hardcoded defaults.
+    Fallbacks use run-specific journey_map friction labels, not hardcoded strings.
     """
 
-    # Root-cause categories that belong to each pillar domain
     ACCURACY_ROOT_CAUSES = {
         'platform_bug', 'wrong_channel_used', 'policy_complexity',
         'missing_info', 'inaccessible_info',
@@ -383,95 +383,44 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
         'no_proactive_notification', 'processing_delay', 'service_delivery_failure',
     }
 
-    # Build a lookup: friction_point_ar → root_cause_category from journey_map
-    friction_to_root_cause = {}
-    for friction in (state.journey_map or []):
-        key = (friction.friction_point_ar or friction.friction_point or '').strip().lower()
-        if key:
-            friction_to_root_cause[key] = friction.root_cause_category
+    def _short(text: str) -> str:
+        """First clause only — keeps cell text concise."""
+        return text.split('،')[0].split('.')[0].strip()
 
-    # Helper: determine root_cause_category for a gap by matching its topic against journey_map
-    def _gap_root_cause(gap) -> str:
-        topic = (gap.topic_ar or gap.topic or '').strip().lower()
-        # Direct match first
-        if topic in friction_to_root_cause:
-            return friction_to_root_cause[topic]
-        # Substring match fallback (topic contained in or contains a friction key)
-        for fkey, rc in friction_to_root_cause.items():
-            if topic and fkey and (topic in fkey or fkey in topic):
-                return rc
-        return ''
-
-    # Read roadmap rows — التوصية is already a concise ≤35-word action phrase
+    # Read roadmap rows and sort journey_map by case_count (same order as roadmap generation).
     roadmap_section = (state.report_sections_ar or {}).get('improvement_roadmap', {})
     roadmap_raw = roadmap_section.get('raw_data', {}) if roadmap_section else {}
     roadmap_rows = roadmap_raw.get('roadmap_table', []) if roadmap_raw else []
 
-    # Helper to extract first clause for brevity (split at sentence/phrase boundaries)
-    def _short(text: str) -> str:
-        return text.split('،')[0].split('.')[0].strip()
+    journey_map_sorted = sorted(
+        state.journey_map or [],
+        key=lambda f: f.case_count,
+        reverse=True,
+    )
 
     accuracy_items = []
     accessibility_items = []
 
-    # First pass: classify roadmap rows by their gap's root_cause_category
-    for row in roadmap_rows:
+    # Pair roadmap rows with journey_map entries by index.
+    # Roadmap row i gets its root_cause from journey_map_sorted[i].
+    for i, row in enumerate(roadmap_rows):
         rec = _short((row.get('التوصية') or '').strip())
         if not rec:
             continue
 
-        # Find the gap this roadmap row addresses by substring matching in the recommendation
-        matched_rc = ''
-        for gap in sorted(state.gap_table or [], key=lambda g: g.case_count, reverse=True):
-            topic = (gap.topic_ar or gap.topic or '').strip().lower()
-            # Match if gap topic appears in the recommendation
-            if topic and topic[:20] in rec.lower():
-                matched_rc = _gap_root_cause(gap)
-                if matched_rc:
-                    break
+        # Get the root_cause of the friction this roadmap row addresses.
+        root_cause = ''
+        if i < len(journey_map_sorted):
+            root_cause = journey_map_sorted[i].root_cause_category or ''
 
-        # If no gap match, try direct journey_map lookup against recommendation text
-        if not matched_rc:
-            for fkey, rc in friction_to_root_cause.items():
-                if fkey[:15] in rec.lower():
-                    matched_rc = rc
-                    break
-
-        # Classify into appropriate pillar based on root_cause_category
-        if matched_rc in ACCURACY_ROOT_CAUSES and len(accuracy_items) < 4:
+        if root_cause in ACCURACY_ROOT_CAUSES and len(accuracy_items) < 4:
             accuracy_items.append(rec)
-        elif matched_rc in ACCESSIBILITY_ROOT_CAUSES and len(accessibility_items) < 4:
+        elif root_cause in ACCESSIBILITY_ROOT_CAUSES and len(accessibility_items) < 4:
             accessibility_items.append(rec)
-        elif not matched_rc and len(accessibility_items) < 4:
-            # Unmatched rows default to accessibility (most roadmap items are notification-based)
+        elif not root_cause and len(accessibility_items) < 4:
             accessibility_items.append(rec)
 
-    # ── Pillar 1 fallback: gap topics whose root_cause is ACCURACY ──
-    if len(accuracy_items) < 4:
-        for gap in sorted(state.gap_table or [], key=lambda g: g.case_count, reverse=True):
-            rc = _gap_root_cause(gap)
-            if rc in ACCURACY_ROOT_CAUSES:
-                label = _short(gap.topic_ar or gap.topic or '')
-                if label and label not in accuracy_items and len(accuracy_items) < 4:
-                    accuracy_items.append(label)
-
-    # ── Pillar 2 fallback: gap topics whose root_cause is ACCESSIBILITY ──
-    if len(accessibility_items) < 4:
-        for gap in sorted(state.gap_table or [], key=lambda g: g.case_count, reverse=True):
-            rc = _gap_root_cause(gap)
-            if rc in ACCESSIBILITY_ROOT_CAUSES:
-                label = _short(gap.topic_ar or gap.topic or '')
-                if label and label not in accessibility_items and len(accessibility_items) < 4:
-                    accessibility_items.append(label)
-
-    # ── Pillar 2 secondary fallback: notification_type labels ──
-    if len(accessibility_items) < 4:
-        for notif in (state.notification_opportunities or []):
-            label = (notif.get('notification_type') or '').strip()
-            if label and label not in accessibility_items and len(accessibility_items) < 4:
-                accessibility_items.append(label)
-
-    # ── Pillar 3: AI tool names (cleaned short labels, no prose) ──
+    # ── Pillar 3: AI tool names ──
     intelligence_items = []
     ai_section = (state.report_sections_ar or {}).get('ai_use_cases', {})
     ai_raw = ai_section.get('raw_data', {}) if ai_section else {}
@@ -480,24 +429,46 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
         if tool and len(intelligence_items) < 4:
             intelligence_items.append(tool)
 
-    # ── Hard fallbacks (only reached if state is unusually sparse) ──
+    # ── Fallbacks: use run-specific journey_map friction labels ──
+    # These only kick in if roadmap is empty or sparse.
+    if len(accuracy_items) < 4:
+        for friction in journey_map_sorted:
+            if friction.root_cause_category in ACCURACY_ROOT_CAUSES:
+                label = _short(friction.friction_point_ar or friction.friction_point or '')
+                if label and label not in accuracy_items and len(accuracy_items) < 4:
+                    accuracy_items.append(label)
+
+    if len(accessibility_items) < 4:
+        for friction in journey_map_sorted:
+            if friction.root_cause_category in ACCESSIBILITY_ROOT_CAUSES:
+                label = _short(friction.friction_point_ar or friction.friction_point or '')
+                if label and label not in accessibility_items and len(accessibility_items) < 4:
+                    accessibility_items.append(label)
+
+    if len(intelligence_items) < 4:
+        for notif in (state.notification_opportunities or []):
+            label = (notif.get('notification_type') or '').strip()
+            if label and label not in intelligence_items and len(intelligence_items) < 4:
+                intelligence_items.append(label)
+
+    # ── Hard defaults: last resort, should never be reached in a normal run ──
     accuracy_defaults = [
-        "تحسين دقة توجيه الشكاوى بين الجهات",
-        "تقليل الشكاوى المكررة بالإشعار الاستباقي",
-        "تصحيح أخطاء إدخال البيانات في المنصة",
-        "توضيح نطاق الاختصاص للمتعاملين",
+        "تحسين دقة توجيه الشكاوى",
+        "تقليص الشكاوى المكررة",
+        "تصحيح بيانات المخالفات",
+        "توضيح نطاق الاختصاص",
     ]
     accessibility_defaults = [
         "إشعارات SMS استباقية عند كل تحديث",
         "نظام تتبع ذاتي لحالة الشكوى",
-        "إشعار فوري عند استلام البلاغ برقم مرجعي",
-        "توضيح مسارات الاستئناف والتظلم",
+        "إشعار فوري عند استلام البلاغ",
+        "توضيح مسارات الاستئناف",
     ]
     intelligence_defaults = [
         "مُصنِّف النصوص الآلي بتقنية NLP",
-        "نظام كشف الشذوذ الإحصائي في الشكاوى",
+        "نظام كشف الشذوذ الإحصائي",
         "وكيل اقتراح الردود بتقنية RAG",
-        "نموذج التنبؤ بحجم الشكاوى عبر السلاسل الزمنية",
+        "نموذج التنبؤ بحجم الشكاوى",
     ]
     for d in accuracy_defaults:
         if len(accuracy_items) < 4:
