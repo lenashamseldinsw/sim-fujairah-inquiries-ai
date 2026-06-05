@@ -80,6 +80,7 @@ class FAQCandidate(BaseModel):
     question_ar: Optional[str] = None
     answer_ar: Optional[str] = None
     top_level: Optional[str] = None  # Official complaint category (e.g., 'شكوى', 'استفسار', 'طلب')
+    sub_classification: Optional[str] = None  # Links FAQ to authoritative case count
 
 
 class GapRow(BaseModel):

@@ -494,6 +494,27 @@ def generate_customer_journey_section(
                     f"Reconciliation may not have completed successfully."
                 )
 
+        # ── Enforce friction_count verbatim in section_body ──
+        # LLM may hallucinate a different friction_count in prose. Enforce the pre-computed value.
+        import re as _re
+        raw_body = result.get("section_body", "")
+
+        # Pattern: digit(s) before Arabic friction-point phrases
+        fixed_body = _re.sub(
+            r'\b\d+\b(?=\s+نقطة احتكاك)',
+            str(friction_count),
+            raw_body,
+        )
+        fixed_body = _re.sub(
+            r'\b\d+\b(?=\s+نقاط? احتكاك)',
+            str(friction_count),
+            fixed_body,
+        )
+
+        if fixed_body != raw_body:
+            print(f"[CustomerJourney] section_body friction_count corrected to {friction_count}")
+            result["section_body"] = fixed_body
+
         print(
             f"[CustomerJourney] OK — "
             f"friction_table={len(merged_friction_table)} rows"

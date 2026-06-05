@@ -126,8 +126,18 @@ ANALYSIS_TOOL = {
                         "question_ar": {"type": "string"},
                         "answer": {"type": "string"},
                         "answer_ar": {"type": "string"},
-                        "frequency": {"type": "integer"}
-                    }
+                        "frequency": {"type": "integer"},
+                        "sub_classification": {
+                            "type": "string",
+                            "description": (
+                                "The sub_classification value from the patterns list that this FAQ "
+                                "most directly addresses. Must be copied verbatim from one of the "
+                                "sub_classification values in the patterns array returned above. "
+                                "This links the FAQ to its authoritative case count."
+                            )
+                        }
+                    },
+                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification"]
                 }
             },
             "self_service_tags": {
@@ -569,7 +579,10 @@ def _reconcile_counts(
             f"exceeds total cases={actual_total}. Capping to {actual_total}."
         )
 
-    # Step 3: For each notification, cap cases_eliminated at sub-classification size
+    # Step 3: For each notification, cap cases_eliminated against the proactive ceiling
+    # Don't match against individual frictions — shared Arabic vocabulary (البلاغ, etc.)
+    # causes false positives. The authoritative ceiling is max_proactive_cases from Stage 4's
+    # per-case analysis, which is the total notification-elimination potential across all frictions.
     reconciled_notifications = []
     for n in notification_opportunities:
         original_claimed = n.get("cases_eliminated", 0)
@@ -578,45 +591,21 @@ def _reconcile_counts(
             reconciled_notifications.append(n)
             continue
 
-        # Try to match notification to a sub-classification
-        notification_type = n.get("notification_type", "")
-        best_sub_match = None
-        best_match_count = 0
+        # Cap solely against the proactive ceiling
+        capped_count = min(original_claimed, max_proactive_cases)
 
-        for sub_name, sub_count in actual_sub_counts.items():
-            # Simple keyword matching: check for word overlap
-            notif_type_norm = notification_type.lower()
-            sub_norm = sub_name.lower()
-
-            # Extract meaningful words (len >= 3 to filter noise)
-            notif_words = set(w for w in notif_type_norm.split() if len(w) >= 3)
-            sub_words = set(w for w in sub_norm.split() if len(w) >= 3)
-
-            overlap = len(notif_words & sub_words)
-            if overlap > 0 and sub_count > best_match_count:
-                best_sub_match = sub_name
-                best_match_count = sub_count
-
-        # Cap cases_eliminated at sub-classification size
-        if best_sub_match and original_claimed > best_match_count:
-            capped_count = best_match_count
+        if capped_count != original_claimed:
+            notification_type = n.get("notification_type", "")
             print(
                 f"[Stage4] Capping notification '{notification_type}' "
                 f"cases_eliminated: {original_claimed} → {capped_count} "
-                f"(sub-classification '{best_sub_match}' has {best_match_count} cases)"
+                f"(proactive ceiling: {max_proactive_cases})"
             )
-        else:
-            capped_count = original_claimed
 
-        # Create capped notification
-        reconciled_notif = {
-            **n,
-            "cases_eliminated": capped_count
-        }
-        reconciled_notifications.append(reconciled_notif)
+        reconciled_notifications.append({**n, "cases_eliminated": capped_count})
 
     print(
-        f"[Stage4] Reconciled notification_opportunities against sub-classification sizes"
+        f"[Stage4] Reconciled notification_opportunities against proactive ceiling"
     )
 
     return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
@@ -639,9 +628,17 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"}
+                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"},
+                        "sub_classification": {
+                            "type": "string",
+                            "description": (
+                                "The sub_classification value from the patterns list that this FAQ "
+                                "most directly addresses. Must be copied verbatim from a sub_classification "
+                                "in the provided patterns."
+                            )
+                        }
                     },
-                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency"]
+                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification"]
                 }
             }
         },
@@ -724,6 +721,7 @@ def _retry_faq_only(
                 frequency=f.get("frequency", 0),
                 validation_status="PENDING",
                 top_level=f.get("top_level", ""),
+                sub_classification=f.get("sub_classification", ""),
             )
             for f in raw_items
         ]
@@ -977,7 +975,8 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                     answer_ar=f.get('answer_ar', ''),
                     frequency=f.get('frequency', 0),
                     validation_status='PENDING',
-                    top_level=f.get('top_level', '')
+                    top_level=f.get('top_level', ''),
+                    sub_classification=f.get('sub_classification', '')
                 )
                 for f in analysis.get('faq_candidates', [])
             ]
