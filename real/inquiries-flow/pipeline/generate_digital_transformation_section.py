@@ -270,8 +270,13 @@ def _build_authoritative_notif_counts(state: PipelineState) -> Dict[str, int]:
     # Map known notification sub_classifications to the keywords Stage 4 uses
     # in notification_type strings — ordered most-specific first
     SUB_CLASS_KEYWORD_MAP = [
-        ("شكوى عن عدم استلام الخدمة",  {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة"}),
+        # Most specific first — license/vehicle renewal tracking (not generic followup)
+        ("طلب تجديد رخصة أو ملكية",    {"تجديد الرخصة", "تسجيل مركبة", "تجديد رخصة", "تجديد ملكية"}),
+        # Generic document delivery (shipping)
+        ("شكوى عن عدم استلام الخدمة",   {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة", "بريد الإمارات"}),
+        # Weapon permits
         ("طلب تصريح سلاح أو ترخيص",    {"سلاح", "ترخيص", "تصريح"}),
+        # Generic request followup — must come AFTER the more specific renewal entry
         ("متابعة طلب مقدم",             {"متابعة", "حالة الطلب", "تحديث الطلب", "حالة طلب"}),
     ]
 
@@ -363,8 +368,13 @@ def _build_notification_rows(state: PipelineState) -> List[Dict[str, str]]:
             # Try sub_classification match first, then keyword match on notif_type
             auth_count = None
             for sub_class, keywords in [
-                ("شكوى عن عدم استلام الخدمة",  {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة"}),
+                # Most specific first — license/vehicle renewal tracking (not generic followup)
+                ("طلب تجديد رخصة أو ملكية",    {"تجديد الرخصة", "تسجيل مركبة", "تجديد رخصة", "تجديد ملكية"}),
+                # Generic document delivery (shipping)
+                ("شكوى عن عدم استلام الخدمة",   {"توصيل", "وثيقة", "استلام", "شحن", "ملكية", "رخصة", "بريد الإمارات"}),
+                # Weapon permits
                 ("طلب تصريح سلاح أو ترخيص",    {"سلاح", "ترخيص", "تصريح"}),
+                # Generic request followup — must come AFTER the more specific renewal entry
                 ("متابعة طلب مقدم",             {"متابعة", "حالة الطلب", "تحديث الطلب", "حالة طلب"}),
             ]:
                 if any(kw in notif_type for kw in keywords):
