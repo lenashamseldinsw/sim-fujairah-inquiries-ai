@@ -387,37 +387,77 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
         """First clause only — keeps cell text concise."""
         return text.split('،')[0].split('.')[0].strip()
 
-    # Read roadmap rows and sort journey_map by case_count (same order as roadmap generation).
+    # Read roadmap rows.
     roadmap_section = (state.report_sections_ar or {}).get('improvement_roadmap', {})
     roadmap_raw = roadmap_section.get('raw_data', {}) if roadmap_section else {}
     roadmap_rows = roadmap_raw.get('roadmap_table', []) if roadmap_raw else []
 
-    journey_map_sorted = sorted(
-        state.journey_map or [],
-        key=lambda f: f.case_count,
-        reverse=True,
-    )
+    # Build lookup: friction_point_ar/cluster_ar → root_cause_category from journey_map.
+    # Used to resolve the root_cause of journey_map-sourced roadmap rows.
+    friction_rc_lookup = {}
+    for f in (state.journey_map or []):
+        for key in [f.friction_point_ar, f.friction_point, f.cluster_ar, f.cluster]:
+            if key:
+                friction_rc_lookup[key.strip().lower()] = f.root_cause_category
+
+    # Build lookup: gap topic → root_cause via journey_map matching.
+    # Used to resolve the root_cause of gap_table-sourced roadmap rows.
+    def _rc_for_gap_topic(topic: str) -> str:
+        t = (topic or '').strip().lower()
+        if t in friction_rc_lookup:
+            return friction_rc_lookup[t]
+        for fkey, rc in friction_rc_lookup.items():
+            if t and fkey and (t in fkey or fkey in t):
+                return rc
+        return ''
+
+    # Notification opportunities always map to ACCESSIBILITY.
+    notif_keys = {
+        (n.get('notification_type') or '')[:30].replace(' ', '_').lower()
+        for n in (state.notification_opportunities or [])
+    }
 
     accuracy_items = []
     accessibility_items = []
 
-    # Pair roadmap rows with journey_map entries by index.
-    # Roadmap row i gets its root_cause from journey_map_sorted[i].
-    for i, row in enumerate(roadmap_rows):
+    for row in roadmap_rows:
         rec = _short((row.get('التوصية') or '').strip())
         if not rec:
             continue
 
-        # Get the root_cause of the friction this roadmap row addresses.
-        root_cause = ''
-        if i < len(journey_map_sorted):
-            root_cause = journey_map_sorted[i].root_cause_category or ''
+        row_id = (row.get('row_id') or '').lower()
+
+        # Determine root_cause from row_id prefix (encodes the source).
+        if row_id.startswith('notif_'):
+            # Notification opportunities are always accessibility domain.
+            root_cause = 'no_proactive_notification'
+
+        elif row_id.startswith('gap_'):
+            # Find the gap this row came from via row_id (format: gap_<topic[:40]>).
+            gap_key = row_id[4:].replace('_', ' ')
+            root_cause = _rc_for_gap_topic(gap_key)
+
+        elif row_id.startswith('journey_') or row_id.startswith('consolidated_'):
+            # Find the friction this row came from.
+            friction_key = row_id.split('_', 1)[1].replace('_', ' ')
+            root_cause = friction_rc_lookup.get(friction_key, '')
+            if not root_cause:
+                root_cause = _rc_for_gap_topic(friction_key)
+
+        elif row_id.startswith('ai_'):
+            # AI use case rows belong to the intelligence pillar — skip for 1 and 2.
+            continue
+
+        else:
+            root_cause = ''
 
         if root_cause in ACCURACY_ROOT_CAUSES and len(accuracy_items) < 4:
             accuracy_items.append(rec)
         elif root_cause in ACCESSIBILITY_ROOT_CAUSES and len(accessibility_items) < 4:
             accessibility_items.append(rec)
         elif not root_cause and len(accessibility_items) < 4:
+            # Unresolved root cause: default to accessibility
+            # (most unresolved roadmap items are notification-related)
             accessibility_items.append(rec)
 
     # ── Pillar 3: AI tool names ──
