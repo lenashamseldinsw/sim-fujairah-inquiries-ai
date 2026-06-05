@@ -453,6 +453,55 @@ def _build_root_cause_prompt_context(state: PipelineState, rc_rows: List[Dict[st
     return context
 
 
+def _fix_section_body_counts(
+    section_body: str,
+    critical_count: int,
+    medium_count: int,
+    proactive_case_count: int,
+    proactive_pct: float,
+) -> str:
+    """
+    Replace LLM-generated gap severity counts in section_body with
+    pre-computed locked values.
+
+    The LLM receives critical_count and medium_count as INPUTS but may still
+    write different numbers in section_body. This function overwrites any
+    Arabic numeral pattern matching "N فجوات حرجة" or "N فجوات عالية" with
+    the authoritative values, preserving surrounding prose unchanged.
+
+    Also enforces proactive_case_count and proactive_pct for the same reason.
+    """
+    import re
+
+    # Pattern: any Arabic/Latin digits immediately before these Arabic phrases
+    # Covers: "5 فجوات حرجة", "٥ فجوات حرجة", etc.
+    section_body = re.sub(
+        r'\d+(?:\.\d+)?(?= فجوات? حرج)',
+        str(critical_count),
+        section_body,
+    )
+    section_body = re.sub(
+        r'\d+(?:\.\d+)?(?= فجوات? عالية)',
+        str(medium_count),
+        section_body,
+    )
+    # Enforce proactive case count and percentage together when they appear
+    # Pattern: "N حالة (X% من الإجمالي)" — fix both the count and the pct
+    if proactive_case_count > 0:
+        section_body = re.sub(
+            r'\d+(?= حالة \(\d+(?:\.\d+)?% من الإجمالي\))',
+            str(proactive_case_count),
+            section_body,
+        )
+        section_body = re.sub(
+            r'(?<=حالة \()\d+(?:\.\d+)?(?=% من الإجمالي\))',
+            f"{proactive_pct:.1f}",
+            section_body,
+        )
+
+    return section_body
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Main section generator
 # ──────────────────────────────────────────────────────────────────────────────
@@ -698,7 +747,26 @@ def generate_digital_gaps_section(
             f"Raw response (first {show_chars} chars):\n{response_text[:show_chars]}"
         )
 
-    # Task 11: Post-generation validation — warn if section_body contains numbers exceeding total_cases
+    # ── Enforce locked counts in section_body ────────────────────────────────
+    # The LLM receives critical_count/medium_count as inputs but may still write
+    # different values. Overwrite with pre-computed values before any downstream use.
+    raw_section_body = result.get("section_body", "")
+    fixed_section_body = _fix_section_body_counts(
+        raw_section_body,
+        critical_count=critical_count,
+        medium_count=medium_count,
+        proactive_case_count=proactive_case_count,
+        proactive_pct=proactive_pct,
+    )
+    if fixed_section_body != raw_section_body:
+        print(
+            f"[DigitalGaps] section_body counts corrected: "
+            f"critical={critical_count}, medium={medium_count}, "
+            f"proactive={proactive_case_count} ({proactive_pct}%)"
+        )
+    result["section_body"] = fixed_section_body
+
+    # Post-generation validation — warn if section_body still contains numbers exceeding total_cases
     section_body_check = result.get("section_body", "")
     import re as _re
     numbers_in_body = [int(n) for n in _re.findall(r'\b(\d+)\b', section_body_check) if int(n) > 1]
