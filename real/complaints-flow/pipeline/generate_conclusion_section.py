@@ -400,6 +400,12 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
             if key:
                 friction_rc_lookup[key.strip().lower()] = f.root_cause_category
 
+    journey_map_sorted = sorted(
+        state.journey_map or [],
+        key=lambda f: f.case_count,
+        reverse=True,
+    )
+
     # Build lookup: gap topic → root_cause via journey_map matching.
     # Used to resolve the root_cause of gap_table-sourced roadmap rows.
     def _rc_for_gap_topic(topic: str) -> str:
@@ -410,12 +416,6 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
             if t and fkey and (t in fkey or fkey in t):
                 return rc
         return ''
-
-    # Notification opportunities always map to ACCESSIBILITY.
-    notif_keys = {
-        (n.get('notification_type') or '')[:30].replace(' ', '_').lower()
-        for n in (state.notification_opportunities or [])
-    }
 
     accuracy_items = []
     accessibility_items = []
