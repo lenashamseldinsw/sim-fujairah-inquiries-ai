@@ -658,7 +658,8 @@ def run_stage5(
                 # Sort gaps by case_count descending — most impactful gets first claim on budget
                 sorted_gaps = sorted(state.gap_table, key=lambda g: g.case_count, reverse=True)
 
-                # Re-derive each gap row's case_count with budget deduction
+                # Reconcile gap case_counts: deduct injected counts from budget to prevent double-counting
+                # FIX: Validate injected counts against budget; don't recalculate from scratch
                 for gap in sorted_gaps:
                     topic_lower = (gap.topic_ar or gap.topic or "").strip().lower()
                     matched_subs: set = set()
@@ -668,33 +669,60 @@ def run_stage5(
                             matched_subs.update(subs)
 
                     if matched_subs:
-                        # Compute available budget: sum of remaining allocations in matched subs
+                        # The gap already has a case_count (from FIX 3 injection)
+                        # Validate it against available budget, then deduct from budget
+                        claimed_count = gap.case_count or 0
                         available_budget = sum(sub_budget.get(s, 0) for s in matched_subs)
 
-                        if available_budget > 0:
-                            reconciled = available_budget
-                            if reconciled != gap.case_count:
-                                print(
-                                    f"[Stage5] RECONCILE gap '{(gap.topic_ar or gap.topic)[:40]}': "
-                                    f"{gap.case_count} → {reconciled} "
-                                    f"(subs: {matched_subs}, available_budget: {available_budget})"
-                                )
-                            gap.case_count = reconciled
-
-                            # DEDUCT from budget: zero out all matched subs (they've been claimed)
-                            for sub in matched_subs:
-                                sub_budget[sub] = 0
+                        if claimed_count <= available_budget:
+                            # Gap claim is within budget — deduct from budget (no recalculation)
+                            # Distribute deduction proportionally across matched subs
+                            if available_budget > 0:
+                                for sub in matched_subs:
+                                    current = sub_budget.get(sub, 0)
+                                    deduction = round(claimed_count * (current / available_budget))
+                                    sub_budget[sub] = max(0, current - deduction)
                         else:
-                            # No budget left for this gap — all matched subs already claimed by higher-priority gaps
-                            print(
-                                f"[Stage5] BUDGET EXHAUSTED for gap '{(gap.topic_ar or gap.topic)[:40]}': "
-                                f"matched_subs {matched_subs} all claimed by earlier gaps"
-                            )
-                            gap.case_count = 0
+                            # Gap claim exceeds available budget — cap to available
+                            capped = min(claimed_count, available_budget)
+                            if capped != gap.case_count:
+                                print(
+                                    f"[Stage5] CAP gap '{(gap.topic_ar or gap.topic)[:40]}': "
+                                    f"{gap.case_count} → {capped} (available_budget={available_budget})"
+                                )
+                            gap.case_count = capped
+                            # Deduct capped amount from budget
+                            if available_budget > 0:
+                                for sub in matched_subs:
+                                    current = sub_budget.get(sub, 0)
+                                    deduction = round(capped * (current / available_budget))
+                                    sub_budget[sub] = max(0, current - deduction)
 
                 # Final reconciled total
                 reconciled_gap_total = sum(g.case_count for g in state.gap_table)
                 total_cases = state.total_cases or len(state.all_classified)
+
+                # FINAL SAFETY CHECK: If injected counts exceed total cases, scale proportionally
+                if reconciled_gap_total > total_cases:
+                    print(
+                        f"[Stage5] SAFETY SCALE: Gap table total {reconciled_gap_total} > {total_cases}. "
+                        f"Scaling all gaps proportionally..."
+                    )
+                    scale_factor = total_cases / reconciled_gap_total if reconciled_gap_total > 0 else 1.0
+                    for gap in state.gap_table:
+                        original = gap.case_count
+                        scaled = max(1, round(gap.case_count * scale_factor))
+                        gap.case_count = scaled
+                        if scaled != original:
+                            print(
+                                f"[Stage5] SCALE: gap '{(gap.topic_ar or gap.topic)[:40]}' "
+                                f"{original} → {scaled} (factor={scale_factor:.2f})"
+                            )
+
+                    reconciled_gap_total = sum(g.case_count for g in state.gap_table)
+                    print(
+                        f"[Stage5] After scaling: {reconciled_gap_total} / {total_cases} cases"
+                    )
 
                 # ── FIX 4 (continued): Re-validate notification_opportunities in Stage 5 ──
                 # After resync, re-apply sub-count caps as safety check
