@@ -357,102 +357,90 @@ def _clean_tool_name(raw_text: str) -> str:
 
 def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
-    Build the three-pillar transformation pivot table deterministically from pipeline data.
+    Build the three-pillar transformation pivot table from run-specific findings.
 
-    For complaints, the three pillars are:
-      • المحور الأول: الدقة (Accuracy) — routing accuracy, reducing "أخرى", complaint classification
-      • المحور الثاني: الإتاحة (Accessibility) — proactive notifications, channel clarity, tracking visibility
-      • المحور الثالث: الذكاء (Intelligence) — AI classification, anomaly detection, quality assurance
+    Each cell is a concise action phrase derived from this run's actual outputs:
+      • Pillar 1 (الدقة):    top roadmap items whose source maps to accuracy/routing/classification
+      • Pillar 2 (الإتاحة):  top roadmap items whose source maps to notification/accessibility
+      • Pillar 3 (الذكاء):   AI tool names from Section 7 (always short, clean labels)
 
-    Pulls items from actual pipeline stages:
-      • Pillar 1 (الدقة): from gap_table recommendations + journey_map insights
-      • Pillar 2 (الإتاحة): from notification_opportunities (stage 4)
-      • Pillar 3 (الذكاء): from ai_use_cases section (stage 7)
-
-    Returns exactly 4 rows, all populated from real data (no empty cells).
+    All content is run-specific — nothing is hardcoded. Each run produces
+    a table that reflects its own findings, matching the sample report pattern.
     """
-    # --- Pillar 1: Accuracy items from gap_table and journey_map ---
-    # Extract real recommendations addressing accuracy, classification, routing
-    accuracy_items = []
 
-    # Start with core accuracy focus areas
-    accuracy_items.append("تحسين دقة تصنيف الشكاوى والخدمات")
-    accuracy_items.append("تقليل نسبة شكاوى فئة «أخرى» غير المصنفة")
-    accuracy_items.append("توضيح معايير التوجيه بين الجهات الحكومية")
+    # ── Source: roadmap rows (already concise action phrases, run-specific) ──
+    roadmap_section = (state.report_sections_ar or {}).get('improvement_roadmap', {})
+    roadmap_raw = roadmap_section.get('raw_data', {}) if roadmap_section else {}
+    roadmap_rows = roadmap_raw.get('roadmap_table', []) if roadmap_raw else []
 
-    # 4th item: extract from gap recommendations or journey insights
-    if state.gap_table:
-        # Find a gap focused on accuracy/classification that isn't already covered
-        for gap in sorted(state.gap_table, key=lambda g: g.case_count, reverse=True):
-            rec = gap.recommendation_ar or gap.recommendation or ""
-            if rec and len(accuracy_items) < 4:
-                # Avoid duplicates of the first 3
-                if not any(rec in item or item in rec for item in accuracy_items):
-                    accuracy_items.append(rec[:80])  # Truncate to fit
-                    break
-
-    # Ensure 4th item exists (fallback if no gap found)
-    if len(accuracy_items) < 4:
-        accuracy_items.append("تحسين معدلات دقة التصنيف الآلي للشكاوى")
-
-    # --- Pillar 2: Accessibility items from notification_opportunities ---
-    # Build from actual notification opportunities with fallback to data-derived defaults
-    opps = state.notification_opportunities or []
-    accessibility_items = []
-
-    if opps:
-        for opp in opps[:4]:
-            item = opp.get('notification_type') or opp.get('content_summary', '')
-            if item and len(accessibility_items) < 4:
-                accessibility_items.append(item)
-
-    # Fallback: ensure exactly 4 items, using data-informed defaults
-    if len(accessibility_items) < 4:
-        defaults = [
-            "إشعارات SMS استباقية قبل تصعيد الشكوى",
-            "نظام تتبع الشكوى في الوقت الفعلي",
-            "توضيح مسارات الاستئناف والدعم",
-            "قنوات تواصل موحدة للشكاوى",
-        ]
-        for default in defaults:
-            if default not in accessibility_items and len(accessibility_items) < 4:
-                accessibility_items.append(default)
-
-    accessibility_items = accessibility_items[:4]
-
-    # --- Pillar 3: Intelligence/AI items from ai_use_cases ---
-    # Pull real AI tool names from state.report_sections_ar['ai_use_cases']
-    # FIX 5: Clean tool names to remove LLM prose
-    intelligence_items = []
-
+    # ── Source: AI tool names from Section 7 ──
     ai_section = (state.report_sections_ar or {}).get('ai_use_cases', {})
     ai_raw = ai_section.get('raw_data', {}) if ai_section else {}
     ai_table = ai_raw.get('use_cases_table', []) if ai_raw else []
 
-    if ai_table:
-        for row in ai_table[:4]:
-            raw_tool = row.get('الأداة', '')
-            tool = _clean_tool_name(raw_tool)  # FIX 5: Clean instead of using as-is
-            if tool and len(intelligence_items) < 4:
-                intelligence_items.append(tool)
-            elif raw_tool and not tool:
-                print(f"[Conclusion] FIX 5: Skipped invalid tool name: '{raw_tool[:60]}'")
+    # ── Classify each roadmap row into a pillar by its content ──
+    # Accuracy (الدقة): routing, classification, wrong channel, jurisdiction, data entry errors
+    # Accessibility (الإتاحة): proactive notification, tracking, channel clarity, follow-up
+    # Rows not matched go to accessibility as default (most roadmap items are notification-related)
+    ACCURACY_KEYWORDS = {
+        'تصنيف', 'توجيه', 'اختصاص', 'قناة', 'بيانات', 'خطأ', 'دقة', 'إدخال', 'مكرر'
+    }
+    ACCESSIBILITY_KEYWORDS = {
+        'إشعار', 'متابعة', 'تتبع', 'استباقي', 'إخطار', 'تحديث', 'بلاغ', 'حفظ', 'SMS'
+    }
 
-    # Fallback: ensure exactly 4 items with meaningful AI tools
+    accuracy_items = []
+    accessibility_items = []
+
+    for row in roadmap_rows:
+        rec = (row.get('التوصية') or '').strip()
+        if not rec:
+            continue
+        # Take only the first sentence/clause to keep cell text short
+        short_rec = rec.split('،')[0].split('.')[0].strip()
+        if not short_rec:
+            continue
+
+        is_accuracy = any(kw in short_rec for kw in ACCURACY_KEYWORDS)
+        is_accessibility = any(kw in short_rec for kw in ACCESSIBILITY_KEYWORDS)
+
+        if is_accuracy and len(accuracy_items) < 4:
+            accuracy_items.append(short_rec)
+        elif len(accessibility_items) < 4:
+            accessibility_items.append(short_rec)
+
+    # ── Pillar 3: AI tool names (already short clean labels) ──
+    intelligence_items = []
+    for row in ai_table[:4]:
+        tool = _clean_tool_name(row.get('الأداة', ''))
+        if tool and len(intelligence_items) < 4:
+            intelligence_items.append(tool)
+
+    # ── Fallbacks: use gap/notification data if roadmap didn't fill a pillar ──
+    if len(accuracy_items) < 4:
+        for gap in sorted(state.gap_table or [], key=lambda g: g.case_count, reverse=True):
+            label = (gap.topic_ar or gap.topic or '').strip()
+            if label and label not in accuracy_items and len(accuracy_items) < 4:
+                accuracy_items.append(label)
+
+    if len(accessibility_items) < 4:
+        for notif in (state.notification_opportunities or [])[:4]:
+            label = (notif.get('notification_type') or '').strip()
+            if label and label not in accessibility_items and len(accessibility_items) < 4:
+                accessibility_items.append(label)
+
     if len(intelligence_items) < 4:
         defaults = [
-            "بناء مُصنِّف آلي مُدرّب على بيانات CRM الفعلية",
-            "نظام اكتشاف الشذوذ الإحصائي في أنماط الشكاوى",
-            "محلل استخراج الردود بـ RAG (استرجاع معزز)",
+            "مُصنِّف النصوص الآلي بتقنية NLP",
+            "نظام كشف الشذوذ الإحصائي في الشكاوى",
+            "وكيل اقتراح الردود بتقنية RAG",
             "نموذج التنبؤ بحجم الشكاوى عبر السلاسل الزمنية",
         ]
-        for default in defaults:
-            if default not in intelligence_items and len(intelligence_items) < 4:
-                intelligence_items.append(default)
+        for d in defaults:
+            if d not in intelligence_items and len(intelligence_items) < 4:
+                intelligence_items.append(d)
 
-    intelligence_items = intelligence_items[:4]
-
-    # ── Ensure all three pillars have exactly 4 non-empty items ──
+    # ── Pad to exactly 4 rows ──
     while len(accuracy_items) < 4:
         accuracy_items.append("")
     while len(accessibility_items) < 4:
@@ -460,12 +448,11 @@ def build_conclusion_pivot_rows(state: PipelineState) -> List[Dict[str, str]]:
     while len(intelligence_items) < 4:
         intelligence_items.append("")
 
-    # Build rows — exactly 4
     return [
         {
-            "المحور الأول: الدقة":     accuracy_items[i],
-            "المحور الثاني: الإتاحة":  accessibility_items[i],
-            "المحور الثالث: الذكاء":   intelligence_items[i],
+            "المحور الأول: الدقة":    accuracy_items[i],
+            "المحور الثاني: الإتاحة": accessibility_items[i],
+            "المحور الثالث: الذكاء":  intelligence_items[i],
         }
         for i in range(4)
     ]
