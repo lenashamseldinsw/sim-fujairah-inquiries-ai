@@ -991,10 +991,92 @@ def init_session_state():
         'analysis_error': None,
         'error_traceback': None,
         'report_data': None,
+        # Authentication
+        'authenticated': False,
+        'show_login': False,
+        'login_error': False,
+        'pending_page': None,
+        'current_user_center': None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
+
+# ── Authentication ────────────────────────────────────────────────────────────
+def load_credentials():
+    """Load user credentials from Streamlit secrets."""
+    try:
+        if hasattr(st, 'secrets') and 'users' in st.secrets:
+            users = []
+            # Load admin user
+            if 'admin_username' in st.secrets.users:
+                users.append({
+                    "username": st.secrets.users.admin_username,
+                    "password": st.secrets.users.admin_password,
+                    "center": st.secrets.users.get('admin_center', 'مركز الإدارة المركزية')
+                })
+            # Load demo user
+            if 'demo_username' in st.secrets.users:
+                users.append({
+                    "username": st.secrets.users.demo_username,
+                    "password": st.secrets.users.demo_password,
+                    "center": st.secrets.users.get('demo_center', 'مركز التجريب والعروض التوضيحية')
+                })
+            # Load fujairah-user
+            if 'fujairah_username' in st.secrets.users:
+                users.append({
+                    "username": st.secrets.users.fujairah_username,
+                    "password": st.secrets.users.fujairah_password,
+                    "center": st.secrets.users.get('fujairah_center', 'مركز الفجيرة الرئيسي')
+                })
+            # Load Fujairah Police Center users
+            user_configs = [
+                # Existing users
+                ('myaalali_email', 'myaalali_password', 'myaalali_center'),
+                ('umahmed_email', 'umahmed_password', 'umahmed_center'),
+                ('kh17878_email', 'kh17878_password', 'kh17878_center'),
+                ('meznar_email', 'meznar_password', 'meznar_center'),
+                ('alkendi_email', 'alkendi_password', 'alkendi_center'),
+                ('alhyah_email', 'alhyah_password', 'alhyah_center'),
+                ('shaheen_email', 'shaheen_password', 'shaheen_center'),
+                ('fatima_email', 'fatima_password', 'fatima_center'),
+                ('saeed_al_soghairi_email', 'saeed_al_soghairi_password', 'saeed_al_soghairi_center'),
+                ('ahmed_al_hammadi_email', 'ahmed_al_hammadi_password', 'ahmed_al_hammadi_center'),
+                # New users
+                ('abdul_sief_albadi_email', 'abdul_sief_albadi_password', 'abdul_sief_albadi_center'),
+                ('sulaiman_saeed_email', 'sulaiman_saeed_password', 'sulaiman_saeed_center'),
+                ('fahd_suwaidi_email', 'fahd_suwaidi_password', 'fahd_suwaidi_center'),
+                ('abdullah_sulaiman_email', 'abdullah_sulaiman_password', 'abdullah_sulaiman_center'),
+                ('ali_sultan_email', 'ali_sultan_password', 'ali_sultan_center'),
+                ('ali_hassan_email', 'ali_hassan_password', 'ali_hassan_center'),
+                ('nayif_taniji_email', 'nayif_taniji_password', 'nayif_taniji_center'),
+                ('aisha_safsouf_email', 'aisha_safsouf_password', 'aisha_safsouf_center'),
+                ('ibrahim_taniji_email', 'ibrahim_taniji_password', 'ibrahim_taniji_center'),
+                ('khams_alhamar_email', 'khams_alhamar_password', 'khams_alhamar_center'),
+                ('mariam_alhashemy_email', 'mariam_alhashemy_password', 'mariam_alhashemy_center'),
+                ('yosra_alkaabi_email', 'yosra_alkaabi_password', 'yosra_alkaabi_center'),
+            ]
+            for email_key, password_key, center_key in user_configs:
+                if email_key in st.secrets.users and password_key in st.secrets.users:
+                    users.append({
+                        "username": st.secrets.users[email_key],
+                        "password": st.secrets.users[password_key],
+                        "center": st.secrets.users.get(center_key, "Unknown Center")
+                    })
+            return {"users": users}
+    except Exception:
+        pass
+
+    return {"users": []}
+
+def verify_credentials(username, password):
+    """Verify user credentials against stored credentials."""
+    creds = load_credentials()
+    for user in creds.get("users", []):
+        if user["username"] == username and user["password"] == password:
+            return user
+    return None
 
 
 # ── Analyzer Setup ────────────────────────────────────────────────────────────
@@ -1163,6 +1245,123 @@ def process_file(uploaded_files, flow_type='inquiries', lang='ar', progress_call
         return {'error': error_msg, 'success': False}
 
 
+# ── Login Modal ───────────────────────────────────────────────────────────────
+def show_login_modal(lang):
+    tx = T[lang]
+    DIR = 'rtl' if lang == 'ar' else 'ltr'
+
+    # Add modal styling
+    st.markdown(f"""
+    <style>
+    .login-modal-overlay {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(8,8,15,0.92);
+        backdrop-filter: blur(12px);
+        z-index: 999;
+        pointer-events: none;
+    }}
+    .login-modal-content {{
+        position: relative;
+        z-index: 1000;
+        pointer-events: auto;
+    }}
+    /* Lift Streamlit form elements above the overlay */
+    [data-testid="stForm"],
+    [data-testid="stVerticalBlock"],
+    [data-testid="stTextInput"],
+    [data-testid="stTextInputRootElement"],
+    .stTextInput,
+    .stForm,
+    .stAlert {{
+        position: relative !important;
+        z-index: 1001 !important;
+    }}
+    </style>
+    <div class="login-modal-overlay"></div>
+    """, unsafe_allow_html=True)
+
+    # Add spacing from top
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown(f"""
+        <div class="login-modal-content" style="
+            background: {BG_CARD};
+            border: 2px solid {BORDER_G2};
+            border-radius: 24px;
+            padding: 2.5rem 2rem 3rem 2rem;
+            box-shadow: 0 24px 80px rgba(201,150,60,0.25);
+            direction: {DIR};
+            margin-bottom: 1.5rem;
+        ">
+            <div style="margin-bottom: 2.5rem; direction: {DIR}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; width: 100%;">
+                <div style="font-size: 3rem; margin-bottom: 0.8rem; text-align: center;">🔐</div>
+                <h2 style="color: {GOLD_LIGHT}; font-size: 1.8rem; font-weight: 700; margin: 0 0 0.5rem 0; text-align: center;">{tx['login_title']}</h2>
+                <p style="color: {TEXT_MUTED}; font-size: 0.95rem; margin: 0; text-align: center; padding: 0 1rem; max-width: 90%;">{tx['login_subtitle']}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if 'login_error' in st.session_state and st.session_state.login_error:
+            st.error(f"❌ {tx['login_error']}")
+
+        with st.form("login_form", clear_on_submit=False, border=False):
+            username = st.text_input(
+                tx['username_label'],
+                key="login_username",
+                placeholder=tx['username_label']
+            )
+
+            password = st.text_input(
+                tx['password_label'],
+                type="password",
+                key="login_password",
+                placeholder=tx['password_label']
+            )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            btn_col1, btn_col2 = st.columns(2)
+
+            with btn_col1:
+                submit = st.form_submit_button(tx['login_button'], use_container_width=True, type="primary")
+
+            with btn_col2:
+                cancel = st.form_submit_button(tx['cancel_button'], use_container_width=True)
+
+            if submit:
+                if username and password:
+                    user = verify_credentials(username, password)
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.show_login = False
+                        st.session_state.login_error = False
+                        st.session_state.current_user_center = user.get("center", "")
+                        if st.session_state.pending_page:
+                            st.session_state.page = st.session_state.pending_page
+                            st.session_state.pending_page = None
+                        st.rerun()
+                    else:
+                        st.session_state.login_error = True
+                        st.rerun()
+                else:
+                    st.session_state.login_error = True
+                    st.rerun()
+
+            if cancel:
+                st.session_state.show_login = False
+                st.session_state.login_error = False
+                st.session_state.pending_page = None
+                st.rerun()
+
+
 # ── Landing Page ──────────────────────────────────────────────────────────────
 def show_landing_page(lang):
     tx = T[lang]
@@ -1213,9 +1412,15 @@ def show_landing_page(lang):
         st.markdown("<br>", unsafe_allow_html=True)
         btn_inq = st.button(tx['btn_inq'], key='btn_inq_nav', use_container_width=True)
         if btn_inq:
-            print(f"[Landing] Inquiries button clicked → navigating to inquiries page")
-            st.session_state.page = 'inquiries'
-            st.rerun()
+            if st.session_state.authenticated:
+                print(f"[Landing] Inquiries button clicked → navigating to inquiries page")
+                st.session_state.page = 'inquiries'
+                st.rerun()
+            else:
+                print(f"[Landing] Inquiries button clicked → showing login modal")
+                st.session_state.show_login = True
+                st.session_state.pending_page = 'inquiries'
+                st.rerun()
 
     with col2:
         st.markdown(f"""
@@ -1235,9 +1440,15 @@ def show_landing_page(lang):
         btn_cmp = st.button(tx['btn_cmp'], key='btn_cmp_nav', use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         if btn_cmp:
-            print(f"[Landing] Complaints button clicked → navigating to complaints page")
-            st.session_state.page = 'complaints'
-            st.rerun()
+            if st.session_state.authenticated:
+                print(f"[Landing] Complaints button clicked → navigating to complaints page")
+                st.session_state.page = 'complaints'
+                st.rerun()
+            else:
+                print(f"[Landing] Complaints button clicked → showing login modal")
+                st.session_state.show_login = True
+                st.session_state.pending_page = 'complaints'
+                st.rerun()
 
     st.markdown(f"""
     <div class="footer">
@@ -1837,11 +2048,48 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
+        # Logout button (only show when authenticated)
+        if st.session_state.authenticated:
+            if st.button('🚪 Logout', key='logout_btn', use_container_width=True):
+                st.session_state.authenticated = False
+                st.session_state.current_user_center = None
+                st.session_state.page = 'landing'
+                st.session_state.inquiries_uploaded_file = None
+                st.session_state.complaints_uploaded_file = None
+                st.session_state.inquiries_processing = False
+                st.session_state.complaints_processing = False
+                st.session_state.inquiries_completed = False
+                st.session_state.complaints_completed = False
+                st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Language toggle
         new_lang = 'ar' if lang == 'en' else 'en'
         button_text = 'العربية' if lang == 'en' else 'EN'
         if st.button(button_text, key='lang_toggle', use_container_width=True):
             st.session_state.language = new_lang
             st.rerun()
+
+        # Display user's center name if authenticated
+        if st.session_state.authenticated and st.session_state.current_user_center:
+            st.markdown(
+                f"""
+                <div style='
+                    font-size: 0.7rem;
+                    color: {GOLD};
+                    text-align: center;
+                    margin-top: 0.4rem;
+                    font-weight: 500;
+                '>{st.session_state.current_user_center}</div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # Show login modal if needed (blocks other content)
+    if st.session_state.show_login:
+        show_login_modal(lang)
+        st.stop()
 
     # Page routing
     print(f"[Main] Current page: {st.session_state.page}")
