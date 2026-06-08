@@ -678,13 +678,13 @@ def generate_digital_gaps_section(
         '\n'
         'A. section_body — 2 sentences, formal Arabic\n'
         '   - Open with: "لماذا تستمر المشاكل رغم توفر قنوات استقبال الشكاوى الرقمية؟"\n'
-        f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (تطبيق/موقع),\n'
+        f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM),\n'
         '     yet problems persist. The problem is not the absence of digital channels —\n'
         '     it is the absence of the right functions inside those channels.\n'
         + (
             f'     OPTIONAL: Additionally, {friction_digital_context_pct}% of friction cases are ROOTED IN A DIGITAL SERVICE CONTEXT\n'
             '     (app error, online submission, digital processing) — cite this if it strengthens the finding.\n'
-            f'     Frame as: "{friction_digital_context_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع)"\n'
+            f'     Frame as: "{friction_digital_context_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM)"\n'
             if friction_digital_context_pct > 0 else
             '     Focus on submission channel percentage — friction_digital_context is not available.\n'
             '     Use gap count to anchor the claim: "المشكلة ليست في غياب القنوات الرقمية بل في غياب الوظائف\n'

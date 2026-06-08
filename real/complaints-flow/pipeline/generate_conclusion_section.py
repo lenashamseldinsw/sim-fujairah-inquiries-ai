@@ -750,7 +750,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     sentence1_guidance = (
         'Sentence 1: Opening statement that frames the data paradox.\n'
         '  • Start with: "الرسالة النهائية:"\n'
-        f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of complaints via app/website\n'
+        f'  • Cite digital infrastructure strength: {submission_channel_pct_str} of complaints via digital channels (التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM)\n'
         f'  • Cite closure achievement: {closure_rate:.1f}% of cases have closure dates\n'
         f'  • Cite handling quality: {zero_rejection_rate:.1f}% handled without formal rejection\n'
         '  • Use a pivot word (لكن) to acknowledge the gap remains\n'
