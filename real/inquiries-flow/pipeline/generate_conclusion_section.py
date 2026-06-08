@@ -381,7 +381,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
         '   Sentence 1 — "الرسالة النهائية:" prefix + submission channel performance:\n'
         '     • MUST open with "الرسالة النهائية:"\n'
         f'     • State that {submission_channel_pct_str} of cases came through digital submission channels '
-        f'(التطبيق / الموقع الإلكتروني) combined with SLA rate {sla_rate:.1f}%.\n'
+        f'(التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM) combined with SLA rate {sla_rate:.1f}%.\n'
         '     • This proves operational excellence in the submission channel.\n'
     )
 

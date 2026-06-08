@@ -516,7 +516,7 @@ def generate_digital_gaps_section(
         '\n'
         'A. section_body — 2 sentences, formal Arabic\n'
         '   - Open with: "لماذا تستمر المشكلات رغم توفر التطبيق والموقع الإلكتروني؟"\n'
-        f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (تطبيق/موقع),\n'
+        f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM),\n'
         '     yet problems persist. The problem is not the absence of digital channels —\n'
         '     it is the absence of the right functions inside those channels.\n'
         + (
