@@ -135,9 +135,14 @@ ANALYSIS_TOOL = {
                                 "sub_classification values in the patterns array returned above. "
                                 "This links the FAQ to its authoritative case count."
                             )
+                        },
+                        "evidence_case_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "2-3 specific case IDs that demonstrate this FAQ's relevance to actual customer issues"
                         }
                     },
-                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification"]
+                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification", "evidence_case_ids"]
                 }
             },
             "self_service_tags": {
@@ -332,14 +337,29 @@ ANALYSIS INSTRUCTIONS:
    - ISSUE 4: All output MUST be in Arabic only. Topic names, questions, answers, descriptions.
    - Proper nouns only (MOI, SMS, OTP, UAE PASS) may remain in Latin script.
 
-   FREQUENCY COUNTING RULE (CRITICAL):
-   Set frequency = the EXACT count of cases in the dataset where this specific question
-   was the PRIMARY driver of the customer contact. Count each case exactly once.
-   Do NOT extrapolate or estimate beyond the cases provided.
-   Do NOT add "+" to frequencies — return the exact integer count.
-   A frequency of 1 means exactly 1 case. Only assign frequency > 1 if multiple DISTINCT
-   cases show the SAME question as their primary concern.
-   Under-counting is better than over-counting — if unsure, use 1.
+   FAQ EXTRACTION RULES (MANDATORY):
+   1. For EACH FAQ, you MUST identify which sub_classification (from the patterns list above)
+      it addresses. Copy the sub_classification verbatim from one of the patterns.
+   2. List 2-3 specific case IDs that provide evidence for this FAQ's relevance.
+   3. Set frequency = the exact case_count from that sub_classification in the patterns list.
+   4. If you cannot find a clear sub_classification match, do NOT include the FAQ (skip it).
+   5. If you cannot provide evidence case IDs, do NOT include the FAQ.
+
+   FREQUENCY RULE - NO ESTIMATION:
+   frequency must ALWAYS equal the case_count of the sub_classification this FAQ addresses.
+   Do NOT guess, extrapolate, or estimate beyond the patterns data provided.
+   Do NOT break down sub_classification into sub-frequencies (use the full count).
+   If a sub_classification has case_count=24, and you create an FAQ for it, frequency=24.
+
+   EXAMPLE:
+   FAQ addressing "wrong_channel_used" sub_classification with case_count=12:
+   {
+     "question_ar": "ما هي القنوات الصحيحة لتقديم الشكوى؟",
+     "answer_ar": "يمكن تقديم الشكوى عبر SMS أو تطبيق الموجودة في الموقع الرسمي",
+     "sub_classification": "wrong_channel_used",
+     "frequency": 12,  // Use the exact case_count from patterns, not your estimate
+     "top_level": "شكوى"
+   }
 
 4. SELF-SERVICE TAGS - Which issues could be self-serviceable
    - Fully self-serviceable (customer can do alone)
@@ -579,33 +599,48 @@ def _reconcile_counts(
             f"exceeds total cases={actual_total}. Capping to {actual_total}."
         )
 
-    # Step 3: For each notification, cap cases_eliminated against the proactive ceiling
-    # Don't match against individual frictions — shared Arabic vocabulary (البلاغ, etc.)
-    # causes false positives. The authoritative ceiling is max_proactive_cases from Stage 4's
-    # per-case analysis, which is the total notification-elimination potential across all frictions.
+    # Step 3: Scale notification cases_eliminated proportionally to fit within proactive ceiling
+    # Don't cap individually — that would allow multiple notifications to each exceed the ceiling.
+    # Instead, compute total claimed, then scale all notifications proportionally.
+    claimed_total = sum(
+        n.get("cases_eliminated", 0)
+        for n in notification_opportunities
+        if n.get("cases_eliminated", 0) > 0
+    )
+
     reconciled_notifications = []
-    for n in notification_opportunities:
-        original_claimed = n.get("cases_eliminated", 0)
+    if claimed_total > max_proactive_cases and claimed_total > 0:
+        # Scale all notifications proportionally to fit within ceiling
+        scale_factor = max_proactive_cases / claimed_total
+        print(
+            f"[Stage4] Scaling notification_opportunities: total claimed {claimed_total} → "
+            f"{max_proactive_cases} (scale factor: {scale_factor:.2f})"
+        )
 
-        if original_claimed < 1:
-            reconciled_notifications.append(n)
-            continue
+        for n in notification_opportunities:
+            original_claimed = n.get("cases_eliminated", 0)
 
-        # Cap solely against the proactive ceiling
-        capped_count = min(original_claimed, max_proactive_cases)
+            if original_claimed < 1:
+                reconciled_notifications.append(n)
+                continue
 
-        if capped_count != original_claimed:
+            scaled_count = int(round(original_claimed * scale_factor))
             notification_type = n.get("notification_type", "")
-            print(
-                f"[Stage4] Capping notification '{notification_type}' "
-                f"cases_eliminated: {original_claimed} → {capped_count} "
-                f"(proactive ceiling: {max_proactive_cases})"
-            )
 
-        reconciled_notifications.append({**n, "cases_eliminated": capped_count})
+            if scaled_count != original_claimed:
+                print(
+                    f"[Stage4] Scaled notification '{notification_type}' "
+                    f"cases_eliminated: {original_claimed} → {scaled_count}"
+                )
+
+            reconciled_notifications.append({**n, "cases_eliminated": scaled_count})
+    else:
+        # Claimed total already fits within ceiling, use as-is
+        reconciled_notifications = notification_opportunities
 
     print(
-        f"[Stage4] Reconciled notification_opportunities against proactive ceiling"
+        f"[Stage4] ✓ Reconciled notification_opportunities: total {claimed_total} cases "
+        f"within ceiling {max_proactive_cases}"
     )
 
     return (reconciled_journey_map, reconciled_patterns, reconciled_notifications)
@@ -636,9 +671,14 @@ FAQ_ONLY_TOOL = {
                                 "most directly addresses. Must be copied verbatim from a sub_classification "
                                 "in the provided patterns."
                             )
+                        },
+                        "evidence_case_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "2-3 specific case IDs that demonstrate this FAQ's relevance to actual customer issues"
                         }
                     },
-                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification"]
+                    "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification", "evidence_case_ids"]
                 }
             }
         },
@@ -664,7 +704,11 @@ def _retry_faq_only(
         "they received, based on the case descriptions and resolutions provided. "
         "For every sub-classification group provided, return at least one FAQ. "
         "All text (question_ar, answer_ar) MUST be in Arabic. "
-        "frequency must not exceed the group size shown in the input."
+        "CRITICAL RULES: "
+        "1. sub_classification MUST be copied verbatim from one of the group names. "
+        "2. frequency MUST equal the exact case_count of that sub_classification — no estimation. "
+        "3. evidence_case_ids MUST list 2-3 specific case IDs proving this FAQ's relevance. "
+        "If you cannot provide valid evidence, skip the FAQ."
     )
 
     base_user_content = (
@@ -982,6 +1026,20 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             ]
             if new_faqs or not state.faq_candidates:
                 state.faq_candidates = new_faqs
+
+            # VALIDATION: Check FAQ sub_classifications against valid patterns (Fix 3)
+            if state.patterns:
+                valid_sub_classifications = {p.sub_classification for p in state.patterns if p.sub_classification}
+                for faq in state.faq_candidates:
+                    sub = faq.sub_classification or ''
+                    if sub and sub not in valid_sub_classifications:
+                        q_preview = (faq.question_ar or faq.question or '')[:50]
+                        print(f"[Stage4] WARNING: FAQ '{q_preview}' assigned unknown sub_classification '{sub}' — "
+                              f"will be rejected in Stage 5. Valid values: {valid_sub_classifications}")
+                    elif not sub:
+                        q_preview = (faq.question_ar or faq.question or '')[:50]
+                        print(f"[Stage4] WARNING: FAQ '{q_preview}' has no sub_classification — "
+                              f"will be rejected in Stage 5. Assign to one of: {valid_sub_classifications}")
 
         # Parse self-service tags
         if 'self_service_tags' in analysis:
