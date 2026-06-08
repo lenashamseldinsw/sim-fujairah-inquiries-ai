@@ -105,11 +105,14 @@ ANALYSIS_TOOL = {
                         "question_ar": {"type": "string"},
                         "answer": {"type": "string"},
                         "answer_ar": {"type": "string"},
-                        "frequency": {"type": "integer"},
+                        "frequency": {
+                            "type": "integer",
+                            "description": "Count of actual cases this FAQ answers (based on evidence_case_ids count). Not the full sub_classification count, but only the cases where this specific Q&A resolves the issue."
+                        },
                         "evidence_case_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "2-3 specific case IDs that demonstrate this FAQ's relevance to actual customer issues"
+                            "description": "2-3+ specific case IDs that this FAQ actually answers. Frequency = count of these cases where the Q&A directly resolves the customer's inquiry."
                         }
                     },
                     "required": ["top_level", "sub_classification", "question", "question_ar", "answer", "answer_ar", "frequency", "evidence_case_ids"]
@@ -255,19 +258,22 @@ ANALYSIS INSTRUCTIONS:
    4. If you cannot find a clear sub_classification match, do NOT include the FAQ (skip it).
    5. If you cannot provide evidence case IDs, do NOT include the FAQ.
 
-   FREQUENCY RULE - NO ESTIMATION:
-   frequency must ALWAYS equal the case_count of the sub_classification this FAQ addresses.
-   Do NOT guess, extrapolate, or estimate beyond the patterns data provided.
-   Do NOT break down sub_classification into sub-frequencies (use the full count).
-   If a sub_classification has case_count=24, and you create an FAQ for it, frequency=24.
+   FREQUENCY RULE - CASE-BY-CASE MATCHING:
+   For EACH FAQ, count how many individual cases it actually answers from the evidence_case_ids.
+   - frequency = number of cases where this FAQ's Q&A directly resolves the customer's issue
+   - Do NOT use the full sub_classification count if only a subset of cases match the question
+   - Estimate conservatively by counting matching evidence_case_ids (list 2-3+ per FAQ)
+   - If multiple FAQs address the same sub_classification, they have different frequencies
 
    EXAMPLE:
-   FAQ addressing "لا تحديد موقع مركز الخدمة" sub_classification with case_count=15:
+   Sub_classification "لا تحديد موقع مركز الخدمة" has case_count=15 total, but:
+   - FAQ "أين أقرب مركز خدمة؟" answers 10 of those cases → frequency=10, evidence: [case1, case2, case3]
+   - FAQ "كيف أعثر على الفروع القريبة؟" answers 5 different cases → frequency=5, evidence: [case4, case5, case6]
    {
      "question_ar": "أين أقرب مركز خدمة؟",
      "answer_ar": "يمكنك العثور على أقرب مركز من خلال الخريطة على الموقع الرسمي",
      "sub_classification": "لا تحديد موقع مركز الخدمة",
-     "frequency": 15,  // Use the exact case_count from patterns, not your estimate
+     "frequency": 10,  // Count of cases this FAQ actually answers, not full category
      "top_level": "استفسار"
    }
 
@@ -597,13 +603,13 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "frequency": {"type": "integer", "description": "How many cases relate to this FAQ"},
+                        "frequency": {"type": "integer", "description": "Count of cases this FAQ actually answers (based on evidence_case_ids). Not the full sub_classification count."},
                         "top_level": {"type": "string", "description": "Top-level category (شكوى, استفسار, etc.)"},
                         "sub_classification": {"type": "string", "description": "The sub-classification this FAQ addresses — must match one of the section headers exactly"},
                         "evidence_case_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "2-3 specific case IDs that demonstrate this FAQ's relevance to actual customer issues"
+                            "description": "2-3+ specific case IDs that this FAQ answers. Frequency = count of these cases where the Q&A resolves the issue."
                         }
                     },
                     "required": ["question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification", "evidence_case_ids"]

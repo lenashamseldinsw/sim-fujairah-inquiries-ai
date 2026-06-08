@@ -126,20 +126,23 @@ ANALYSIS_TOOL = {
                         "question_ar": {"type": "string"},
                         "answer": {"type": "string"},
                         "answer_ar": {"type": "string"},
-                        "frequency": {"type": "integer"},
+                        "frequency": {
+                            "type": "integer",
+                            "description": "Count of actual cases this FAQ answers (based on evidence_case_ids count). Not the full sub_classification count, but only the cases where this specific Q&A resolves the issue."
+                        },
                         "sub_classification": {
                             "type": "string",
                             "description": (
                                 "The sub_classification value from the patterns list that this FAQ "
                                 "most directly addresses. Must be copied verbatim from one of the "
                                 "sub_classification values in the patterns array returned above. "
-                                "This links the FAQ to its authoritative case count."
+                                "Links the FAQ to its domain, but frequency is NOT the full category count."
                             )
                         },
                         "evidence_case_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "2-3 specific case IDs that demonstrate this FAQ's relevance to actual customer issues"
+                            "description": "2-3+ specific case IDs that this FAQ actually answers. Frequency = count of these cases where the Q&A directly resolves the customer's complaint."
                         }
                     },
                     "required": ["top_level", "question", "question_ar", "answer", "answer_ar", "frequency", "sub_classification", "evidence_case_ids"]
@@ -345,19 +348,22 @@ ANALYSIS INSTRUCTIONS:
    4. If you cannot find a clear sub_classification match, do NOT include the FAQ (skip it).
    5. If you cannot provide evidence case IDs, do NOT include the FAQ.
 
-   FREQUENCY RULE - NO ESTIMATION:
-   frequency must ALWAYS equal the case_count of the sub_classification this FAQ addresses.
-   Do NOT guess, extrapolate, or estimate beyond the patterns data provided.
-   Do NOT break down sub_classification into sub-frequencies (use the full count).
-   If a sub_classification has case_count=24, and you create an FAQ for it, frequency=24.
+   FREQUENCY RULE - CASE-BY-CASE MATCHING:
+   For EACH FAQ, count how many individual cases it actually answers from the evidence_case_ids.
+   - frequency = number of cases where this FAQ's Q&A directly resolves the customer's issue
+   - Do NOT use the full sub_classification count if only a subset of cases match the question
+   - Estimate conservatively by counting matching evidence_case_ids (list 2-3 per FAQ)
+   - If multiple FAQs address the same sub_classification, they have different frequencies
 
    EXAMPLE:
-   FAQ addressing "wrong_channel_used" sub_classification with case_count=12:
+   Sub_classification "wrong_channel_used" has case_count=12 total, but:
+   - FAQ "ما هي القنوات الصحيحة؟" answers 8 of those cases → frequency=8, evidence: [case1, case2, case3]
+   - FAQ "هل أرسل عبر SMS أم تطبيق؟" answers 4 different cases → frequency=4, evidence: [case4, case5, case6]
    {
      "question_ar": "ما هي القنوات الصحيحة لتقديم الشكوى؟",
      "answer_ar": "يمكن تقديم الشكوى عبر SMS أو تطبيق الموجودة في الموقع الرسمي",
      "sub_classification": "wrong_channel_used",
-     "frequency": 12,  // Use the exact case_count from patterns, not your estimate
+     "frequency": 8,  // Count of cases this FAQ actually answers, not full category
      "top_level": "شكوى"
    }
 
