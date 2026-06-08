@@ -78,6 +78,7 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
     Build pre-computed friction rows from state.journey_map.
 
     Sorted descending by case_count (highest friction first).
+    Excludes friction points with 0 cases.
     Uses Arabic friction_point_ar / cluster_ar where available.
 
     Row schema (matches sample output table columns):
@@ -87,6 +88,8 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     rows = []
     for friction in sorted(state.journey_map, key=lambda f: f.case_count, reverse=True):
+        if friction.case_count == 0:
+            continue
         point = friction.friction_point_ar or friction.friction_point or friction.cluster_ar or friction.cluster
         root_cause_label = _ROOT_CAUSE_LABELS.get(
             friction.root_cause_category,
@@ -106,6 +109,7 @@ def _build_friction_context(state: PipelineState) -> List[Dict[str, Any]]:
     Each entry carries: friction_point, case_count, root_cause_category,
     severity (from gap_table), guidebook_status, and recommendation_ar.
     No new computation — pure join of Stage 4 + Stage 5 outputs.
+    Excludes friction points with 0 cases.
     """
     # Build a lookup from gap topic keywords to gap rows
     gap_lookup = {}
@@ -116,6 +120,8 @@ def _build_friction_context(state: PipelineState) -> List[Dict[str, Any]]:
 
     context = []
     for f in sorted(state.journey_map, key=lambda x: x.case_count, reverse=True):
+        if f.case_count == 0:
+            continue
         point = f.friction_point_ar or f.friction_point or ""
         # Try to find a matching gap row by substring overlap
         matched_gap = None
@@ -244,7 +250,8 @@ def generate_customer_journey_section(
         # FIX 4: Use len(all_classified) consistently (matches workload map pattern)
         total_cases  = len(state.all_classified) or state.total_cases or 1
         date_range   = convert_month_year_to_arabic(state.month_year) or "Q1 2026"
-        friction_count = len(state.journey_map)
+        # Count only friction points with case_count > 0
+        friction_count = sum(1 for f in state.journey_map if f.case_count > 0)
 
         friction_rows = _build_friction_rows(state)
         # FIX 4: Pass total_cases explicitly to _find_quick_win

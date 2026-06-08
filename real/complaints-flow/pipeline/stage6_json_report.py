@@ -323,6 +323,8 @@ class JSONReportBuilder:
         # Rebuild from state.journey_map to enforce single source of truth
         rebuilt = []
         for friction in sorted(self.state.journey_map, key=lambda f: f.case_count, reverse=True):
+            if friction.case_count == 0:
+                continue
             point = friction.friction_point_ar or friction.friction_point or friction.cluster_ar or friction.cluster
 
             # Get LLM-supplied action and text from the matching row

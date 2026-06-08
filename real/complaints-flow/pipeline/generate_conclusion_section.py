@@ -306,8 +306,8 @@ def _count_proactive_cancellable(state: PipelineState) -> int:
 
 
 def _count_critical_gaps(state: PipelineState) -> int:
-    """Return number of Critical-severity gaps from Stage 5."""
-    return sum(1 for g in (state.gap_table or []) if g.severity == 'Critical')
+    """Return number of Critical-severity gaps from Stage 5 with non-zero cases."""
+    return sum(1 for g in (state.gap_table or []) if g.severity == 'Critical' and g.case_count)
 
 
 def _clean_tool_name(raw_text: str) -> str:

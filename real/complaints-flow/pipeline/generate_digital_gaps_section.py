@@ -374,6 +374,7 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     De-duplicates journey_map by root_cause_category (summing case counts).
     Picks the highest-count friction point as the example text.
+    Excludes root causes with zero total case count.
     Sort: descending by total case count.
     Columns locked here — LLM adds الحل.
 
@@ -383,6 +384,8 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     rc_best_friction: Dict[str, tuple] = {}  # cat → (count, text)
 
     for f in state.journey_map:
+        if f.case_count == 0:
+            continue
         cat = f.root_cause_category
         rc_totals[cat] += f.case_count
         text = f.friction_point_ar or f.friction_point
@@ -393,15 +396,20 @@ def _build_root_cause_rows(state: PipelineState) -> List[Dict[str, str]]:
     sorted_rc = sorted(rc_totals.items(), key=lambda x: x[1], reverse=True)
 
     rows = []
-    for i, (cat, total_count) in enumerate(sorted_rc, 1):
+    row_num = 1
+    for cat, total_count in sorted_rc:
+        # Skip root causes with zero total case count
+        if total_count == 0:
+            continue
         label = _ROOT_CAUSE_LABELS.get(cat, cat)
         best_count, example_text = rc_best_friction.get(cat, (0, ""))
         example_cell = f"{best_count} حالة — {example_text}" if example_text else str(total_count)
         rows.append({
-            "#":               str(i),
+            "#":               str(row_num),
             "السبب الجذري":    label,
             "مثال على التحدي": example_cell,
         })
+        row_num += 1
     return rows
 
 
