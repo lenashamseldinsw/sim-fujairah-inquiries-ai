@@ -56,6 +56,7 @@ from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response, extract_methodology_context
 from .utils import normalize_arabic
 from .validate_llm_numbers import validate_section_9_narrative, _compute_proactive_cancellable_count
+from .generate_digital_gaps_section import _DIGITAL_SUBMISSION_CHANNELS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -94,17 +95,25 @@ def _compute_submission_channel_pct(state: PipelineState) -> tuple[float, str]:
     """
     Compute the submission channel percentage from case_channel data.
 
-    This is the real, always-available channel figure — how many cases came via
-    "تطبيق" (app) or "موقع" (website). This percentage is never zero for this dataset.
+    Returns pre-calculated value from state.digital_channel_pct if available
+    (set by stage6_artifacts). Otherwise calculates from state.all_classified.
 
     Returns (percentage, formatted string like "75.2%").
     """
+    # Use pre-calculated value from stage6_artifacts if available
+    if hasattr(state, 'digital_channel_pct') and state.digital_channel_pct is not None:
+        pct = state.digital_channel_pct
+        return pct, f"{pct}%"
+
+    # Fallback: calculate if not yet set (should not happen in normal flow)
     cases = state.all_classified or []
     total = len(cases) or 1
 
     digital_submissions = sum(
         1 for c in cases
-        if c.case_channel and ("تطبيق" in str(c.case_channel) or "موقع" in str(c.case_channel))
+        if c.case_channel and any(
+            kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS
+        )
     )
     pct = round(digital_submissions / total * 100, 1)
     return pct, f"{pct}%"
@@ -157,25 +166,31 @@ def _compute_friction_digital_context_pct(state: PipelineState) -> tuple[float, 
 
 def _compute_digital_channel_rate(state: PipelineState) -> tuple[int, float]:
     """
-    Compute % of complaints via digital channels (phone app + website).
+    Compute % of complaints via digital channels (app, website, email, NCRM).
 
     Returns (count, percentage) for complaints submitted through digital channels.
-    Uses normalized matching to handle diacritic variants.
-    This is pre-computed in state by stage1_validator.py, but recomputed here for
-    accuracy against all_classified (which may differ from raw input).
+    Uses pre-calculated state.digital_channel_pct if available, otherwise computes.
     """
     cases = state.all_classified or []
     total = len(cases) or 1
 
-    # Digital keywords: تطبيق (app) and موقع (website)
-    # Normalize both the channel value and keywords for diacritic-invariant matching
-    DIGITAL_KEYWORDS = {normalize_arabic(kw) for kw in ['تطبيق', 'موقع']}
+    # Use pre-calculated percentage from stage6_artifacts if available
+    if hasattr(state, 'digital_channel_pct') and state.digital_channel_pct is not None:
+        pct = state.digital_channel_pct
+        # Compute count to match percentage
+        digital_count = sum(
+            1 for c in cases
+            if c.case_channel and any(
+                kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS
+            )
+        )
+        return digital_count, pct
 
+    # Fallback: calculate if not yet set (should not happen in normal flow)
     digital_count = sum(
         1 for c in cases
         if c.case_channel and any(
-            kw in normalize_arabic(str(c.case_channel))
-            for kw in DIGITAL_KEYWORDS
+            kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS
         )
     )
     pct = round(digital_count / total * 100, 1)

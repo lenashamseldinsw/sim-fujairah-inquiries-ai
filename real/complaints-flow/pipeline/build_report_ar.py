@@ -102,7 +102,7 @@ def _extract_cover_stats(data: dict):
     traffic_pct = ""
     digital_channel_rate = "0"
     rejection_rate = 0.0
-    true_digital_gaps = 0
+    closure_rate = 0.0
 
     # Total complaints count from metadata
     total_complaints = data.get("metadata", {}).get("total_complaints", 0)
@@ -132,17 +132,10 @@ def _extract_cover_stats(data: dict):
     # Rejection rate (formal rejection) from metadata
     rejection_rate = data.get("metadata", {}).get("rejection_rate", 0.0)
 
-    # Count only 🔴 true digital gaps (services with NO digital channel)
-    # Excludes 🟡 awareness gaps per report_structure.md spec
-    sec_51 = _find_subsection(data["sections"], "جدول_الفجوات")
-    if sec_51:
-        for table in sec_51.get("tables", []):
-            for row in table.get("rows", []):
-                gap_type = row.get("نوع الفجوة", "")
-                if gap_type.startswith("🔴") or "حقيقية" in gap_type:
-                    true_digital_gaps += 1
+    # Closure rate (on-time closure) from metadata
+    closure_rate = data.get("metadata", {}).get("closure_rate", 0.0)
 
-    return total_complaints, traffic_pct, digital_channel_rate, rejection_rate, true_digital_gaps
+    return total_complaints, traffic_pct, digital_channel_rate, rejection_rate, closure_rate
 
 
 def _make_config(data: dict) -> DocumentConfig:
@@ -194,7 +187,7 @@ def _make_config(data: dict) -> DocumentConfig:
 
 
 def _build_cover(builder: WordBuilder, data: dict):
-    total_complaints, traffic_pct, digital_channel_rate, rejection_rate, true_digital_gaps = _extract_cover_stats(data)
+    total_complaints, traffic_pct, digital_channel_rate, rejection_rate, closure_rate = _extract_cover_stats(data)
     doc_name = data.get("document_name", "تقرير تحليل شكاوى المتعاملين")
     parts = doc_name.split("—")
     period = parts[1].strip() if len(parts) > 1 else ""
@@ -236,8 +229,8 @@ def _build_cover(builder: WordBuilder, data: dict):
     cover.add_paragraph(f"القنوات الرقمية: {digital_channel_rate} من التقديمات", style=stat_style, rtl=True)
     if rejection_rate > 0:
         cover.add_paragraph(f"معدل الرفض الرسمي: {rejection_rate:.1f}%", style=stat_style, rtl=True)
-    if true_digital_gaps:
-        cover.add_paragraph(f"رصد {true_digital_gaps} فجوات رقمية محددة", style=stat_style, rtl=True)
+    if closure_rate > 0:
+        cover.add_paragraph(f"معدل الإغلاق في الوقت المحدد: {closure_rate:.1f}%", style=stat_style, rtl=True)
 
     cover.add_spacer(32)
 

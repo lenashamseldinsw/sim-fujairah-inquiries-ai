@@ -68,11 +68,17 @@ def _compute_submission_channel_pct(state: PipelineState) -> tuple[float, str]:
     """
     Compute the submission channel percentage from case_channel data.
 
-    Uses _DIGITAL_SUBMISSION_CHANNELS constant from generate_digital_gaps_section
-    to ensure consistency across all report sections (includes NCRM channel).
+    Returns pre-calculated value from state.digital_channel_pct if available
+    (set by stage6_artifacts). Otherwise calculates from state.all_classified.
 
     Returns (percentage, formatted string like "96.0%").
     """
+    # Use pre-calculated value from stage6_artifacts if available
+    if hasattr(state, 'digital_channel_pct') and state.digital_channel_pct is not None:
+        pct = state.digital_channel_pct
+        return pct, f"{pct}%"
+
+    # Fallback: calculate if not yet set (should not happen in normal flow)
     cases = state.all_classified or []
     total = len(cases) or 1
 

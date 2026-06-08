@@ -28,7 +28,7 @@ from .stage6_json_report import generate_json_report
 from .translate_report_en import translate_report_to_english
 from .generate_workload_map_section import generate_workload_map_section
 from .generate_customer_journey_section import generate_customer_journey_section
-from .generate_digital_gaps_section import generate_digital_gaps_section
+from .generate_digital_gaps_section import generate_digital_gaps_section, _DIGITAL_SUBMISSION_CHANNELS
 from .generate_digital_transformation_section import generate_digital_transformation_section
 from .generate_ai_use_cases_section import generate_ai_use_cases_section
 from .generate_improvement_roadmap_section import generate_improvement_roadmap_section
@@ -1104,9 +1104,13 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             proactive_notification_total = sum(n.get('cases_eliminated', n.get('case_count', 0)) for n in state.notification_opportunities)
         proactive_notification_pct = (proactive_notification_total / total_cases * 100) if total_cases > 0 else 0
 
-        # Digital channel percentage
-        digital_cases = sum(1 for c in all_classified if c.case_channel in ['app', 'web', 'website', 'application'])
+        # Digital channel percentage — store in state for reuse in all sections
+        digital_cases = sum(
+            1 for c in all_classified
+            if c.case_channel and any(kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS)
+        )
         digital_channel_pct = (digital_cases / total_cases * 100) if total_cases > 0 else 0
+        state.digital_channel_pct = round(digital_channel_pct, 1)
 
         # Date range extraction (placeholder - would be parsed from data in real scenario)
         date_range = convert_month_year_to_arabic(state.month_year) or "يناير — مارس 2026"

@@ -203,6 +203,82 @@ def load_guidebook_for_stage5(guidebook_path: str, friction_clusters: List[str])
     }
 
 
+def reconcile_faq_frequencies(
+    faq_list: List[FAQCandidate],
+    journey_map: List[Any],
+    all_classified: List[Any]
+) -> List[FAQCandidate]:
+    """
+    Reconcile FAQ frequencies using sub_classification as the ONLY signal.
+
+    STRICT VALIDATION: sub_classification direct lookup only
+    - LLM assigns sub_classification to each FAQ from the patterns list
+    - Look up actual case count for that sub_classification
+    - Cap at the friction's reconciled case_count (not full category total)
+    - This avoids register mismatch entirely — uses authoritative ground truth
+    - If sub_classification is missing or unmatched, FAQ is REJECTED (frequency=0)
+
+    NO FALLBACK: Keyword matching is disabled to prevent false positives that
+    inflated FAQ frequencies (e.g., "complaint" keyword matching unrelated cases).
+    """
+    if not faq_list or not all_classified:
+        return faq_list
+
+    # Build ground truth: sub_classification → actual case count
+    actual_sub_counts: Dict[str, int] = defaultdict(int)
+    for case in all_classified:
+        sub = case.sub_classification or ''
+        if sub:
+            actual_sub_counts[sub] += 1
+
+    # Build journey_map cap: sub_classification → friction case_count
+    # (the reconciled per-friction count, always <= sub total)
+    friction_cap: Dict[str, int] = {}
+    for jf in (journey_map or []):
+        sub = getattr(jf, 'sub_classification', None)
+        cc = getattr(jf, 'case_count', 0)
+        if sub and cc > 0:
+            # Take the MAX friction case_count per sub (most relevant friction wins)
+            if sub not in friction_cap or cc > friction_cap[sub]:
+                friction_cap[sub] = cc
+
+    reconciled_faqs = []
+    for faq in faq_list:
+        q_text = (faq.question_ar or faq.question or '').strip()
+        a_text = (faq.answer_ar or faq.answer or '').strip()
+
+        # ── SUB-CLASSIFICATION VALIDATION (ONLY SIGNAL) ──────────────────────
+        # If the LLM assigned a sub_classification to this FAQ, use the actual
+        # case count for that sub, capped at the friction's reconciled case_count.
+        # If sub_classification is missing or unmatched, REJECT the FAQ (frequency=0).
+        reconciled_frequency = 0
+        sub = getattr(faq, 'sub_classification', None) or ''
+        signal_used = "rejected (no match)"
+
+        if sub and sub in actual_sub_counts:
+            raw_count = actual_sub_counts[sub]
+            cap = friction_cap.get(sub, raw_count)
+            reconciled_frequency = min(raw_count, cap)
+            signal_used = f"sub_classification='{sub}' ({reconciled_frequency} cases)"
+        elif sub:
+            # sub_classification provided but not found in patterns
+            signal_used = f"rejected (unknown sub_classification='{sub}')"
+        else:
+            # No sub_classification provided
+            signal_used = "rejected (no sub_classification)"
+
+        # Safety cap
+        reconciled_frequency = min(reconciled_frequency, len(all_classified))
+
+        print(
+            f"[Stage5] FAQ '{q_text[:50]}': "
+            f"{faq.frequency} → {reconciled_frequency} [{signal_used}]"
+        )
+        reconciled_faqs.append(faq.model_copy(update={"frequency": reconciled_frequency}))
+
+    return reconciled_faqs
+
+
 def build_gap_analysis_prompt(
     patterns: List[Dict],
     journey_map: List[Dict],
@@ -302,11 +378,13 @@ def run_stage5(
         if state.faq_candidates:
             print(
                 "[Stage5] journey_map is empty — skipping gap analysis. "
-                "Promoting faq_candidates to validated_faqs without guidebook cross-check."
+                "Reconciling faq_candidates frequencies using all_classified."
             )
-            for faq in state.faq_candidates:
+            # Reconcile FAQ frequencies using sub_classification matching
+            reconciled = reconcile_faq_frequencies(state.faq_candidates, state.journey_map or [], state.all_classified or [])
+            for faq in reconciled:
                 faq.validation_status = 'OK'
-            state.validated_faqs = list(state.faq_candidates)
+            state.validated_faqs = reconciled
         else:
             print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
         return state
@@ -491,7 +569,7 @@ def run_stage5(
 
                 print(f"[Stage5] ✓ gap_table case_counts reconciled against all_classified")
 
-                # Validate FAQ candidates
+                # Validate and reconcile FAQ candidates
                 if 'faq_validations' in analysis:
                     faq_validations = {
                         v['question']: v['validation_status']
@@ -505,12 +583,15 @@ def run_stage5(
                         if status == 'OK':
                             validated.append(faq)
 
-                    state.validated_faqs = validated
+                    # Reconcile frequencies using sub_classification matching
+                    reconciled = reconcile_faq_frequencies(validated, state.journey_map or [], state.all_classified or [])
+                    state.validated_faqs = reconciled
                 else:
-                    # If no validations provided, assume all OK
+                    # If no validations provided, reconcile all candidates
                     for faq in state.faq_candidates:
                         faq.validation_status = 'OK'
-                    state.validated_faqs = state.faq_candidates
+                    reconciled = reconcile_faq_frequencies(state.faq_candidates, state.journey_map or [], state.all_classified or [])
+                    state.validated_faqs = reconciled
 
                 break
         else:

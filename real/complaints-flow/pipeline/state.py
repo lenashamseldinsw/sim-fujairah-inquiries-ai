@@ -187,6 +187,9 @@ class PipelineState(BaseModel):
     guidebook_faq_count: Optional[int] = None  # Total FAQs in guidebook
     guidebook_year: Optional[str] = None  # Publication year of guidebook
 
+    # --- DIGITAL CHANNEL PERCENTAGE (computed in Stage 6) ---
+    digital_channel_pct: Optional[float] = None  # % of cases via digital channels, single source of truth
+
     # --- COMPLAINTS-SPECIFIC METADATA ---
     complaint_severity_distribution: Dict[str, int] = Field(default_factory=dict)
     # e.g. {"طلب روتينى": 222, "طلب حرج": 17, "طلب معقد": 2}

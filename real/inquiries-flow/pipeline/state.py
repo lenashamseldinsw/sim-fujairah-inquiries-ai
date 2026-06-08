@@ -179,6 +179,9 @@ class PipelineState(BaseModel):
     guidebook_faq_count: Optional[int] = None  # Total FAQs in guidebook
     guidebook_year: Optional[str] = None  # Publication year of guidebook
 
+    # --- DIGITAL CHANNEL PERCENTAGE (computed in Stage 6) ---
+    digital_channel_pct: Optional[float] = None  # % of cases via digital channels, single source of truth
+
     class Config:
         arbitrary_types_allowed = True
 

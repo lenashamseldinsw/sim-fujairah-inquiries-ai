@@ -396,6 +396,11 @@ class JSONReportBuilder:
         rejected_count = sum(1 for c in all_classified if c.case_status and c.case_status.strip() == 'طلب مرفوض')
         rejection_rate = (rejected_count / total * 100) if total > 0 else 0.0
 
+        # Compute closure rate from total_cases and closed_cases_count
+        closure_rate = 0.0
+        if self.state.total_cases and self.state.closed_cases_count:
+            closure_rate = round(self.state.closed_cases_count / self.state.total_cases * 100, 1)
+
         return {
             "extraction_version": 1,
             "document_name": f"تقرير تحليل شكاوى المتعاملين — {convert_month_year_to_arabic(self.state.month_year) or 'Q1 2026'}",
@@ -409,6 +414,7 @@ class JSONReportBuilder:
                 "total_tables": len(self.state.gap_table) + 3,
                 "total_cases": self.state.total_cases,
                 "closed_cases_count": self.state.closed_cases_count,
+                "closure_rate": closure_rate,
                 "total_complaints": total,
                 "digital_channel_rate": digital_channel_rate,
                 "rejection_rate": round(rejection_rate, 1),

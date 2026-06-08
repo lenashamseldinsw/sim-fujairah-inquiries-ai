@@ -83,49 +83,20 @@ def reconcile_faq_frequencies(
     all_classified: List[Any]
 ) -> List[FAQCandidate]:
     """
-    Reconcile FAQ frequencies using sub_classification as the primary signal.
+    Reconcile FAQ frequencies using sub_classification as the ONLY signal.
 
-    SIGNAL 1 (PRIMARY): sub_classification direct lookup
+    STRICT VALIDATION: sub_classification direct lookup only
     - LLM assigns sub_classification to each FAQ from the patterns list
     - Look up actual case count for that sub_classification
     - Cap at the friction's reconciled case_count (not full category total)
     - This avoids register mismatch entirely — uses authoritative ground truth
+    - If sub_classification is missing or unmatched, FAQ is REJECTED (frequency=0)
 
-    SIGNAL 2 (FALLBACK): Combined Q+A keyword match at threshold=4
-    - Used only when sub_classification is absent or unmatched
-    - Requires 4+ distinct keywords from question+answer to appear in case text
-    - More specific than individual keyword signals, reduces false positives
+    NO FALLBACK: Keyword matching is disabled to prevent false positives that
+    inflated FAQ frequencies (e.g., "complaint" keyword matching unrelated cases).
     """
     if not faq_list or not all_classified:
         return faq_list
-
-    import re as _re
-
-    def _clean_keywords(text: str, min_len: int = 4) -> List[str]:
-        """
-        Extract and rank keywords by length (longer = more specific).
-        Strips both ASCII and Arabic punctuation before splitting.
-        Returns top 8 keywords sorted by length descending.
-        """
-        if not text:
-            return []
-        clean = _re.sub(r'[،؛.?!؟()\"\' «»\[\]،:؛]', ' ', text)
-        words = [w for w in clean.split() if len(w) >= min_len]
-        # Deduplicate preserving order, sort by length descending
-        seen = set()
-        unique = []
-        for w in sorted(words, key=len, reverse=True):
-            if w not in seen:
-                seen.add(w)
-                unique.append(w)
-        return unique[:8]
-
-    def _keyword_hits(text: str, keywords: List[str], threshold: int) -> bool:
-        """Return True if at least `threshold` keywords appear in text."""
-        if not text or not keywords:
-            return False
-        t = text.lower()
-        return sum(1 for kw in keywords if kw.lower() in t) >= threshold
 
     # Build ground truth: sub_classification → actual case count
     actual_sub_counts: Dict[str, int] = defaultdict(int)
@@ -150,43 +121,25 @@ def reconcile_faq_frequencies(
         q_text = (faq.question_ar or faq.question or '').strip()
         a_text = (faq.answer_ar or faq.answer or '').strip()
 
-        # ── SIGNAL 1 (PRIMARY): sub_classification direct lookup ─────────────
+        # ── SUB-CLASSIFICATION VALIDATION (ONLY SIGNAL) ──────────────────────
         # If the LLM assigned a sub_classification to this FAQ, use the actual
         # case count for that sub, capped at the friction's reconciled case_count.
-        # This is the only signal that correctly handles register mismatch.
-        freq_signal1 = 0
+        # If sub_classification is missing or unmatched, REJECT the FAQ (frequency=0).
+        reconciled_frequency = 0
         sub = getattr(faq, 'sub_classification', None) or ''
+        signal_used = "rejected (no match)"
+
         if sub and sub in actual_sub_counts:
             raw_count = actual_sub_counts[sub]
             cap = friction_cap.get(sub, raw_count)
-            freq_signal1 = min(raw_count, cap)
-
-        # ── SIGNAL 2 (FALLBACK): combined Q+A keyword match ──────────────────
-        # Used only when sub_classification is absent or unmatched.
-        freq_signal2 = 0
-        qa_keywords = _clean_keywords(q_text + ' ' + a_text)
-        if not freq_signal1 and len(qa_keywords) >= 4:
-            threshold = min(4, len(qa_keywords))
-            freq_signal2 = sum(
-                1 for case in all_classified
-                if _keyword_hits(
-                    ((getattr(case, 'description', None) or '') + ' ' +
-                     (getattr(case, 'resolution_response', None) or '')).lower(),
-                    qa_keywords,
-                    threshold,
-                )
-            )
-
-        # ── Select ───────────────────────────────────────────────────────────
-        if freq_signal1 > 0:
-            reconciled_frequency = freq_signal1
-            signal_used = f"sub_classification='{sub}' ({freq_signal1} cases)"
-        elif freq_signal2 > 0:
-            reconciled_frequency = freq_signal2
-            signal_used = f"keyword fallback (freq={freq_signal2})"
+            reconciled_frequency = min(raw_count, cap)
+            signal_used = f"sub_classification='{sub}' ({reconciled_frequency} cases)"
+        elif sub:
+            # sub_classification provided but not found in patterns
+            signal_used = f"rejected (unknown sub_classification='{sub}')"
         else:
-            reconciled_frequency = 0
-            signal_used = "no match"
+            # No sub_classification provided
+            signal_used = "rejected (no sub_classification)"
 
         # Safety cap
         reconciled_frequency = min(reconciled_frequency, len(all_classified))

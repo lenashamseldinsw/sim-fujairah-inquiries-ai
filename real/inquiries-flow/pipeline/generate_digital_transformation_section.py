@@ -149,77 +149,46 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     Pre-computed rows for Section 6.1 FAQ table.
 
     Uses validated_faqs (Stage 5) if available; falls back to faq_candidates (Stage 4).
-    Sorted by actual sub_classification case count (not LLM frequency estimate).
-    Capped at _MAX_FAQ_ROWS.
+    Frequencies are actual case counts from the pipeline (reconciled in Stage 5),
+    never LLM-invented. FAQs with frequency=0 are skipped.
 
-    Task 12 Fix: Cap FAQ frequency against actual sub_classification case count from
-    state.all_classified to prevent Stage 4 LLM over-counting from inflating the table.
-    Also sort by actual counts, not LLM estimates, so FAQs appear in order of impact.
+    SOURCE: state.validated_faqs (from Stage 5, post-reconciliation).
+    ACCURACY: Frequency values are reconciled against actual case counts in the pipeline.
+              FAQs with frequency=0 indicate no matching cases — they're excluded from display.
 
     Schema returned: # | التكرار
     (السؤال and الإجابة المقترحة are written by the LLM from faq context)
     """
-    source = state.validated_faqs if state.validated_faqs else state.faq_candidates
+    all_faqs = list(state.validated_faqs) if state.validated_faqs else (state.faq_candidates if state.faq_candidates else [])
 
-    # Build sub_classification counts from all_classified (ground truth)
-    # MUST be built before sorting so we can use it as the sort key
-    sub_counts: Dict[str, int] = defaultdict(int)
-    for case in (state.all_classified or []):
-        if case.sub_classification:
-            sub_counts[case.sub_classification] += 1
-
-    # Sort by actual sub_classification count, not by LLM frequency estimate
-    # This ensures FAQ ranking reflects actual case distribution
-    def _sort_key(faq):
-        sub = getattr(faq, "sub_classification", None)
-        return sub_counts.get(sub, faq.frequency) if sub else faq.frequency
-
-    sorted_faqs = sorted(source, key=_sort_key, reverse=True)
+    # Sort by frequency (descending) to show most impactful FAQs first
+    all_faqs.sort(
+        key=lambda f: (
+            f.get('frequency', 0)
+            if isinstance(f, dict)
+            else getattr(f, 'frequency', 0)
+        ),
+        reverse=True
+    )
 
     rows = []
-    for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1):
-        raw_freq = faq.frequency
+    counter = 1
+    for faq in all_faqs:
+        if counter > _MAX_FAQ_ROWS:
+            break
 
-        # Look up sub_classification from FAQ to get the authoritative case count
-        faq_sub_class = getattr(faq, "sub_classification", None)
+        # Extract frequency (handle both dict and object access)
+        freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-        if faq_sub_class and faq_sub_class in sub_counts:
-            # Use the actual sub_classification count as the authoritative frequency
-            capped_freq = sub_counts[faq_sub_class]
-            source = "sub_classification"
-        elif faq_sub_class and not (faq_sub_class in sub_counts):
-            # FAQ has sub_classification but it doesn't match any cases (data mismatch)
-            # Fall back to raw frequency capped against max sub-count
-            max_sub_count = max(sub_counts.values()) if sub_counts else raw_freq
-            capped_freq = min(raw_freq, max_sub_count)
-            source = "fallback (no sub_class match)"
-            if not faq_sub_class:
-                print(
-                    f"[DigitalTransform] WARNING: FAQ #{i} has sub_classification='{faq_sub_class}' "
-                    f"but no matching cases. Using fallback cap."
-                )
-        elif sub_counts:
-            # No sub_classification on FAQ — fall back to max sub-count as loose upper bound
-            max_sub_count = max(sub_counts.values())
-            capped_freq = min(raw_freq, max_sub_count)
-            source = "fallback (no sub_class)"
-        else:
-            capped_freq = raw_freq
-            source = "no sub_counts"
+        # CRITICAL: Skip FAQs with frequency=0 (no matching cases found in pipeline)
+        # Only include if frequency > 0
+        if freq > 0:
+            rows.append({
+                "#":        str(counter),
+                "التكرار":  str(int(freq)),
+            })
+            counter += 1
 
-        if capped_freq != raw_freq and source != "no sub_counts":
-            print(
-                f"[DigitalTransform] FAQ frequency: rank={i}, "
-                f"sub_classification={faq_sub_class!r}, original={raw_freq} → capped={capped_freq} ({source})"
-            )
-
-        # Display: show exact integer (no "+" suffix for capped values)
-        freq_display = str(capped_freq)
-
-        rows.append({
-            "#":        str(i),
-            "التكرار":  freq_display,
-        })
     return rows
 
 
@@ -228,35 +197,43 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
     Enriched FAQ context for the LLM prompt (Section 6.1).
 
     Provides raw Q&A text so the LLM can sharpen phrasing and add
-    operational context from the resolved cases. Sorted by actual sub_classification
-    case count to match the display order. No new computation — pure read of Stage 4/5 outputs.
+    operational context from the resolved cases. Sorted by frequency (descending)
+    to match the display order. No new computation — pure read of Stage 4/5 outputs.
     """
-    source = state.validated_faqs if state.validated_faqs else state.faq_candidates
+    all_faqs = list(state.validated_faqs) if state.validated_faqs else (state.faq_candidates if state.faq_candidates else [])
 
-    # Build sub_classification counts (same as in _build_faq_rows_for_transform)
-    sub_counts: Dict[str, int] = defaultdict(int)
-    for case in (state.all_classified or []):
-        if case.sub_classification:
-            sub_counts[case.sub_classification] += 1
+    # Sort by frequency (descending) to match display order
+    all_faqs.sort(
+        key=lambda f: (
+            f.get('frequency', 0)
+            if isinstance(f, dict)
+            else getattr(f, 'frequency', 0)
+        ),
+        reverse=True
+    )
 
-    # Sort by actual sub_classification count for consistency with display order
-    def _sort_key(faq):
-        sub = getattr(faq, "sub_classification", None)
-        return sub_counts.get(sub, faq.frequency) if sub else faq.frequency
+    result = []
+    counter = 1
+    for faq in all_faqs:
+        if counter > _MAX_FAQ_ROWS:
+            break
 
-    sorted_faqs = sorted(source, key=_sort_key, reverse=True)
+        # Extract frequency
+        freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-    return [
-        {
-            "rank":        i,
-            "frequency":   faq.frequency,
-            "question_ar": faq.question_ar or faq.question,
-            "answer_ar":   faq.answer_ar or faq.answer,
-            "top_level":   getattr(faq, "top_level", ""),
-            "sub_classification": getattr(faq, "sub_classification", ""),
-        }
-        for i, faq in enumerate(sorted_faqs[:_MAX_FAQ_ROWS], 1)
-    ]
+        # Only include FAQs with frequency > 0
+        if freq > 0:
+            result.append({
+                "rank":        counter,
+                "frequency":   freq,
+                "question_ar": faq.question_ar or faq.question if isinstance(faq, dict) else (faq.question_ar or getattr(faq, 'question', '')),
+                "answer_ar":   faq.answer_ar or faq.answer if isinstance(faq, dict) else (faq.answer_ar or getattr(faq, 'answer', '')),
+                "top_level":   faq.get('top_level', '') if isinstance(faq, dict) else getattr(faq, 'top_level', ''),
+                "sub_classification": faq.get('sub_classification', '') if isinstance(faq, dict) else getattr(faq, 'sub_classification', ''),
+            })
+            counter += 1
+
+    return result
 
 
 def _build_authoritative_notif_counts(state: PipelineState) -> Dict[str, int]:

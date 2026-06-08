@@ -87,7 +87,13 @@ _SEVERITY_ORDER = {"Critical": 0, "Medium": 1, "Adequate": 2}
 
 # Single authoritative definition of digital submission channels
 # Used in all sections and conclusion to ensure consistency
-_DIGITAL_SUBMISSION_CHANNELS = {"تطبيق", "موقع", "NCRM", "ncrm"}
+# Supports Arabic and English variations of channel names
+_DIGITAL_SUBMISSION_CHANNELS = {
+    "تطبيق", "app", "application",           # App
+    "موقع", "website", "web",                # Website
+    "بريد", "email",                          # Email
+    "NCRM", "ncrm"                            # NCRM
+}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -97,12 +103,17 @@ _DIGITAL_SUBMISSION_CHANNELS = {"تطبيق", "موقع", "NCRM", "ncrm"}
 
 def _compute_submission_channel_pct(state: PipelineState) -> float:
     """
-    % of cases submitted via digital channels (app, website, or NCRM).
+    % of cases submitted via digital channels (app, website, email, or NCRM).
 
-    This is the submission channel metric — how many customers submitted their case
-    through "تطبيق" (app), "موقع" (website), or "NCRM" rather than phone/in-person.
-    Single source of truth for all sections using _DIGITAL_SUBMISSION_CHANNELS.
+    Returns pre-calculated value from state.digital_channel_pct if available
+    (set by stage6_artifacts during executive summary). Otherwise calculates
+    from state.all_classified to ensure consistency across all sections.
     """
+    # Use pre-calculated value from stage6_artifacts if available
+    if hasattr(state, 'digital_channel_pct') and state.digital_channel_pct is not None:
+        return state.digital_channel_pct
+
+    # Fallback: calculate if not yet set (should not happen in normal flow)
     cases = state.all_classified or []
     total = len(cases) or 1
 
@@ -169,6 +180,8 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Pre-computed rows for Section 5.1 table.
 
+    FILTER: Excludes gaps with zero case_count — nothing to display or analyze.
+
     Sort: Critical first, then by case_count descending.
     Columns locked here — LLM adds وضع التطبيق / الموقع الحالي and التوصية.
 
@@ -186,6 +199,7 @@ def _build_gap_rows(state: PipelineState) -> List[Dict[str, str]]:
             "نوع الفجوة": gap.gap_type_ar or gap.gap_type or "—",
         }
         for gap in sorted_gaps
+        if gap.case_count  # Filter: skip gaps with zero cases
     ]
 
 
@@ -280,6 +294,7 @@ def _build_gap_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
     Joins gap_table with guidebook intelligence from Stage 5.
     The LLM uses guidebook_status, guidebook_excerpt, and
     recommendation_from_stage5 to write informed column values.
+    FILTER: Excludes gaps with zero case_count — no data to inform recommendations.
     No new computation — pure read of Stage 5 outputs.
     """
     sorted_gaps = sorted(
@@ -303,6 +318,7 @@ def _build_gap_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
             "recommendation_from_stage5": gap.recommendation_ar or gap.recommendation,
         }
         for gap in sorted_gaps
+        if gap.case_count  # Filter: skip gaps with zero cases
     ]
 
 
@@ -424,20 +440,26 @@ def generate_digital_gaps_section(
     gap_context        = _build_gap_prompt_context(state)
     root_cause_context = _build_root_cause_prompt_context(state, root_cause_rows)
 
-    # Derived scalars for the section body
+    # Derived scalars for the section body (excluding zero-case gaps)
+    non_zero_gaps = [g for g in state.gap_table if g.case_count]
+    if not non_zero_gaps:
+        raise RuntimeError(
+            "[DigitalGaps] No gaps with non-zero case counts — "
+            "cannot determine top gap for narrative."
+        )
     sorted_gap_indices = sorted(
-        range(len(state.gap_table)),
+        range(len(non_zero_gaps)),
         key=lambda i: (
-            _SEVERITY_ORDER.get(state.gap_table[i].severity, 9),
-            -(state.gap_table[i].case_count or 0)
+            _SEVERITY_ORDER.get(non_zero_gaps[i].severity, 9),
+            -(non_zero_gaps[i].case_count or 0)
         )
     )
-    top_gap       = state.gap_table[sorted_gap_indices[0]]
+    top_gap       = non_zero_gaps[sorted_gap_indices[0]]
     top_gap_name  = top_gap.topic_ar or top_gap.topic
     top_gap_count = top_gap.case_count
 
-    critical_count = sum(1 for g in state.gap_table if g.severity == "Critical")
-    medium_count   = sum(1 for g in state.gap_table if g.severity == "Medium")
+    critical_count = sum(1 for g in state.gap_table if g.severity == "Critical" and g.case_count)
+    medium_count   = sum(1 for g in state.gap_table if g.severity == "Medium" and g.case_count)
 
     proactive_gaps       = [g for g in state.gap_table if g.proactive_notification_opportunity]
     proactive_case_count = state.proactive_notification_case_count or sum(g.case_count for g in proactive_gaps)
