@@ -1,173 +1,136 @@
-# نبض الفجيرة - Fujairah Nabd Demo
+# نبض الفجيرة - Fujairah Pulse AI Platform
 
-## نظرة عامة | Overview
+## 📖 Overview
 
-**العربية:**
-تطبيق تجريبي لنظام نبض الفجيرة لتحليل استفسارات المتعاملين باستخدام الذكاء الاصطناعي. يتيح التطبيق رفع الملفات (Excel أو PDF) ومعالجتها وتحميل التقرير النهائي.
+**نبض الفجيرة** (Fujairah Pulse) is an AI-powered platform for analyzing customer inquiries and complaints. The project uses a **dual-implementation strategy**:
 
-**English:**
-A demo application for Fujairah Nabd (نبض) - an AI-powered system for analyzing customer inquiries. The app allows uploading files (Excel or PDF), processing them, and downloading the final report.
+- **`demo/`**: Stable, production-ready demo version with simulated outputs (main branch)
+- **`real/`**: Full agentic AI implementation with real analysis pipelines (real branch)
+
+**See [CLAUDE.md](CLAUDE.md) for full development guide.**
 
 ---
 
-## 🚀 التشغيل السريع | Quick Start
+## 🚀 Quick Start
 
-### خطوة واحدة فقط | Just One Step
-
-**على macOS/Linux:**
+### Demo Version (Stable, Pre-built Reports)
 ```bash
-./run.sh
+make demo
+# Or: cd demo && streamlit run app.py
 ```
+Opens at `http://localhost:8501` with automatic report extraction and caching.
 
-**على Windows:**
-```cmd
-run.bat
-```
-
-التطبيق سيفتح تلقائياً في المتصفح على | The app will automatically open at:
-```
-http://localhost:8501
-```
-
-### التشغيل اليدوي | Manual Run
-
+### Real Version (AI-Powered Analysis)
 ```bash
-# تثبيت المكتبات | Install dependencies
-pip install -r requirements.txt
-
-# تشغيل التطبيق | Run the app
-streamlit run app.py
+cd real && streamlit run app_inq_comp.py
 ```
+Unified app supporting both inquiries and complaints flows with 6-stage AI pipelines.
 
 ---
 
-## ✨ المميزات | Features
-
-- ✅ **واجهة عربية 100%** - Full Arabic interface with complete RTL support
-- 📤 **رفع الملفات** - Upload Excel (.xlsx, .xls) and PDF files
-- ⏱️ **معالجة ذكية** - 2-minute processing simulation with 4 stages
-- 📥 **تحميل التقرير** - Download comprehensive Word report
-- 🎨 **تصميم احترافي** - Modern design with Fujairah brand colors
-- 🔒 **آمن** - All data stays local, no external servers
-
-### مراحل المعالجة | Processing Stages
-
-1. **جاري رفع الملفات** (0-25%) - File upload and validation
-2. **تحليل البيانات** (25-50%) - Data analysis and extraction
-3. **معالجة الاستفسارات** (50-75%) - AI-powered inquiry processing
-4. **إنشاء التقرير النهائي** (75-100%) - Report generation
-
----
-
-## 📋 المتطلبات | Requirements
-
-- Python 3.8 أو أحدث | Python 3.8 or higher
-- pip (مدير المكتبات) | pip (package manager)
-- متصفح حديث | Modern browser
-
----
-
-## 📁 هيكل المشروع | Project Structure
+## 📁 Project Structure
 
 ```
 sim-fujairah-inquiries-ai/
-├── app.py                      # التطبيق الرئيسي
-├── requirements.txt            # المكتبات المطلوبة
-├── README.md                   # هذا الملف
-├── run.sh / run.bat           # سكريبت التشغيل
-├── .streamlit/
-│   └── config.toml            # إعدادات Streamlit
-├── assets/                    # الشعارات والصور
-├── inquiries-output/          # تقارير استفسارات المتعاملين
-└── complaints-output/         # تقارير شكاوى المتعاملين
+├── CLAUDE.md                  # Development guide (READ THIS FIRST)
+├── README.md                  # This file (project overview)
+├── demo/                      # Stable demo version
+│   ├── README.md             # Demo-specific setup & features
+│   ├── app.py                # Streamlit UI
+│   └── analysis/             # Demo analyzer with extraction
+├── real/                      # AI-powered real version
+│   ├── README.md             # Real-specific setup & features
+│   ├── app_inq_comp.py       # Unified dual-flow UI
+│   ├── inquiries-flow/       # Inquiries pipeline
+│   └── complaints-flow/      # Complaints pipeline
+├── sword_word_builder/       # Shared Word generation utilities
+├── Makefile                  # Convenience commands
+└── requirements.txt          # Python dependencies
 ```
 
 ---
 
-## 🎬 كيفية الاستخدام | How to Use
+## 🎯 Which Version Should I Use?
 
-1. **افتح التطبيق** - Run `./run.sh` or `run.bat`
-2. **ارفع ملف** - Upload Excel or PDF file
-3. **ابدأ التحليل** - Click "بدء التحليل" and wait 2 minutes
-4. **حمّل التقرير** - Download the generated Word report
+| Need | Version | Command |
+|------|---------|---------|
+| **See pre-built sample reports** | demo | `make demo` |
+| **Run AI analysis on real data** | real | `cd real && streamlit run app_inq_comp.py` |
+| **Develop demo features** | demo | Edit `demo/` folder |
+| **Develop AI pipelines** | real | Edit `real/` folder |
 
 ---
 
-## 🌐 النشر | Deployment
+## 📚 Documentation
 
-### على Streamlit Cloud
+- **[CLAUDE.md](CLAUDE.md)**: Full development guide, architecture, and workflows
+- **[demo/README.md](demo/README.md)**: Demo version setup and features
+- **[real/README.md](real/README.md)**: Real version setup and features
+- **Memory**: See `.claude/projects/.../memory/MEMORY.md` for implementation notes
+
+---
+
+## 🔧 Development
+
+### Making Changes
+
+**To demo version** (UI, extraction, caching):
+```bash
+cd demo && streamlit run app.py
+```
+
+**To real version** (AI pipelines, analysis logic):
+```bash
+cd real && streamlit run app_inq_comp.py
+```
+
+Both versions are independent. Changes to demo don't affect real and vice versa.
+
+### Running Tests
 
 ```bash
-# رفع الكود إلى GitHub
-git init
-git add .
-git commit -m "Initial commit"
-git push -u origin main
+# Demo extraction tests
+cd demo && python test_adaptive_system.py
 
-# ثم انتقل إلى https://streamlit.io/cloud
-# واختر المستودع وملف app.py
-```
-
-### باستخدام Docker
-
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8501
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-```
-
-```bash
-docker build -t fujairah-nabd-demo .
-docker run -p 8501:8501 fujairah-nabd-demo
+# Real pipeline tests (if available)
+cd real && python test_pipeline.py
 ```
 
 ---
 
-## 🐛 استكشاف الأخطاء | Troubleshooting
+## 🌍 Deployment
 
-### "Port already in use"
-```bash
-streamlit run app.py --server.port 8502
-```
+### Streamlit Cloud
 
-### الخطوط العربية لا تظهر
-- تحقق من اتصال الإنترنت (الخطوط تُحمل من Google Fonts)
-- امسح ذاكرة المتصفح المؤقتة
+Push the repo to GitHub and deploy from https://streamlit.io/cloud:
+- For demo: Select `demo/app.py`
+- For real: Select `real/app_inq_comp.py`
 
-### الملف لا يتم تحميله
-```bash
-ls -la inquiries-output/
-ls -la complaints-output/
-chmod 644 inquiries-output/*.docx
-chmod 644 complaints-output/*.docx
-```
+### Docker
+
+See individual README files in `demo/` and `real/` for Docker setup.
 
 ---
 
-## 📝 ملاحظات مهمة | Important Notes
+## 🐛 Troubleshooting
 
-⚠️ **هذا تطبيق تجريبي** - لا يتم إجراء معالجة حقيقية للبيانات  
-⚠️ **This is a demo app** - No actual data processing is performed
-
-✅ التقرير المُنتج هو نموذج ثابت لأغراض العرض  
-✅ The generated report is a static sample for demonstration purposes
-
-🔒 جميع الملفات المرفوعة تبقى محلية ولا يتم إرسالها إلى أي خادم  
-🔒 All uploaded files remain local and are not sent to any server
+| Issue | Solution |
+|-------|----------|
+| Port 8501 in use | `streamlit run app.py --server.port 8502` |
+| ModuleNotFoundError | Make sure you're in `demo/` or `real/` folder |
+| Reports not displaying | Check `demo/inquiries-output/` or `demo/complaints-output/` folders exist |
+| Cache not working | Delete `*/cache/` folders and re-run |
 
 ---
 
-## 📞 الدعم | Support
+## 📝 Key Files
 
-- [Streamlit Documentation](https://docs.streamlit.io)
-- [Python Documentation](https://docs.python.org)
+- **[CLAUDE.md](CLAUDE.md)**: Complete development instructions (must read)
+- **[Makefile](Makefile)**: Quick start commands
+- **[demo/README.md](demo/README.md)**: Demo version details
+- **[real/README.md](real/README.md)**: Real version details
 
 ---
 
-**تم التطوير بواسطة | Developed for:** حكومة الفجيرة | Fujairah Government  
-**التاريخ | Date:** أبريل 2026 | April 2026  
-**الإصدار | Version:** 1.0.1
+**Developed for**: حكومة الفجيرة | Fujairah Government  
+**Last Updated**: June 2026

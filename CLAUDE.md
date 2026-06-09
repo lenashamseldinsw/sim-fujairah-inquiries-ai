@@ -1,5 +1,20 @@
 # Development Guide for Fujairah Pulse AI Platform
 
+## 📋 Documentation Policy
+
+**⚠️ DO NOT CREATE NEW .MD FILES** — All project-level documentation must consolidate into:
+- **CLAUDE.md** (this file) - Development guide, architecture, and workflows
+- **README.md** - Project overview and navigation
+- **demo/README.md** - Demo version setup and features
+- **real/README.md** - Real version setup and features
+- **MEMORY.md** - Implementation decisions and context (auto-memory system)
+
+**Any notes or documentation needed** should be added to one of these files, not scattered as new .md files. If you find yourself creating a new .md file, it probably belongs in CLAUDE.md, README.md, or one of the folder-specific READMEs instead.
+
+**Why?** Scattered documentation becomes stale, unmaintainable, and hard to find. Consolidation keeps everything in one place.
+
+---
+
 ## Architecture Overview
 
 This project uses a **dual-implementation strategy** to maintain a stable demo version while developing the full agentic AI system in parallel.
