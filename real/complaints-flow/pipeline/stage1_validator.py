@@ -15,6 +15,7 @@ from pandera import Column, Index, Check, DataFrameSchema
 from typing import Tuple, Dict, Any
 from .state import PipelineState
 from .utils import normalize_arabic
+from .generate_digital_gaps_section import _DIGITAL_SUBMISSION_CHANNELS
 
 
 def _sanitize_for_json(obj):
@@ -378,12 +379,12 @@ def run_stage1(state: PipelineState, df: pd.DataFrame) -> PipelineState:
         channel_counts = df_normalized['قناة_تقديم_الخدمة'].str.strip().value_counts()
         state.channel_distribution = _sanitize_for_json(channel_counts.to_dict())
 
-    # 2. Digital channel rate (تطبيق الهاتف + موقع إلكتروني = digital)
+    # 2. Digital channel rate using authoritative channel definition
+    # Includes: app (تطبيق), website (موقع), email (بريد), NCRM
     # Use normalized matching to handle diacritic and spelling variants
-    # Digital channels: phone app (تطبيق) and website (موقع)
     DIGITAL_KEYWORDS = {
         normalize_arabic(kw)
-        for kw in ['تطبيق', 'موقع']
+        for kw in _DIGITAL_SUBMISSION_CHANNELS
     }
     if 'قناة_تقديم_الخدمة' in df_normalized.columns:
         digital_count = 0

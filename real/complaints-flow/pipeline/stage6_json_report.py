@@ -33,7 +33,7 @@ from collections import defaultdict, Counter
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage2_rules import ALL_COMPLAINT_SUB_CATEGORIES as _SUB_CLASSIFICATIONS
 from .generate_customer_journey_section import _build_friction_rows
-from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows
+from .generate_digital_gaps_section import _build_gap_rows, _build_root_cause_rows, _DIGITAL_SUBMISSION_CHANNELS
 from .generate_digital_transformation_section import (
     _build_faq_rows_for_transform,
     _build_notification_rows,
@@ -382,9 +382,10 @@ class JSONReportBuilder:
         all_classified = self.state.all_classified or []
         total = len(all_classified)
 
-        # Calculate digital channel rate from case_channel (phone app + website)
+        # Calculate digital channel rate from case_channel using authoritative channel definition
+        # Includes: app (تطبيق), website (موقع), email (بريد), NCRM
         # Use normalized matching to handle diacritic variants
-        DIGITAL_KEYWORDS = {normalize_arabic(kw) for kw in ['تطبيق', 'موقع']}
+        DIGITAL_KEYWORDS = {normalize_arabic(kw) for kw in _DIGITAL_SUBMISSION_CHANNELS}
         digital_count = sum(
             1 for c in all_classified
             if c.case_channel and any(
