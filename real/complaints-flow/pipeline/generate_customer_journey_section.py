@@ -77,6 +77,10 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build pre-computed friction rows from state.journey_map.
 
+    RECONCILIATION: For friction points with root_cause="no_proactive_notification",
+    scale case counts to match the reconciled notification_opportunities total.
+    This ensures consistency with Excel and Section 6 narratives.
+
     Sorted descending by case_count (highest friction first).
     Excludes friction points with 0 cases.
     Uses Arabic friction_point_ar / cluster_ar where available.
@@ -86,10 +90,41 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
 
     The LLM adds الإجراء التحسيني in the prompt output.
     """
+    # ── FIX: Reconcile notification friction points with notification_opportunities ──
+    # Calculate raw total for "no_proactive_notification" root cause
+    raw_notification_total = sum(
+        f.case_count for f in state.journey_map
+        if f.root_cause_category == "no_proactive_notification"
+    )
+
+    # Calculate reconciled total from notification_opportunities
+    reconciled_notification_total = sum(
+        int(n.get("cases_eliminated", n.get("case_count", 0)))
+        for n in (state.notification_opportunities or [])
+    )
+
+    # Apply proportional scaling if totals diverge
+    use_reconciled = False
+    scale_factor = 1.0
+    if raw_notification_total > 0 and reconciled_notification_total != raw_notification_total:
+        scale_factor = reconciled_notification_total / raw_notification_total
+        use_reconciled = True
+        print(
+            f"[Section 4] Scaling 'no_proactive_notification' friction points: "
+            f"{raw_notification_total} → {reconciled_notification_total} "
+            f"(scale: {scale_factor:.3f})"
+        )
+
     rows = []
     for friction in sorted(state.journey_map, key=lambda f: f.case_count, reverse=True):
         if friction.case_count == 0:
             continue
+
+        # Apply reconciliation scaling for proactive notification cases
+        case_count = friction.case_count
+        if use_reconciled and friction.root_cause_category == "no_proactive_notification":
+            case_count = int(round(friction.case_count * scale_factor))
+
         point = friction.friction_point_ar or friction.friction_point or friction.cluster_ar or friction.cluster
         root_cause_label = _ROOT_CAUSE_LABELS.get(
             friction.root_cause_category,
@@ -97,7 +132,7 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
         )
         rows.append({
             "نقطة الاحتكاك": point,
-            "الحالات": str(friction.case_count),
+            "الحالات": str(case_count),
             "السبب الجذري": root_cause_label,
         })
     return rows
