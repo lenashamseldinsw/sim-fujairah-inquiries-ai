@@ -379,10 +379,10 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         dept_dist = state.department_distribution or {}
         department_rows = _build_department_distribution_rows(dept_dist, total_cases)
 
-        # Use the digital-channel rate pre-computed in stage1_validator (the canonical source).
-        # The previous local recomputation matched against "إلكترون" (with hamza), but the
-        # raw data uses "الكترونى" (no hamza, ى not ي) — so the local match was always 0%.
-        digital_channel_rate = state.digital_channel_rate
+        # Use the digital-channel rate pre-computed in stage6 (the canonical source).
+        # Falls back to stage1's rate if stage6 computation hasn't run yet.
+        # Stage 6 uses all 4 channels (تطبيق, موقع, بريد, NCRM), not just app and website.
+        digital_channel_rate = state.digital_channel_pct if hasattr(state, 'digital_channel_pct') and state.digital_channel_pct is not None else state.digital_channel_rate
 
         # "Rejection" in this dataset = officially classified as duplicate/rejected.
         # The previous version searched resolution_response for "طلب مرفوض" which is
@@ -442,9 +442,9 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             '\n'
             'B. channel_insight (subsection 3.2 lead-in) — KEY: use this exact field name\n'
             '1-2 sentences, formal Arabic. Must:\n'
-            f'  - Reference that {digital_channel_rate:.1f}% of complaints arrived via digital channels (تطبيق الهاتف and موقع إلكتروني).\n'
+            f'  - Reference that {digital_channel_rate:.1f}% of complaints arrived via digital channels (التطبيق، الموقع الإلكتروني، البريد الإلكتروني، وNCRM).\n'
             '  - Reference individual percentages ONLY from the pre_computed_channel_distribution table below.\n'
-            '  - Do NOT invent percentages. Do NOT contradict the {digital_channel_rate:.1f}% figure.\n'
+            f'  - Do NOT invent percentages. Do NOT contradict the {digital_channel_rate:.1f}% figure.\n'
             '  - The detailed breakdown table shows all channels — reference those exact numbers only.\n'
             '  - End with a colon (":") — the channel distribution table follows immediately.\n'
             '\n'

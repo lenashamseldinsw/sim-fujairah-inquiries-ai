@@ -1189,13 +1189,9 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
             proactive_notification_total = sum(n.get('cases_eliminated', n.get('case_count', 0)) for n in state.notification_opportunities)
         proactive_notification_pct = (proactive_notification_total / total_cases * 100) if total_cases > 0 else 0
 
-        # Digital channel percentage — store in state for reuse in all sections
-        digital_cases = sum(
-            1 for c in all_classified
-            if c.case_channel and any(kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS)
-        )
-        digital_channel_pct = (digital_cases / total_cases * 100) if total_cases > 0 else 0
-        state.digital_channel_pct = round(digital_channel_pct, 1)
+        # Digital channel percentage is pre-computed before _generate_report_sections
+        # (see run_stage6) to ensure all sections use the corrected value
+        digital_channel_pct = state.digital_channel_pct or 0.0
 
         # Date range extraction
         date_range = convert_month_year_to_arabic(state.month_year) or "يناير — مارس 2026"
@@ -1578,6 +1574,17 @@ def run_stage6(
     print(f"[Stage6] Clearing cached report_sections_ar and report_sections_en to ensure fresh generation...")
     state.report_sections_ar = {}
     state.report_sections_en = {}
+
+    # Compute digital_channel_pct BEFORE report generation so all sections use the corrected value
+    # (stage1's digital_channel_rate used only تطبيق and موقع; this includes all 4 channels)
+    all_classified = state.all_classified or []
+    digital_cases = sum(
+        1 for c in all_classified
+        if c.case_channel and any(kw in str(c.case_channel) for kw in _DIGITAL_SUBMISSION_CHANNELS)
+    )
+    digital_channel_pct = (digital_cases / state.total_cases * 100) if state.total_cases > 0 else 0
+    state.digital_channel_pct = round(digital_channel_pct, 1)
+    print(f"[Stage6] Computed digital_channel_pct={state.digital_channel_pct}% (using all 4 submission channels)")
 
     print(f"[Stage6] Calling _generate_report_sections with fresh state...")
     _generate_report_sections(state, api_key)
