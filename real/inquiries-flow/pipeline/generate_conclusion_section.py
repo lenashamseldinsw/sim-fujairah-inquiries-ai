@@ -350,7 +350,8 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     inquiry_count, inquiry_pct  = _inquiry_pct(state)
 
     # Distil key findings from prior sections — what the conclusion must echo
-    top_friction = state.journey_map[0] if state.journey_map else None
+    # Find the friction point with maximum case_count (matches Section 4 logic)
+    top_friction = max(state.journey_map, key=lambda f: f.case_count) if state.journey_map else None
     top_friction_label    = top_friction.cluster_ar or top_friction.cluster if top_friction else ""
     top_friction_count    = top_friction.case_count if top_friction else 0
 
