@@ -298,6 +298,7 @@ def build_faq_system_prompt() -> str:
     """Build system prompt for dedicated FAQ extraction.
 
     Simplified and focused: case-by-case frequency matching + semantic distinctness.
+    CRITICAL: Enforce CASE-LEVEL semantic matching, not just category grouping.
     """
     return """You are an expert business analyst for government customer service.
 Your ONLY task is to extract FAQ candidates from customer service cases.
@@ -308,44 +309,61 @@ All output MUST be in Arabic only (except proper nouns: MOI, SMS, OTP, UAE PASS)
 
 MANDATORY RULES:
 
-1. FREQUENCY = EXACT CASE MATCH
+1. FREQUENCY = EXACT CASE MATCH (CASE-LEVEL, NOT CATEGORY-LEVEL)
    frequency = count of cases in evidence_case_ids where this FAQ's answer directly resolves that case's issue.
 
-   CRITICAL: frequency ≠ sub_classification case_count (most common error)
-   CRITICAL: frequency ≤ evidence_case_ids.length() (always)
+   ⚠️ CRITICAL: Just because two cases are in the same sub_classification does NOT mean they have the same FAQ.
+   ⚠️ CRITICAL: frequency ≠ sub_classification case_count (most common error)
+   ⚠️ CRITICAL: frequency ≤ evidence_case_ids.length() (always)
 
    Example:
-   - If evidence_case_ids = [case1, case2, case3] and all 3 are answered by this FAQ → frequency = 3
-   - If evidence_case_ids = [case1, case2, case3, case4, case5] but only 3 of them are answered → frequency = 3
-   - Never use the sub_classification total as frequency.
+   Sub_classification has 15 service center inquiry cases:
+   - 10 asking about location (different aspects)
+   - 5 asking about hours of operation
 
-2. SEMANTIC DISTINCTNESS
-   Each FAQ must ask a DIFFERENT customer question. Do NOT create variations of the same question.
+   FAQ "Where is the service center?"
+   - evidence_case_ids = [cases that ask about location] (only 10)
+   - frequency = 10 (NOT 15)
+   - Cases asking "what are the hours" don't answer a "where is it" question
 
-   ❌ WRONG: "أين أقرب مركز خدمة؟" + "كيف أعثر على مركز قريب؟" (same question, different wording)
-   ✅ RIGHT: "أين أقرب مركز خدمة؟" + "ما هي ساعات العمل؟" (different questions)
+   STRICT RULE: Read each evidence case. Ask: "Does this case's description/resolution explicitly
+   contain the specific aspect of the FAQ question?" If not, EXCLUDE it from evidence.
 
-   If evidence_case_ids mention different aspects (location vs hours vs contact), split into separate FAQs.
-   If a new FAQ rewording an existing one, merge them (combine evidence_case_ids).
+2. SEMANTIC DISTINCTNESS = CASE-LEVEL MATCHING
+   Two cases in the same category are NOT evidence for the same FAQ unless they ask about
+   the SAME SPECIFIC ASPECT.
+
+   ❌ WRONG: "Where is the service center?" + "What are the hours?"
+              (both service centers, but DIFFERENT questions → different FAQs)
+   ❌ WRONG: Case is about "can I call instead of visiting" but FAQ asks "where is it"
+              (same category, different issue → not evidence)
+
+   ✅ RIGHT: Cases explicitly ask about location → FAQ about location
+   ✅ RIGHT: Cases explicitly ask about hours → FAQ about hours
+
+   BEFORE assigning a case as evidence, verify:
+   - Does the case mention the SPECIFIC DETAIL the FAQ asks about?
+   - Or just that it's in the same general category?
 
 3. MULTI-FAQ RULE
    When multiple FAQs address the same sub_classification:
    - Each FAQ must have a DIFFERENT frequency (not all equal to category total)
    - Sum of frequencies should NOT exceed sub_classification case_count
 
-   Example: sub_classification has 15 cases
-   - FAQ1 "أين مركز؟" → evidence=[case1-10] → frequency=10
-   - FAQ2 "ساعات العمل؟" → evidence=[case11-15] → frequency=5
-   - Total: 10+5=15 ✓ (matches actual)
+   Example: sub_classification has 15 service center cases
+   - FAQ1 "Where is the service center?" → evidence=[case_that_asks_location] → frequency=10
+   - FAQ2 "What are the hours?" → evidence=[case_that_asks_hours] → frequency=5
+   - Total: 10+5=15 ✓ (matches actual, different FAQs for different questions)
 
-   NOT: Both frequency=15 ✗ (inflation 2x)
+   NOT: Both FAQs frequency=15 ✗ (inflation)
 
 4. EVIDENCE REQUIREMENT
    For each FAQ:
    - List 2-3+ specific case IDs as evidence
-   - Each evidence case must explicitly demonstrate this FAQ answers their issue
-   - If unsure a case matches, exclude it from evidence and frequency
-   - Conservative > aggressive: 3 strong cases > 15 weak ones
+   - EACH case must explicitly contain the specific detail the FAQ asks about
+   - Do NOT include a case just because it's in the same category
+   - If unsure, EXCLUDE the case
+   - Conservative > aggressive: 2-3 cases that explicitly match > 15 cases loosely related
 
 5. SUB_CLASSIFICATION ASSIGNMENT
    - Copy sub_classification EXACTLY from the "=== top_level > sub_classification ===" section headers
@@ -362,10 +380,11 @@ OUTPUT STRUCTURE:
   "top_level": "استفسار"
 }
 
-⚠️ RED FLAG VALIDATION:
-- All FAQs in same sub_classification have identical frequency? → ❌ WRONG (copied category total)
-- Any FAQ frequency = sub_classification case_count? → ❌ WRONG
-- Sum of FAQ frequencies >> sub_classification case_count? → ❌ WRONG (over-counting)
+⚠️ RED FLAG VALIDATION (if ANY are true, restart):
+1. All FAQs in same sub_classification have identical frequency? → ❌ WRONG (copied category total)
+2. Any FAQ frequency = sub_classification case_count? → ❌ WRONG
+3. Sum of FAQ frequencies >> sub_classification case_count? → ❌ WRONG (over-counting)
+4. Evidence case doesn't explicitly mention the specific detail in the FAQ question? → ❌ WRONG (category-level, not case-level)
 
 If any red flag is true, restart your extraction.
 """
