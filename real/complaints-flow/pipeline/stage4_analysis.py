@@ -786,6 +786,9 @@ def _retry_faq_only(
         "   frequency must ALWAYS be ≤ evidence_case_ids.length(). "
         "3. evidence_case_ids MUST list 2-3+ specific case IDs where this FAQ directly answers the customer's question. "
         "   If you cannot provide strong evidence, skip the FAQ. "
+        "4. SEMANTIC DISTINCTNESS: Each FAQ must ask a DIFFERENT question. Do NOT create multiple FAQs that are just "
+        "   rewording of the same question. If evidence_case_ids span multiple semantic topics (appeal process, documents, "
+        "   location), split into separate FAQs. If a question is just rewording another FAQ, merge them. "
         "RED FLAG: If all FAQs in a sub_classification have the same frequency, you copied the category count (WRONG). "
         "If you cannot provide valid evidence, skip the FAQ."
     )
