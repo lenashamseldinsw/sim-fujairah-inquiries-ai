@@ -278,6 +278,32 @@ ANALYSIS INSTRUCTIONS:
    - If unsure whether a case matches, exclude it from frequency
    - 2-3 strong evidence cases is better than 15 weak ones
 
+   SEMANTIC DISTINCTNESS RULE (CRITICAL):
+   Each FAQ must represent a DISTINCT question semantically. Do NOT create multiple FAQs that are just
+   slight variations of the same core question. Examples of what NOT to do:
+
+   ❌ WRONG (Semantic Duplicates):
+   - FAQ 1: "أين أقرب مركز خدمة؟" (Where is the nearest service center?)
+   - FAQ 2: "كيف أعثر على مركز خدمة قريب؟" (How do I find a nearby service center?)
+   These ask the SAME thing in different words. Merge them into one FAQ.
+
+   ❌ WRONG (Fuzzy Grouping):
+   - FAQ "What's the process?" paired with evidence: [case_about_hours, case_about_location, case_about_phone]
+   These cases ask semantically different sub-questions. Split into separate FAQs or disambiguate.
+
+   ✅ CORRECT (Distinct Questions):
+   - FAQ "أين أقرب مركز خدمة؟" → evidence: [cases specifically asking about location/address]
+   - FAQ "ما هي ساعات العمل؟" → evidence: [cases specifically asking about hours]
+   - FAQ "كيف أتصل بالمركز؟" → evidence: [cases specifically asking about contact info]
+   Each answers a DIFFERENT customer question with a DIFFERENT answer.
+
+   HOW TO APPLY THIS RULE:
+   1. Before extracting each FAQ, ask: "Is this question asking something different from my other FAQs?"
+   2. Check evidence_case_ids: do all cases mention the SAME aspect (location? hours? contact?)
+      Or are they a mix of different sub-aspects?
+   3. If evidence_case_ids span multiple semantic topics, split into multiple FAQs or exclude the FAQ.
+   4. If a new FAQ's question is just a rewording of an existing FAQ, merge them (combine evidence_case_ids).
+
    MULTI-FAQ SUB-CLASSIFICATIONS:
    When 2+ FAQs address the same sub_classification, they MUST have different frequencies reflecting
    how many distinct cases each one actually answers. Example:

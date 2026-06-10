@@ -180,9 +180,10 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
         # Extract frequency (handle both dict and object access)
         freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-        # CRITICAL: Skip FAQs with frequency=0 (no matching cases found in pipeline)
-        # Only include if frequency > 0
-        if freq > 0:
+        # CRITICAL: Skip FAQs with frequency < 3 (insufficient evidence of actual matching cases)
+        # Only include if frequency >= 3
+        # This filters out over-counted or weakly-matched FAQs automatically
+        if freq >= 3:
             rows.append({
                 "#":        str(counter),
                 "التكرار":  str(int(freq)),
@@ -221,8 +222,9 @@ def _build_faq_prompt_context(state: PipelineState) -> List[Dict[str, Any]]:
         # Extract frequency
         freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-        # Only include FAQs with frequency > 0
-        if freq > 0:
+        # Only include FAQs with frequency >= 3 (sufficient evidence of actual matching cases)
+        # Filters out over-counted or weakly-matched FAQs automatically
+        if freq >= 3:
             result.append({
                 "rank":        counter,
                 "frequency":   freq,
