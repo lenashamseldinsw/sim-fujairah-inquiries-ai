@@ -1254,6 +1254,8 @@ INPUTS PROVIDED:
 - total_cases: {total_cases}
 - date_range: {date_range}
 - friction_count: {friction_count} (total distinct friction points identified)
+- proactive_notification_cases: {proactive_notification_total} (cases with proactive notification opportunities — SOURCE OF TRUTH for narrative)
+- proactive_notification_pct: {proactive_notification_pct:.1f}%
 - gap_table: {json.dumps(gap_table, ensure_ascii=False)}
 - guidebook_coverage_metrics: {json.dumps(guidebook_coverage_metrics, ensure_ascii=False)}
 {sla_line}
@@ -1320,6 +1322,11 @@ RULES:
 - core_message: Arabic only, 3 sentences max, begin with "الرسالة الجوهرية:".
 - No markdown, no extra keys, no extra nesting.
 - CRITICAL: Do NOT use double-quote characters (") inside any string value. Use « » for citations.
+
+PROACTIVE NOTIFICATION REQUIREMENT:
+- When writing about غياب الإشعار الاستباقي or الإشعارات الاستباقية, you MUST reference {proactive_notification_total} cases.
+- Example phrase: "الإشعار الاستباقي يمكنه معالجة {proactive_notification_total} حالة" or "{proactive_notification_total} حالات قابلة للإشعار الاستباقي"
+- If you cannot find a natural way to include this exact number, include it in a standalone sentence before the core message.
 """
 
         client = anthropic.Anthropic(api_key=api_key)

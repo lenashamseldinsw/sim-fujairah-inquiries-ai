@@ -253,27 +253,64 @@ ANALYSIS INSTRUCTIONS:
    FAQ EXTRACTION RULES (MANDATORY):
    1. For EACH FAQ, you MUST identify which sub_classification (from the patterns list above)
       it addresses. Copy the sub_classification verbatim from one of the patterns.
-   2. List 2-3 specific case IDs that provide evidence for this FAQ's relevance.
-   3. Set frequency = the exact case_count from that sub_classification in the patterns list.
+   2. List 2-3+ specific case IDs that provide evidence for this FAQ's relevance.
+   3. Count how many of those evidence cases this FAQ actually answers (strict: not the full sub_classification).
    4. If you cannot find a clear sub_classification match, do NOT include the FAQ (skip it).
    5. If you cannot provide evidence case IDs, do NOT include the FAQ.
 
-   FREQUENCY RULE - CASE-BY-CASE MATCHING:
-   For EACH FAQ, count how many individual cases it actually answers from the evidence_case_ids.
-   - frequency = number of cases where this FAQ's Q&A directly resolves the customer's issue
-   - Do NOT use the full sub_classification count if only a subset of cases match the question
-   - Estimate conservatively by counting matching evidence_case_ids (list 2-3+ per FAQ)
-   - If multiple FAQs address the same sub_classification, they have different frequencies
+   FREQUENCY RULE - CASE-BY-CASE MATCHING (STRICT ENFORCEMENT):
 
-   EXAMPLE:
-   Sub_classification "لا تحديد موقع مركز الخدمة" has case_count=15 total, but:
-   - FAQ "أين أقرب مركز خدمة؟" answers 10 of those cases → frequency=10, evidence: [case1, case2, case3]
-   - FAQ "كيف أعثر على الفروع القريبة؟" answers 5 different cases → frequency=5, evidence: [case4, case5, case6]
+   ⚠️ CRITICAL: frequency = EXACT count of cases in evidence_case_ids where this FAQ's answer directly resolves the customer's issue.
+
+   ENFORCEMENT RULES:
+   - DO NOT set frequency = sub_classification case_count (most common error — this conflates category size with FAQ scope)
+   - DO NOT assign the same frequency to multiple FAQs in the same sub_classification
+   - frequency must ALWAYS be ≤ evidence_case_ids.length()
+   - If you list evidence_case_ids = [case1, case2, case3], then frequency MUST be 3 (or fewer if not all truly apply)
+
+   RED FLAG VALIDATION (If any of these are TRUE, your extraction is WRONG — restart):
+   1. All FAQs in the same sub_classification have identical frequency? → ❌ WRONG (you copied the category count)
+   2. Any FAQ's frequency = the sub_classification's case_count? → ❌ WRONG (conflating category size with FAQ scope)
+   3. Sum of frequencies for FAQs in same sub_classification >> sub_classification case_count? → ❌ WRONG (over-claiming coverage)
+
+   CONSERVATIVE COUNTING:
+   - Count only evidence_case_ids you can actually defend from the case text
+   - If unsure whether a case matches, exclude it from frequency
+   - 2-3 strong evidence cases is better than 15 weak ones
+
+   MULTI-FAQ SUB-CLASSIFICATIONS:
+   When 2+ FAQs address the same sub_classification, they MUST have different frequencies reflecting
+   how many distinct cases each one actually answers. Example:
+
+   Sub_classification "لا تحديد موقع مركز الخدمة" (case_count=15 total):
+
+   ❌ WRONG APPROACH:
+   - FAQ "أين أقرب مركز خدمة؟" → frequency=15 (entire category count)
+   - FAQ "كيف أعثر على الفروع القريبة؟" → frequency=15 (same — copied category total)
+   - Result: 15+15=30 reported cases, actual=15. INFLATION 2x.
+
+   ✅ CORRECT APPROACH:
+   - FAQ "أين أقرب مركز خدمة؟"
+     → evidence_case_ids: [case1, case2, case3, case4, case5, case6, case7, case8, case9, case10] (10 cases ask for nearest location)
+     → frequency = 10
+   - FAQ "كيف أعثر على الفروع القريبة؟"
+     → evidence_case_ids: [case11, case12, case13, case14, case15] (5 cases ask about finding branches)
+     → frequency = 5
+   - Total: 10+5 = 15 reported cases (matches actual)
+
+   RULES FOR LOCATION/SERVICE CENTER FAQS (High-Risk Category):
+   - "أين أقرب مركز خدمة لي؟" is ONLY relevant to cases explicitly asking about location or directions
+   - Do NOT count: "What are the center hours?" as evidence — different question
+   - Do NOT count: "Why is the center closed?" as evidence — different issue
+   - Be strict: only count cases where the Q&A directly addresses their question
+
+   CORRECT EXAMPLE STRUCTURE:
    {
      "question_ar": "أين أقرب مركز خدمة؟",
      "answer_ar": "يمكنك العثور على أقرب مركز من خلال الخريطة على الموقع الرسمي",
      "sub_classification": "لا تحديد موقع مركز الخدمة",
-     "frequency": 10,  // Count of cases this FAQ actually answers, not full category
+     "frequency": 10,  // STRICT: only cases where evidence supports this exact answer
+     "evidence_case_ids": ["case1", "case2", "case3"],  // These 3+ cases show this Q&A resolves their issue
      "top_level": "استفسار"
    }
 
@@ -603,7 +640,7 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "frequency": {"type": "integer", "description": "Count of cases this FAQ actually answers (based on evidence_case_ids). Not the full sub_classification count."},
+                        "frequency": {"type": "integer", "description": "STRICT: Exact count of evidence_case_ids where this FAQ's answer resolves the customer's issue. Must be ≤ evidence_case_ids.length(). NEVER use the sub_classification case_count."},
                         "top_level": {"type": "string", "description": "Top-level category (شكوى, استفسار, etc.)"},
                         "sub_classification": {"type": "string", "description": "The sub-classification this FAQ addresses — must match one of the section headers exactly"},
                         "evidence_case_ids": {
@@ -638,10 +675,15 @@ def _retry_faq_only(
         "they received, based on the case descriptions and resolutions provided. "
         "For every sub-classification group provided, return at least one FAQ. "
         "All text (question_ar, answer_ar) MUST be in Arabic. "
-        "CRITICAL RULES: "
+        "CRITICAL RULES (STRICT ENFORCEMENT): "
         "1. sub_classification MUST be copied verbatim from one of the group names. "
-        "2. frequency MUST equal the exact case_count of that sub_classification — no estimation. "
-        "3. evidence_case_ids MUST list 2-3 specific case IDs proving this FAQ's relevance. "
+        "2. frequency = EXACT count of evidence_case_ids where this FAQ's answer resolves the customer's issue. "
+        "   NEVER set frequency = the sub_classification's case_count. That's the most common error. "
+        "   Multiple FAQs from the same sub_classification MUST have different frequencies. "
+        "   frequency must ALWAYS be ≤ evidence_case_ids.length(). "
+        "3. evidence_case_ids MUST list 2-3+ specific case IDs where this FAQ directly answers the customer's question. "
+        "   If you cannot provide strong evidence, skip the FAQ. "
+        "RED FLAG: If all FAQs in a sub_classification have the same frequency, you copied the category count (WRONG). "
         "If you cannot provide valid evidence, skip the FAQ."
     )
 
