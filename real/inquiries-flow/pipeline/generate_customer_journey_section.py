@@ -77,10 +77,7 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build pre-computed friction rows from state.journey_map.
 
-    RECONCILIATION: For friction points with root_cause="no_proactive_notification",
-    scale case counts to match the reconciled notification_opportunities total.
-    This ensures consistency with Excel and Section 6 narratives.
-
+    Uses raw case counts without scaling.
     Sorted descending by case_count (highest friction first).
     Uses Arabic friction_point_ar / cluster_ar where available.
 
@@ -88,39 +85,12 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
       نقطة الاحتكاك | الحالات | السبب الجذري
 
     The LLM adds الإجراء التحسيني in the prompt output.
+
+    NOTE: The narrative will explain any gap between friction counts and
+    proactive notification capacity separately — no artificial scaling applied here.
     """
-    # ── FIX: Reconcile notification friction points with notification_opportunities ──
-    # Calculate raw total for "no_proactive_notification" root cause
-    raw_notification_total = sum(
-        f.case_count for f in state.journey_map
-        if f.root_cause_category == "no_proactive_notification"
-    )
-
-    # Calculate reconciled total from notification_opportunities
-    reconciled_notification_total = sum(
-        int(n.get("cases_eliminated", n.get("case_count", 0)))
-        for n in (state.notification_opportunities or [])
-    )
-
-    # Apply proportional scaling if totals diverge
-    use_reconciled = False
-    scale_factor = 1.0
-    if raw_notification_total > 0 and reconciled_notification_total != raw_notification_total:
-        scale_factor = reconciled_notification_total / raw_notification_total
-        use_reconciled = True
-        print(
-            f"[Section 4] Scaling 'no_proactive_notification' friction points: "
-            f"{raw_notification_total} → {reconciled_notification_total} "
-            f"(scale: {scale_factor:.3f})"
-        )
-
     rows = []
     for friction in sorted(state.journey_map, key=lambda f: f.case_count, reverse=True):
-        # Apply reconciliation scaling for proactive notification cases
-        case_count = friction.case_count
-        if use_reconciled and friction.root_cause_category == "no_proactive_notification":
-            case_count = int(round(friction.case_count * scale_factor))
-
         point = friction.friction_point_ar or friction.friction_point or friction.cluster_ar or friction.cluster
         root_cause_label = _ROOT_CAUSE_LABELS.get(
             friction.root_cause_category,
@@ -128,7 +98,7 @@ def _build_friction_rows(state: PipelineState) -> List[Dict[str, str]]:
         )
         rows.append({
             "نقطة الاحتكاك": point,
-            "الحالات": str(case_count),
+            "الحالات": str(friction.case_count),
             "السبب الجذري": root_cause_label,
         })
     return rows
@@ -177,32 +147,15 @@ def _find_quick_win(state: PipelineState, total_cases: int) -> Optional[Dict[str
     """
     Identify the single highest-impact quick-win friction point.
 
-    A quick-win is a friction point where:
-      - notification_opportunities from Stage 5 is available (primary source)
-      - OR root_cause is no_proactive_notification (easiest to fix — just send an SMS/email)
-      - OR the gap_table has a corresponding proactive_notification_opportunity=True entry
+    Uses RAW case counts from journey_map so the quick_win number matches the friction table.
+    The narrative will separately explain how many of these can be addressed within capacity.
 
     Returns a dict with keys: friction_point, case_count, pct_of_total, fix_type
     Returns None if no suitable quick-win found.
     """
     total = total_cases
 
-    # 1. Use notification_opportunities computed by Stage 4 — already sorted/ranked
-    if state.notification_opportunities:
-        best_notif = max(
-            state.notification_opportunities,
-            key=lambda n: n.get('cases_eliminated', n.get('case_count', 0))
-        )
-        case_count = best_notif.get('cases_eliminated', best_notif.get('case_count', 0))
-        if case_count > 0:
-            return {
-                "friction_point": best_notif.get('notification_type', ''),
-                "case_count": case_count,
-                "pct_of_total": round(case_count / total * 100, 1),
-                "fix_type": f"إشعار استباقي عبر {best_notif.get('channel', 'SMS')} — {best_notif.get('content_summary', '')}",
-            }
-
-    # 2. Fall back: notification-based friction from journey_map
+    # 1. Notification-based friction from journey_map (highest impact, easiest to fix with proactive notification)
     notification_frictions = [
         f for f in state.journey_map
         if f.root_cause_category == "no_proactive_notification"
@@ -216,7 +169,7 @@ def _find_quick_win(state: PipelineState, total_cases: int) -> Optional[Dict[str
             "fix_type": "إشعار استباقي (SMS/بريد إلكتروني)",
         }
 
-    # 3. Fall back: gap_table proactive_notification_opportunity from Stage 5
+    # 2. Fall back: gap_table proactive_notification_opportunity from Stage 5
     if state.gap_table:
         notif_gaps = [g for g in state.gap_table if g.proactive_notification_opportunity]
         if notif_gaps:
@@ -228,7 +181,7 @@ def _find_quick_win(state: PipelineState, total_cases: int) -> Optional[Dict[str
                 "fix_type": "إشعار استباقي (SMS/بريد إلكتروني)",
             }
 
-    # 4. Last resort: largest friction point overall
+    # 3. Last resort: largest friction point overall
     if state.journey_map:
         best = max(state.journey_map, key=lambda f: f.case_count)
         return {
