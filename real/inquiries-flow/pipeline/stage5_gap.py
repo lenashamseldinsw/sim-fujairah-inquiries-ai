@@ -247,19 +247,22 @@ def reconcile_faq_frequencies(
         q_text = (faq.question_ar or faq.question or '').strip()
         a_text = (faq.answer_ar or faq.answer or '').strip()
 
-        # ── SUB-CLASSIFICATION VALIDATION (ONLY SIGNAL) ──────────────────────
-        # If the LLM assigned a sub_classification to this FAQ, use the actual
-        # case count for that sub, capped at the friction's reconciled case_count.
+        # ── SUB-CLASSIFICATION VALIDATION ──────────────────────────────────────
+        # Preserve the FAQ's evidence-based frequency from Stage 4.
+        # Only use sub_classification as a CEILING (cap), never as replacement.
         # If sub_classification is missing or unmatched, REJECT the FAQ (frequency=0).
         reconciled_frequency = 0
         sub = getattr(faq, 'sub_classification', None) or ''
         signal_used = "rejected (no match)"
+        faq_evidence_freq = getattr(faq, 'frequency', 0)
 
         if sub and sub in actual_sub_counts:
             raw_count = actual_sub_counts[sub]
             cap = friction_cap.get(sub, raw_count)
-            reconciled_frequency = min(raw_count, cap)
-            signal_used = f"sub_classification='{sub}' ({reconciled_frequency} cases)"
+            # Use FAQ's evidence-based frequency from Stage 4 as base
+            # Cap it against sub_classification total (never exceed category size)
+            reconciled_frequency = min(faq_evidence_freq, raw_count, cap)
+            signal_used = f"sub_classification='{sub}' (evidence:{faq_evidence_freq} capped to {reconciled_frequency})"
         elif sub:
             # sub_classification provided but not found in patterns
             signal_used = f"rejected (unknown sub_classification='{sub}')"
@@ -267,7 +270,7 @@ def reconcile_faq_frequencies(
             # No sub_classification provided
             signal_used = "rejected (no sub_classification)"
 
-        # Safety cap
+        # Safety cap against total cases
         reconciled_frequency = min(reconciled_frequency, len(all_classified))
 
         print(
