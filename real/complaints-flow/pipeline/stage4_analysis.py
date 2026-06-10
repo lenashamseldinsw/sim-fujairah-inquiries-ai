@@ -349,116 +349,77 @@ Be specific with example case IDs and counts.
 def build_faq_system_prompt() -> str:
     """Build system prompt for dedicated FAQ extraction.
 
-    Contains all the detailed FAQ logic: frequency rules, semantic distinctness,
-    red flag validation, and high-risk category rules for complaints analysis.
+    Simplified and focused: case-by-case frequency matching + semantic distinctness.
     """
     return """You are an expert business analyst for government customer service.
 Your ONLY task is to extract FAQ candidates from customer complaint cases.
 
-EXTRACT FAQS - Questions answered repeatedly in case resolutions:
-- Extract actual Q&A from good resolution responses
-- Tag with the top_level category
-- These should help customers self-serve next time
-- All output MUST be in Arabic only. Topic names, questions, answers, descriptions.
-- Proper nouns only (MOI, SMS, OTP, UAE PASS) may remain in Latin script.
+TASK:
+Extract actual Q&A pairs from case resolutions that address the same customer question.
+All output MUST be in Arabic only (except proper nouns: MOI, SMS, OTP, UAE PASS).
 
-FAQ EXTRACTION RULES (MANDATORY):
-1. For EACH FAQ, you MUST identify which sub_classification it addresses.
-   Copy the sub_classification verbatim from the "=== top_level > sub_classification ===" section headers.
-2. List 2-3+ specific case IDs that provide evidence for this FAQ's relevance.
-3. Count how many of those evidence cases this FAQ actually answers (strict: not the full sub_classification).
-4. If you cannot find a clear sub_classification match, do NOT include the FAQ (skip it).
-5. If you cannot provide evidence case IDs, do NOT include the FAQ.
+MANDATORY RULES:
 
-FREQUENCY RULE - CASE-BY-CASE MATCHING (STRICT ENFORCEMENT):
+1. FREQUENCY = EXACT CASE MATCH
+   frequency = count of cases in evidence_case_ids where this FAQ's answer directly resolves that case's issue.
 
-⚠️ CRITICAL: frequency = EXACT count of cases in evidence_case_ids where this FAQ's answer directly resolves the customer's issue.
+   CRITICAL: frequency ≠ sub_classification case_count (most common error)
+   CRITICAL: frequency ≤ evidence_case_ids.length() (always)
 
-ENFORCEMENT RULES:
-- DO NOT set frequency = sub_classification case_count (most common error — this conflates category size with FAQ scope)
-- DO NOT assign the same frequency to multiple FAQs in the same sub_classification
-- frequency must ALWAYS be ≤ evidence_case_ids.length()
-- If you list evidence_case_ids = [case1, case2, case3], then frequency MUST be 3 (or fewer if not all truly apply)
+   Example:
+   - If evidence_case_ids = [case1, case2, case3] and all 3 are answered by this FAQ → frequency = 3
+   - If evidence_case_ids = [case1, case2, case3, case4, case5] but only 3 of them are answered → frequency = 3
+   - Never use the sub_classification total as frequency.
 
-RED FLAG VALIDATION (If any of these are TRUE, your extraction is WRONG — restart):
-1. All FAQs in the same sub_classification have identical frequency? → ❌ WRONG (you copied the category count)
-2. Any FAQ's frequency = the sub_classification's case_count? → ❌ WRONG (conflating category size with FAQ scope)
-3. Sum of frequencies for FAQs in same sub_classification >> sub_classification case_count? → ❌ WRONG (over-claiming coverage)
+2. SEMANTIC DISTINCTNESS
+   Each FAQ must ask a DIFFERENT customer question. Do NOT create variations of the same question.
 
-CONSERVATIVE COUNTING:
-- Count only evidence_case_ids you can actually defend from the case text
-- If unsure whether a case matches, exclude it from frequency
-- 2-3 strong evidence cases is better than 12 weak ones
+   ❌ WRONG: "هل يمكنني الاعتراض؟" + "هل هناك طريقة للاعتراض؟" (same question, different wording)
+   ✅ RIGHT: "هل يمكنني الاعتراض؟" + "ما هي المستندات المطلوبة؟" (different questions)
 
-SEMANTIC DISTINCTNESS RULE (CRITICAL):
-Each FAQ must represent a DISTINCT question semantically. Do NOT create multiple FAQs that are just
-slight variations of the same core question. Examples of what NOT to do:
+   If evidence_case_ids mention different aspects (documents vs process vs location), split into separate FAQs.
+   If a new FAQ rewording an existing one, merge them (combine evidence_case_ids).
 
-❌ WRONG (Semantic Duplicates):
-- FAQ 1: "هل يمكنني الاعتراض على المخالفة؟" (Can I appeal the fine?)
-- FAQ 2: "هل هناك طريقة للاعتراض؟" (Is there a way to appeal?)
-These ask the SAME thing in different words. Merge them into one FAQ.
+3. MULTI-FAQ RULE
+   When multiple FAQs address the same sub_classification:
+   - Each FAQ must have a DIFFERENT frequency (not all equal to category total)
+   - Sum of frequencies should NOT exceed sub_classification case_count
 
-❌ WRONG (Fuzzy Grouping):
-- FAQ "What's the process?" paired with evidence: [case_about_documents, case_about_location, case_about_timeline]
-These cases ask semantically different sub-questions. Split into separate FAQs or disambiguate.
+   Example: sub_classification has 12 cases
+   - FAQ1 "ما هي المستندات؟" → evidence=[case1-8] → frequency=8
+   - FAQ2 "أين أقدم؟" → evidence=[case9-12] → frequency=4
+   - Total: 8+4=12 ✓ (matches actual)
 
-✅ CORRECT (Distinct Questions):
-- FAQ "Can I appeal from another emirate?" → evidence: [cases specifically about cross-emirate context]
-- FAQ "What documents do I need?" → evidence: [cases specifically about documentation]
-- FAQ "Where do I submit?" → evidence: [cases specifically about submission location]
-Each answers a DIFFERENT customer question with a DIFFERENT answer.
+   NOT: Both frequency=12 ✗ (inflation 2x)
 
-HOW TO APPLY THIS RULE:
-1. Before extracting each FAQ, ask: "Is this question asking something different from my other FAQs?"
-2. Check evidence_case_ids: do all cases mention the SAME aspect (location? documents? validity?)
-   Or are they a mix of different sub-aspects?
-3. If evidence_case_ids span multiple semantic topics, split into multiple FAQs or exclude the FAQ.
-4. If a new FAQ's question is just a rewording of an existing FAQ, merge them (combine evidence_case_ids).
+4. EVIDENCE REQUIREMENT
+   For each FAQ:
+   - List 2-3+ specific case IDs as evidence
+   - Each evidence case must explicitly demonstrate this FAQ answers their issue
+   - If unsure a case matches, exclude it from evidence and frequency
+   - Conservative > aggressive: 3 strong cases > 12 weak ones
 
-MULTI-FAQ SUB-CLASSIFICATIONS:
-When 2+ FAQs address the same sub_classification, they MUST have different frequencies reflecting
-how many distinct cases each one actually answers. Example:
+5. SUB_CLASSIFICATION ASSIGNMENT
+   - Copy sub_classification EXACTLY from the "=== top_level > sub_classification ===" section headers
+   - Do NOT invent or paraphrase
+   - Do NOT omit (sub_classification is required)
 
-Sub_classification "appeal_traffic_violation" (case_count=12 total):
-
-❌ WRONG APPROACH:
-- FAQ "Can I appeal a violation from another emirate?" → frequency=12 (entire category count)
-- FAQ "What's the appeal process?" → frequency=12 (same — copied category total)
-- Result: 12+12=24 reported cases, actual=12. INFLATION 2x.
-
-✅ CORRECT APPROACH:
-- FAQ "هل يمكنني الاعتراض على مخالفة مرورية صادرة عن سلطنة عمان أو إمارة أخرى؟"
-  → evidence_case_ids: [case_123, case_456, case_789] (only these 3 explicitly mention another emirate/Oman)
-  → frequency = 3
-- FAQ "ما هي المستندات المطلوبة للاعتراض؟"
-  → evidence_case_ids: [case_200, case_201, case_202, case_203, case_204, case_205, case_206, case_208] (8 cases ask about documents)
-  → frequency = 8
-- FAQ "أين أقدم الاعتراض؟"
-  → evidence_case_ids: [case_300, case_301] (only 2 cases ask about submission location)
-  → frequency = 2
-- Total: 3+8+2 = 13 reported cases (slight over-report due to multi-question cases, acceptable)
-
-RULES FOR TRAFFIC VIOLATION FAQS (High-Risk Category):
-- "هل يمكنني الاعتراض على مخالفة مرورية صادرة عن سلطنة عمان أو إمارة أخرى؟" is ONLY relevant to cases mentioning:
-  * "سلطنة عمان" OR "إمارة أخرى" OR "دولة أخرى" in description/resolution
-  * NOT just any appeal question or traffic violation
-- Do NOT count: "Is there an appeal process?" as evidence — too generic
-- Do NOT count: "I got a fine in Fujairah" as evidence — that's local, not cross-emirate
-- Be strict: this FAQ should have frequency ≤ 5, probably 1-3 based on case analysis
-
-CORRECT EXAMPLE STRUCTURE:
+OUTPUT STRUCTURE:
 {
   "question_ar": "ما هي القنوات الصحيحة لتقديم الشكوى؟",
-  "answer_ar": "يمكن تقديم الشكوى عبر SMS أو تطبيق الموجودة في الموقع الرسمي",
+  "answer_ar": "يمكن تقديم الشكوى عبر SMS أو التطبيق على الموقع الرسمي",
   "sub_classification": "wrong_channel_used",
-  "frequency": 8,  // STRICT: only cases where evidence supports this exact answer
-  "evidence_case_ids": ["case1", "case2", "case3"],  // These 3+ cases show this Q&A resolves their issue
+  "frequency": 8,
+  "evidence_case_ids": ["case1", "case2", "case3"],
   "top_level": "شكوى"
 }
 
-CRITICAL: All FAQ output must be in Arabic only.
-Be specific with example case IDs and counts.
+⚠️ RED FLAG VALIDATION:
+- All FAQs in same sub_classification have identical frequency? → ❌ WRONG (copied category total)
+- Any FAQ frequency = sub_classification case_count? → ❌ WRONG
+- Sum of FAQ frequencies >> sub_classification case_count? → ❌ WRONG (over-counting)
+
+If any red flag is true, restart your extraction.
 """
 
 
@@ -718,7 +679,7 @@ FAQ_ONLY_TOOL = {
                         "question_ar": {"type": "string", "description": "Question in Arabic"},
                         "answer": {"type": "string", "description": "Answer in English"},
                         "answer_ar": {"type": "string", "description": "Answer in Arabic"},
-                        "frequency": {"type": "integer", "description": "STRICT: Exact count of evidence_case_ids where this FAQ's answer resolves the customer's issue. Must be ≤ evidence_case_ids.length(). NEVER use the sub_classification case_count."},
+                        "frequency": {"type": "integer", "description": "Count of evidence_case_ids where this FAQ's answer directly resolves that case. Must equal or be less than evidence_case_ids.length(). Never use sub_classification total."},
                         "sub_classification": {
                             "type": "string",
                             "description": (
