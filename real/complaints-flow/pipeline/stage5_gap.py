@@ -131,12 +131,11 @@ def reconcile_faq_frequencies(
         faq_evidence_freq = getattr(faq, 'frequency', 0)
 
         if sub and sub in actual_sub_counts:
-            raw_count = actual_sub_counts[sub]
-            cap = friction_cap.get(sub, raw_count)
-            # Use FAQ's evidence-based frequency from Stage 4 as base
-            # Cap it against sub_classification total (never exceed category size)
-            reconciled_frequency = min(faq_evidence_freq, raw_count, cap)
-            signal_used = f"sub_classification='{sub}' (evidence:{faq_evidence_freq} capped to {reconciled_frequency})"
+            # Use FAQ's evidence-based frequency from Stage 4 directly.
+            # This comes from case-by-case matching with strict semantic validation.
+            # No capping — if the frequency is wrong, the problem is in Stage 4, not here.
+            reconciled_frequency = faq_evidence_freq
+            signal_used = f"sub_classification='{sub}' (evidence:{faq_evidence_freq})"
         elif sub:
             # sub_classification provided but not found in patterns
             signal_used = f"rejected (unknown sub_classification='{sub}')"
