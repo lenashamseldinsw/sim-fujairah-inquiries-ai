@@ -971,6 +971,12 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             ]
             if new_faqs or not state.faq_candidates:
                 state.faq_candidates = new_faqs
+                # Debug: Print FAQ frequencies to identify if LLM is using consistent values
+                if state.faq_candidates:
+                    print(f"[Stage4] DEBUG: Generated {len(state.faq_candidates)} FAQ candidates:")
+                    for i, faq in enumerate(state.faq_candidates, 1):
+                        q_preview = (faq.question_ar or faq.question or '')[:40]
+                        print(f"  FAQ {i}: freq={faq.frequency} | {q_preview}...")
 
             # VALIDATION: Check FAQ sub_classifications against valid patterns (Fix 3)
             if state.patterns:
