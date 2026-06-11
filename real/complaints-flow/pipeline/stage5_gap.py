@@ -143,9 +143,6 @@ def reconcile_faq_frequencies(
             # No sub_classification provided
             signal_used = "rejected (no sub_classification)"
 
-        # Safety cap against total cases
-        reconciled_frequency = min(reconciled_frequency, len(all_classified))
-
         print(
             f"[Stage5] FAQ '{q_text[:50]}': "
             f"{faq.frequency} → {reconciled_frequency} [{signal_used}]"
