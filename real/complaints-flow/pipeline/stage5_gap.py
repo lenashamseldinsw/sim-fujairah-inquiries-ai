@@ -117,35 +117,40 @@ def reconcile_faq_frequencies(
                 friction_cap[sub] = cc
 
     reconciled_faqs = []
+
+    # Build case number lookup for fast validation
+    case_numbers = {case.case_number for case in all_classified}
+
     for faq in faq_list:
         q_text = (faq.question_ar or faq.question or '').strip()
         a_text = (faq.answer_ar or faq.answer or '').strip()
 
-        # ── SUB-CLASSIFICATION VALIDATION ──────────────────────────────────────
-        # Preserve the FAQ's evidence-based frequency from Stage 4.
-        # Only use sub_classification as a CEILING (cap), never as replacement.
-        # If sub_classification is missing or unmatched, REJECT the FAQ (frequency=0).
+        # ── EVIDENCE VALIDATION ───────────────────────────────────────────────
+        # Validate evidence_case_ids against actual cases in all_classified.
+        # Frequency = count of valid (existing) evidence cases.
+        # Sub_classification is for categorization only, not for filtering count.
         reconciled_frequency = 0
-        sub = getattr(faq, 'sub_classification', None) or ''
-        signal_used = "rejected (no match)"
-        faq_evidence_freq = getattr(faq, 'frequency', 0)
+        signal_used = "rejected (no evidence)"
 
-        if sub and sub in actual_sub_counts:
-            # Use FAQ's evidence-based frequency from Stage 4 directly.
-            # This comes from case-by-case matching with strict semantic validation.
-            # No capping — if the frequency is wrong, the problem is in Stage 4, not here.
-            reconciled_frequency = faq_evidence_freq
-            signal_used = f"sub_classification='{sub}' (evidence:{faq_evidence_freq})"
-        elif sub:
-            # sub_classification provided but not found in patterns
-            signal_used = f"rejected (unknown sub_classification='{sub}')"
+        evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
+
+        if evidence_ids:
+            # Count how many evidence case IDs actually exist in all_classified
+            valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
+            reconciled_frequency = len(valid_evidence)
+
+            if len(valid_evidence) < len(evidence_ids):
+                # Some evidence cases don't exist (hallucinated or typo)
+                signal_used = f"evidence: {len(valid_evidence)}/{len(evidence_ids)} valid cases"
+            else:
+                signal_used = f"evidence: {len(valid_evidence)} cases verified"
         else:
-            # No sub_classification provided
-            signal_used = "rejected (no sub_classification)"
+            # No evidence provided — reject the FAQ
+            signal_used = "rejected (no evidence_case_ids)"
 
         print(
             f"[Stage5] FAQ '{q_text[:50]}': "
-            f"{faq.frequency} → {reconciled_frequency} [{signal_used}]"
+            f"{getattr(faq, 'frequency', 0)} → {reconciled_frequency} [{signal_used}]"
         )
         reconciled_faqs.append(faq.model_copy(update={"frequency": reconciled_frequency}))
 
