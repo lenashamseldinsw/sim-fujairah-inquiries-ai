@@ -66,6 +66,7 @@ class FAQCandidate(BaseModel):
     answer_ar: Optional[str] = None
     top_level: Optional[str] = None  # Top-level category (شكوى, استفسار, etc.)
     sub_classification: Optional[str] = None  # Specific sub-classification for frequency capping
+    evidence_case_ids: List[str] = Field(default_factory=list)  # Case IDs that support this FAQ (from Stage 4 LLM)
 
 
 class GapRow(BaseModel):

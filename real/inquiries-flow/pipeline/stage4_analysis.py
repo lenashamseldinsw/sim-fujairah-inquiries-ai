@@ -965,7 +965,8 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                     frequency=f.get('frequency', 0),
                     validation_status='PENDING',
                     top_level=f.get('top_level', ''),
-                    sub_classification=f.get('sub_classification', '')
+                    sub_classification=f.get('sub_classification', ''),
+                    evidence_case_ids=f.get('evidence_case_ids', [])
                 )
                 for f in analysis.get('faq_candidates', [])
             ]
