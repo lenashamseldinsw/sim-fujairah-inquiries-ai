@@ -112,10 +112,9 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
         category = faq.get('top_level') if isinstance(faq, dict) else getattr(faq, 'top_level', '')
         freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
-        # CRITICAL: Skip FAQs with frequency < 3 (insufficient evidence of actual matching cases)
-        # Only include if question, answer are present AND frequency >= 3
-        # This filters out over-counted or weakly-matched FAQs automatically
-        if q_ar and a_ar and freq >= 3:
+        # Include FAQs with frequency >= 1 (supported by at least one case)
+        # Lower frequencies indicate emerging patterns and should not be filtered out
+        if q_ar and a_ar and freq >= 1:
             rows.append({
                 '#': str(counter),
                 'السؤال': q_ar,
