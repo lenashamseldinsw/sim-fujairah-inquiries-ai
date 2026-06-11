@@ -1074,7 +1074,9 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
         top_friction_pct = 0.0
 
         if state.journey_map:
-            for friction in state.journey_map[:10]:
+            for friction in state.journey_map:
+                if friction.case_count == 0:
+                    continue
                 # Map severity from root_cause_category
                 severity_map = {
                     'missing_info': '🔴 حرجة',
@@ -1109,8 +1111,8 @@ def generate_executive_summary_section(state: PipelineState, api_key: str) -> Di
 
         # FIX: Pre-compute findings table deterministically from state before LLM call
         # Avoids LLM inventing ambiguous case-count titles
-        # CRITICAL: Count only the friction points actually included in findings (top 10),
-        # not the total in journey_map. Ensures narrative matches displayed data.
+        # CRITICAL: Use all non-zero friction points from journey_map (same as Section 4),
+        # ensuring executive summary findings match Section 4 table count.
         friction_count = len(friction_points)
         pre_computed_findings = _build_pre_computed_findings(
             total_cases=total_cases,
