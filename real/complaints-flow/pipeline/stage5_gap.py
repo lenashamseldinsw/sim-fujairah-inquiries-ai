@@ -120,6 +120,7 @@ def reconcile_faq_frequencies(
 
     # Build case number lookup for fast validation
     case_numbers = {case.case_number for case in all_classified}
+    print(f"[Stage5] Case numbers available: {sorted(list(case_numbers)[:10])}... ({len(case_numbers)} total)")
 
     for faq in faq_list:
         q_text = (faq.question_ar or faq.question or '').strip()
@@ -134,10 +135,18 @@ def reconcile_faq_frequencies(
 
         evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
 
+        # DEBUG: Show what evidence_case_ids we got
+        print(f"[Stage5-DEBUG] FAQ '{q_text[:30]}': evidence_ids={evidence_ids}")
+
         if evidence_ids:
             # Count how many evidence case IDs actually exist in all_classified
             valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
             reconciled_frequency = len(valid_evidence)
+
+            # DEBUG: Show matching results
+            mismatches = [cid for cid in evidence_ids if cid not in case_numbers]
+            if mismatches:
+                print(f"  → Mismatches: {mismatches}")
 
             if len(valid_evidence) < len(evidence_ids):
                 # Some evidence cases don't exist (hallucinated or typo)
