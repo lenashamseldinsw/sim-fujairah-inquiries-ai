@@ -83,82 +83,63 @@ def reconcile_faq_frequencies(
     all_classified: List[Any]
 ) -> List[FAQCandidate]:
     """
-    Reconcile FAQ frequencies using sub_classification as the ONLY signal.
+    Reconcile FAQ frequencies using Stage 4 audit trail (assigned_faq_id).
 
-    STRICT VALIDATION: sub_classification direct lookup only
-    - LLM assigns sub_classification to each FAQ from the patterns list
-    - Look up actual case count for that sub_classification
-    - Cap at the friction's reconciled case_count (not full category total)
-    - This avoids register mismatch entirely — uses authoritative ground truth
-    - If sub_classification is missing or unmatched, FAQ is REJECTED (frequency=0)
+    AUDIT TRAIL VALIDATION: Count actual case assignments
+    - Stage 4 builds audit trail: each case tagged with assigned_faq_id (FAQ1, FAQ2, etc.)
+    - This function counts cases matching each FAQ's ID
+    - Frequency = actual count of cases where assigned_faq_id matches this FAQ
+    - Result: COUNTIF-verifiable frequencies based on real case assignments, not LLM guesses
 
-    NO FALLBACK: Keyword matching is disabled to prevent false positives that
-    inflated FAQ frequencies (e.g., "complaint" keyword matching unrelated cases).
+    Falls back to evidence_case_ids if audit trail is not available (backward compatibility).
     """
     if not faq_list or not all_classified:
         return faq_list
 
-    # Build ground truth: sub_classification → actual case count
-    actual_sub_counts: Dict[str, int] = defaultdict(int)
-    for case in all_classified:
-        sub = case.sub_classification or ''
-        if sub:
-            actual_sub_counts[sub] += 1
-
-    # Build journey_map cap: sub_classification → friction case_count
-    # (the reconciled per-friction count, always <= sub total)
-    friction_cap: Dict[str, int] = {}
-    for jf in (journey_map or []):
-        sub = getattr(jf, 'sub_classification', None)
-        cc = getattr(jf, 'case_count', 0)
-        if sub and cc > 0:
-            # Take the MAX friction case_count per sub (most relevant friction wins)
-            if sub not in friction_cap or cc > friction_cap[sub]:
-                friction_cap[sub] = cc
+    # Check if audit trail exists (assigned_faq_id fields populated by Stage 4)
+    has_audit_trail = any(
+        getattr(case, 'assigned_faq_id', None)
+        for case in all_classified
+    )
 
     reconciled_faqs = []
 
-    # Build case number lookup for fast validation
-    case_numbers = {case.case_number for case in all_classified}
-    print(f"[Stage5] Case numbers available: {sorted(list(case_numbers)[:10])}... ({len(case_numbers)} total)")
-
-    for faq in faq_list:
+    for faq_index, faq in enumerate(faq_list):
         q_text = (faq.question_ar or faq.question or '').strip()
-        a_text = (faq.answer_ar or faq.answer or '').strip()
-
-        # ── EVIDENCE VALIDATION ───────────────────────────────────────────────
-        # Validate evidence_case_ids against actual cases in all_classified.
-        # Frequency = count of valid (existing) evidence cases.
-        # Sub_classification is for categorization only, not for filtering count.
         reconciled_frequency = 0
-        signal_used = "rejected (no evidence)"
+        signal_used = "rejected (no audit trail or evidence)"
 
-        evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
+        if has_audit_trail:
+            # ── PRIMARY: Use audit trail from Stage 4 ─────────────────────────────
+            # Each case is tagged with assigned_faq_id (FAQ1, FAQ2, etc.)
+            # Count cases where assigned_faq_id matches this FAQ's position
+            faq_id = f"FAQ{faq_index + 1}"
+            matching_cases = [
+                case for case in all_classified
+                if getattr(case, 'assigned_faq_id', None) == faq_id
+            ]
+            reconciled_frequency = len(matching_cases)
+            signal_used = f"audit trail: {reconciled_frequency} cases tagged {faq_id}"
 
-        # DEBUG: Show what evidence_case_ids we got
-        print(f"[Stage5-DEBUG] FAQ '{q_text[:30]}': evidence_ids={evidence_ids}")
+            if reconciled_frequency == 0:
+                # FAQ has no matching cases in audit trail
+                signal_used = f"audit trail: no cases tagged {faq_id}"
 
-        if evidence_ids:
-            # Count how many evidence case IDs actually exist in all_classified
-            valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
-            reconciled_frequency = len(valid_evidence)
+        else:
+            # ── FALLBACK: Use evidence_case_ids (backward compatibility) ──────────
+            # If audit trail not available, validate evidence_case_ids against actual cases
+            evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
 
-            # DEBUG: Show matching results
-            mismatches = [cid for cid in evidence_ids if cid not in case_numbers]
-            if mismatches:
-                print(f"  → Mismatches: {mismatches}")
-
-            if len(valid_evidence) < len(evidence_ids):
-                # Some evidence cases don't exist (hallucinated or typo)
+            if evidence_ids:
+                case_numbers = {case.case_number for case in all_classified}
+                valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
+                reconciled_frequency = len(valid_evidence)
                 signal_used = f"evidence: {len(valid_evidence)}/{len(evidence_ids)} valid cases"
             else:
-                signal_used = f"evidence: {len(valid_evidence)} cases verified"
-        else:
-            # No evidence provided — reject the FAQ
-            signal_used = "rejected (no evidence_case_ids)"
+                signal_used = "rejected (no evidence_case_ids)"
 
         print(
-            f"[Stage5] FAQ '{q_text[:50]}': "
+            f"[Stage5] FAQ {faq_index + 1} '{q_text[:50]}': "
             f"{getattr(faq, 'frequency', 0)} → {reconciled_frequency} [{signal_used}]"
         )
         reconciled_faqs.append(faq.model_copy(update={"frequency": reconciled_frequency}))
