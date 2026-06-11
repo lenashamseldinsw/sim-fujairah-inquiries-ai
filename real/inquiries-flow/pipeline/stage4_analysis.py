@@ -726,6 +726,7 @@ def _retry_faq_only(
                 validation_status="PENDING",
                 top_level=f.get("top_level", ""),
                 sub_classification=f.get("sub_classification", ""),
+                evidence_case_ids=f.get("evidence_case_ids", []),
             )
             for f in raw_items
         ]
@@ -838,6 +839,115 @@ def _retry_journey_map_only(
 
     print("[Stage4] WARNING: journey_map-only focused retry also failed — journey_map remains empty.")
     return state
+
+
+def extract_faq_with_audit_trail(state: PipelineState) -> None:
+    """
+    Assign each case to a canonical FAQ for audit trail verification.
+
+    Adds 'assigned_faq' and 'assigned_faq_id' fields to each CaseRow.
+    FAQ IDs become COUNTIF-verifiable in the output spreadsheet.
+
+    Algorithm:
+    1. Deduplicate faq_candidates by semantic similarity (8-12 target)
+    2. For each case, find best FAQ match using word overlap
+    3. Tag case with assigned_faq_id (e.g., "FAQ1", "FAQ2")
+
+    Side effects: Modifies state.all_classified in-place by adding assigned_faq fields.
+    """
+    if not state.faq_candidates:
+        print("[Stage4] No FAQ candidates to assign — skipping audit trail")
+        for case in state.all_classified:
+            case.assigned_faq_id = "NO_FAQ"
+        return
+
+    # Step 1: Create canonical FAQ list (deduplicated, 8-12 target)
+    canonical_faqs = []
+    seen_questions = set()
+
+    for faq in state.faq_candidates:
+        q_text = (faq.question_ar or faq.question or "").strip().lower()
+        if not q_text:
+            continue
+
+        # Skip near-duplicates (>80% word overlap)
+        is_duplicate = False
+        for seen_q in seen_questions:
+            if _overlap_ratio(q_text, seen_q, min_word_len=3) >= 0.8:
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            seen_questions.add(q_text)
+            faq_id = f"FAQ{len(canonical_faqs) + 1}"
+            canonical_faqs.append({
+                "faq_id": faq_id,
+                "question_ar": faq.question_ar or faq.question or "",
+                "question": faq.question or "",
+                "sub_classification": faq.sub_classification or "",
+                "evidence_case_ids": faq.evidence_case_ids or [],
+                "original_faq": faq
+            })
+
+    print(f"[Stage4] Created canonical FAQ list: {len(canonical_faqs)} distinct FAQs (from {len(state.faq_candidates)} candidates)")
+    for faq in canonical_faqs:
+        print(f"  {faq['faq_id']}: {faq['question_ar'][:60]}... (sub={faq['sub_classification']})")
+
+    # Step 2: Assign each case to best matching FAQ
+    assignment_summary = defaultdict(int)
+
+    for case in state.all_classified:
+        best_faq = None
+        best_score = 0.0
+
+        # Check evidence_case_ids first (highest priority)
+        for faq in canonical_faqs:
+            if case.case_number in faq["evidence_case_ids"]:
+                best_faq = faq
+                best_score = 1.0
+                break
+
+        # If not in evidence, use word overlap on description + classification_reason
+        if not best_faq:
+            case_text = (
+                f"{case.description or ''} {case.classification_reason or ''} "
+                f"{case.sub_classification or ''}"
+            ).lower()
+
+            for faq in canonical_faqs:
+                faq_text = (
+                    f"{faq['question_ar'] or ''} {faq['question'] or ''} "
+                    f"{faq['sub_classification'] or ''}"
+                ).lower()
+
+                score = _overlap_ratio(case_text, faq_text, min_word_len=3)
+
+                # Boost score if sub_classification matches exactly
+                if case.sub_classification == faq["sub_classification"]:
+                    score = min(1.0, score + 0.3)
+
+                if score > best_score:
+                    best_score = score
+                    best_faq = faq
+
+        # Assign FAQ to case
+        if best_faq and best_score >= 0.2:  # Threshold: at least 20% word overlap
+            case.assigned_faq_id = best_faq["faq_id"]
+            case.assigned_faq = f"{best_faq['faq_id']}: {best_faq['question_ar'][:50]}"
+            assignment_summary[best_faq["faq_id"]] += 1
+        else:
+            case.assigned_faq_id = "UNMATCHED"
+            case.assigned_faq = "UNMATCHED: No clear FAQ match"
+            assignment_summary["UNMATCHED"] += 1
+
+    # Step 3: Print audit summary
+    print(f"[Stage4] FAQ assignment audit trail:")
+    for faq_id in sorted(assignment_summary.keys()):
+        count = assignment_summary[faq_id]
+        print(f"  {faq_id}: {count} cases assigned")
+
+    total_assigned = sum(1 for case in state.all_classified if case.assigned_faq_id)
+    print(f"[Stage4] Total cases assigned to FAQ: {total_assigned}/{len(state.all_classified)}")
 
 
 def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
@@ -1100,5 +1210,9 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             "[Stage4] WARNING: faq_candidates is empty after all attempts. "
             "The digital_transformation report section will be skipped."
         )
+
+    # Step 3: Build FAQ audit trail (COUNTIF-verifiable case assignments)
+    print("[Stage4] Building FAQ audit trail for spreadsheet verification...")
+    extract_faq_with_audit_trail(state)
 
     return state

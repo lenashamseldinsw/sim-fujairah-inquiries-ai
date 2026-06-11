@@ -30,6 +30,8 @@ class CaseRow(BaseModel):
     sub_classification: Optional[str] = None  # Domain-specific sub-classification
     admin: Optional[str] = None  # General administration / department name (الإدارة_العامة)
     date_closed: Optional[str] = None  # تاريخ_إغلاق_الطلب — empty string means not yet closed
+    assigned_faq: Optional[str] = None  # FAQ tag assigned in Stage 4 audit trail (e.g., "FAQ#1: Where is service center?")
+    assigned_faq_id: Optional[str] = None  # Simple FAQ ID for COUNTIF (e.g., "FAQ1", "FAQ2")
 
 
 class PatternCluster(BaseModel):

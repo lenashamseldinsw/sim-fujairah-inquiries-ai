@@ -45,6 +45,10 @@ class CaseRow(BaseModel):
     emirate: Optional[str] = None  # الإمارة
     case_status: Optional[str] = None  # الحالة from input: "طلب مرفوض" | "تم الموافقة على الحل" | "طلب منجز" etc.
 
+    # FAQ audit trail fields
+    assigned_faq: Optional[str] = None  # FAQ tag assigned in Stage 4 audit trail (e.g., "FAQ#1: Why hasn't my complaint been resolved?")
+    assigned_faq_id: Optional[str] = None  # Simple FAQ ID for COUNTIF (e.g., "FAQ1", "FAQ2")
+
 
 class PatternCluster(BaseModel):
     """Identified pattern cluster from Stage 4."""
