@@ -1,7 +1,7 @@
 {
   "executive_summary": {
     "heading": "First: Executive Summary",
-    "body": "One thousand inquiry cases have been analysed.",
+    "body": "One thousand inquiry cases were analysed.",
     "core_message": "Message: Improving digital services.",
     "raw_data": {
       "framing_paragraph": "This report presents a comprehensive analysis of the data.",
@@ -16,7 +16,7 @@
   },
   "methodology": {
     "heading": "Second: Methodology",
-    "body": "We utilized data analysis and modern technologies.",
+    "body": "We used data analysis and modern technologies.",
     "raw_data": {
       "classification_method": "Automated classification using rules.",
       "sources_table": [
@@ -45,7 +45,7 @@
   },
   "customer_journey": {
     "heading": "Fourth: Journey Challenges",
-    "body": "We identified key friction points in the customer experience.",
+    "body": "We have identified key friction points in the customer experience.",
     "raw_data": {
       "friction_points": "Lack of clarity in information and delayed responses.",
       "case_count": 250
@@ -77,7 +77,7 @@
   },
   "improvement_roadmap": {
     "heading": "Eighth: The Improvement Roadmap",
-    "body": "We recommend implementing improvements in phases.",
+    "body": "We recommend implementing the improvements in phases.",
     "raw_data": {
       "phase_1": "Phase One: Update the manual within 3 months.",
       "priority_count": 6
@@ -85,7 +85,7 @@
   },
   "conclusion": {
     "heading": "Ninth: Summary and Recommendations",
-    "body": "Improvement requires inter-departmental cooperation and adherence to the phases.",
+    "body": "Improvement requires inter-departmental cooperation and commitment to the phases.",
     "raw_data": {
       "summary": "The recommended improvements will lead to better service.",
       "expected_impact": "30% improvement in customer satisfaction"
