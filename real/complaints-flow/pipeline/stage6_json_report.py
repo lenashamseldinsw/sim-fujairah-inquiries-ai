@@ -969,7 +969,14 @@ class JSONReportBuilder:
                         if case.sub_classification  # Skip None/empty
                     )
                     if complaint_counts:
-                        dominant_complaint = complaint_counts.most_common(1)[0][0]
+                        # Get max frequency and all types with that frequency (handles ties)
+                        max_count = max(complaint_counts.values())
+                        tied_types = [
+                            complaint_type
+                            for complaint_type, count in complaint_counts.items()
+                            if count == max_count
+                        ]
+                        dominant_complaint = " / ".join(sorted(tied_types))
 
                 rows.append({
                     'الإدارة': dept,
