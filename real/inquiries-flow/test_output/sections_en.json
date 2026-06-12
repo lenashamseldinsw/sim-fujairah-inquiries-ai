@@ -1,0 +1,94 @@
+{
+  "executive_summary": {
+    "heading": "First: Executive Summary",
+    "body": "One thousand inquiry cases have been analysed.",
+    "core_message": "Message: Improving digital services.",
+    "raw_data": {
+      "framing_paragraph": "This report presents a comprehensive analysis of the data.",
+      "key_findings": [
+        {
+          "number": 1,
+          "title": "First Finding",
+          "description": "We identified issues in the classification."
+        }
+      ]
+    }
+  },
+  "methodology": {
+    "heading": "Second: Methodology",
+    "body": "We utilized data analysis and modern technologies.",
+    "raw_data": {
+      "classification_method": "Automated classification using rules.",
+      "sources_table": [
+        {
+          "المصدر": "Customer Management System",
+          "الطبيعة": "Primary Data",
+          "الحجم": "1000 حالة",
+          "الفترة": "2025"
+        }
+      ]
+    }
+  },
+  "workload_map": {
+    "heading": "Third: Request Distribution Map",
+    "body": "Distribution of cases by type and channel.",
+    "raw_data": {
+      "summary": "Most cases are complaints and service requests.",
+      "table_data": [
+        {
+          "type": "Complaint",
+          "count": 450,
+          "percentage": "45%"
+        }
+      ]
+    }
+  },
+  "customer_journey": {
+    "heading": "Fourth: Journey Challenges",
+    "body": "We identified key friction points in the customer experience.",
+    "raw_data": {
+      "friction_points": "Lack of clarity in information and delayed responses.",
+      "case_count": 250
+    }
+  },
+  "digital_gaps": {
+    "heading": "Fifth: Digital Gaps",
+    "body": "There are significant gaps in the digital evidence coverage.",
+    "raw_data": {
+      "gaps": "Incomplete information regarding procedures and details.",
+      "gap_count": 12
+    }
+  },
+  "digital_transformation": {
+    "heading": "Sixth: Digital Transformation Plan",
+    "body": "We propose updating the information system and frequently asked questions.",
+    "raw_data": {
+      "strategy": "Developing a comprehensive digital guide with frequently asked questions.",
+      "faq_count": 7
+    }
+  },
+  "ai_use_cases": {
+    "heading": "Seventh: Artificial Intelligence Use Cases",
+    "body": "Artificial intelligence can be used in classification and response.",
+    "raw_data": {
+      "use_case_1": "Automated classification of incoming cases.",
+      "use_case_count": 4
+    }
+  },
+  "improvement_roadmap": {
+    "heading": "Eighth: The Improvement Roadmap",
+    "body": "We recommend implementing improvements in phases.",
+    "raw_data": {
+      "phase_1": "Phase One: Update the manual within 3 months.",
+      "priority_count": 6
+    }
+  },
+  "conclusion": {
+    "heading": "Ninth: Summary and Recommendations",
+    "body": "Improvement requires inter-departmental cooperation and adherence to the phases.",
+    "raw_data": {
+      "summary": "The recommended improvements will lead to better service.",
+      "expected_impact": "30% improvement in customer satisfaction"
+    }
+  }
+}
