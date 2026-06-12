@@ -1485,13 +1485,13 @@ class JSONReportBuilder:
         )
 
         # ── FAQ table dict ────────────────────────────────────────────────────
-        # COLUMNS (matching Section 6.1 screenshot):
-        # #, السؤال, الفئة الرسمية, الإجابة الصحيحة, التكرار
+        # COLUMNS (Section 6.1 FAQ table):
+        # #, السؤال, الإجابة الصحيحة, التكرار
         faq_table_dict = {
-            "columns":        ["#", "السؤال", "الفئة الرسمية", "الإجابة الصحيحة", "التكرار"],
+            "columns":        ["#", "السؤال", "الإجابة الصحيحة", "التكرار"],
             "rows":           faq_rows,
             "row_count":      len(faq_rows),
-            "col_count":      5,
+            "col_count":      4,
             "original_index": self.next_table_index(),
             "caption":        faq_intro,
         }

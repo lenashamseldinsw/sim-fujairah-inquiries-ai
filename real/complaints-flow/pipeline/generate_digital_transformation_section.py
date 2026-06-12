@@ -34,7 +34,7 @@ SECTION STRUCTURE:
 Intro paragraph: states the digital transformation vision grounded in pipeline data.
 
 Sub-section 6.1 — الأسئلة الشائعة (FAQ)
-  Table columns: # | السؤال | الفئة الرسمية | الإجابة الصحيحة | التكرار
+  Table columns: # | السؤال | الإجابة الصحيحة | التكرار
   Data source: state.validated_faqs and state.faq_candidates (from Stage 4/5)
   Frequency: Actual case counts from pipeline, never LLM-invented
   Sorting: By frequency (descending) — most impactful FAQs first
@@ -69,8 +69,8 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
     """
     Build FAQ rows from validated FAQs for the transformation section.
 
-    COLUMNS (matching Section 6.1 screenshot):
-    #, السؤال, الفئة الرسمية, الإجابة الصحيحة, التكرار
+    COLUMNS (Section 6.1 FAQ table):
+    #, السؤال, الإجابة الصحيحة, التكرار
 
     SOURCE: state.validated_faqs (from Stage 5, post-reconciliation).
     ACCURACY: Frequency values are actual case counts from the pipeline (reconciled in Stage 5),
@@ -109,7 +109,6 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
         # Extract fields (handle both dict and object access)
         q_ar = faq.get('question_ar') if isinstance(faq, dict) else getattr(faq, 'question_ar', '')
         a_ar = faq.get('answer_ar') if isinstance(faq, dict) else getattr(faq, 'answer_ar', '')
-        category = faq.get('top_level') if isinstance(faq, dict) else getattr(faq, 'top_level', '')
         freq = faq.get('frequency', 0) if isinstance(faq, dict) else getattr(faq, 'frequency', 0)
 
         # Include FAQs with frequency >= 1 (supported by at least one case)
@@ -118,7 +117,6 @@ def _build_faq_rows_for_transform(state: PipelineState) -> List[Dict[str, str]]:
             rows.append({
                 '#': str(counter),
                 'السؤال': q_ar,
-                'الفئة الرسمية': category if category else '—',
                 'الإجابة الصحيحة': a_ar,
                 'التكرار': str(int(freq)),
             })
