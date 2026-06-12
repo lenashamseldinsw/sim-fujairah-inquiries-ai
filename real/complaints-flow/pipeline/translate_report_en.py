@@ -101,7 +101,7 @@ def translate_report_to_english(
         try:
             message = client.messages.create(
                 model=model,
-                max_tokens=16000,
+                max_tokens=24000,
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_content}],
             )
