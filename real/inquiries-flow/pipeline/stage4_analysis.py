@@ -1453,21 +1453,23 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             print(f"[Stage4] ERROR in service-based extraction: {e}")
 
     # ── FALLBACK 1: Main LLM extraction (if service-split failed) ───────────────────
-    if not state.faq_candidates and state.all_classified:
-        print("[Stage4] Service-split failed — running focused faq-only retry...")
-        state = _retry_faq_only(state, client, cases_text)
+    # TEMPORARILY DISABLED FOR TESTING (matching complaints flow)
+    # if not state.faq_candidates and state.all_classified:
+    #     print("[Stage4] Service-split failed — running focused faq-only retry...")
+    #     state = _retry_faq_only(state, client, cases_text)
 
     # ── FALLBACK 2: Grouped FAQ extraction (final fallback) ────────────────────────
-    if not state.faq_candidates and state.all_classified:
-        print("[Stage4] faq-only retry failed — generating from grouped cases...")
-        try:
-            state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
-                state, client, groups
-            )
-            if state.faq_candidates:
-                print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates from grouped cases (fallback)")
-        except Exception as e:
-            print(f"[Stage4] ERROR generating grouped FAQs: {e}")
+    # TEMPORARILY DISABLED FOR TESTING (matching complaints flow)
+    # if not state.faq_candidates and state.all_classified:
+    #     print("[Stage4] faq-only retry failed — generating from grouped cases...")
+    #     try:
+    #         state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
+    #             state, client, groups
+    #         )
+    #         if state.faq_candidates:
+    #             print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates from grouped cases (fallback)")
+    #     except Exception as e:
+    #         print(f"[Stage4] ERROR generating grouped FAQs: {e}")
 
     if not state.faq_candidates:
         print(
