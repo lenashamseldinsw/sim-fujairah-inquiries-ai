@@ -691,7 +691,7 @@ def _retry_faq_only(
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=8000,
+                max_tokens=12000,  # INCREASED from 8000 for better translation
                 system=system_prompt,
                 tools=[FAQ_ONLY_TOOL],
                 tool_choice={"type": "any"},
@@ -782,7 +782,7 @@ def _retry_journey_map_only(
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=4000,
+                max_tokens=8000,  # INCREASED from 4000 for better translation
                 system=system_prompt,
                 tools=[JOURNEY_MAP_ONLY_TOOL],
                 tool_choice={"type": "any"},
@@ -861,13 +861,16 @@ def _generate_faq_candidates_by_service(
         List of FAQCandidate objects (frequency set to 0, reconciled in Stage 5)
     """
     faq_list = []
+    import json as json_module
 
-    # Extract unique services, excluding "أخرى" (Other)
+    # Extract unique services, excluding "أخرى" (Other) and handling NaN/None
     service_groups = defaultdict(list)
     for case in state.all_classified:
+        # CRITICAL: Filter out None, NaN, and empty service names
         service = (case.service_name or "").strip()
-        if service and service != "أخرى":
-            service_groups[service].append(case)
+        if not service or service == "أخرى" or service == "nan" or service.lower() == "none":
+            continue
+        service_groups[service].append(case)
 
     print(f"[Stage4-Service-FAQ] Found {len(service_groups)} services, processing FAQs...")
 
@@ -888,6 +891,7 @@ def _generate_faq_candidates_by_service(
             case_summary += f"  Resolution: {case.resolution_response[:200]}\n\n"
 
         # Ask LLM to extract FAQs from all cases in this service
+        # INCREASED TOKEN LIMIT to 4000 to prevent JSON truncation
         prompt = f"""You are analyzing customer cases for the service: '{service_name}'
 
 Below are all {len(cases)} cases for this service. Extract the key FAQ questions that customers are asking.
@@ -896,7 +900,7 @@ Below are all {len(cases)} cases for this service. Extract the key FAQ questions
 
 For each FAQ, identify 3+ specific case numbers from above that this FAQ answers.
 
-Return as JSON:
+Return ONLY valid JSON (no other text before or after):
 {{
   "faqs": [
     {{"question": "...", "question_ar": "...", "answer": "...", "answer_ar": "...", "case_ids": ["case_number1", "case_number2", "case_number3", ...]}},
@@ -904,56 +908,68 @@ Return as JSON:
   ]
 }}
 
-IMPORTANT:
+CRITICAL RULES:
 - Only include FAQs supported by 3+ cases
 - case_ids must be actual case numbers from the list above
 - Answer in Arabic for answer_ar
 - Be specific to this service's context
+- Return ONLY valid JSON with no additional text
+- Ensure all JSON syntax is correct (proper commas, quotes, brackets)
 """
 
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=2000,
+                max_tokens=4000,  # INCREASED from 2000 to prevent truncation
                 messages=[{"role": "user", "content": prompt}],
             )
 
             response_text = message.content[0].text if message.content else ""
-            import json as json_module
 
-            # Extract JSON from response
+            # Extract JSON from response more robustly
             json_start = response_text.find("{")
             json_end = response_text.rfind("}") + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
+
+            if json_start < 0 or json_end <= json_start:
+                print(f"[Stage4-Service-FAQ] No JSON found in response for {service_name}")
+                continue
+
+            json_str = response_text[json_start:json_end]
+
+            # CRITICAL: Validate JSON structure before parsing
+            try:
                 result = json_module.loads(json_str)
+            except json_module.JSONDecodeError as je:
+                print(f"[Stage4-Service-FAQ] JSON parse error for {service_name}: {je}")
+                print(f"[Stage4-Service-FAQ] JSON snippet: {json_str[:200]}...")
+                continue
 
-                # Valid case numbers for this service
-                valid_case_numbers = {case.case_number for case in cases}
+            # Valid case numbers for this service
+            valid_case_numbers = {case.case_number for case in cases}
 
-                for faq_data in result.get("faqs", []):
-                    # Get evidence case IDs and filter to valid ones
-                    evidence_ids = faq_data.get("case_ids", [])
-                    valid_evidence = [cid for cid in evidence_ids if cid in valid_case_numbers]
+            for faq_data in result.get("faqs", []):
+                # Get evidence case IDs and filter to valid ones
+                evidence_ids = faq_data.get("case_ids", [])
+                valid_evidence = [cid for cid in evidence_ids if cid in valid_case_numbers]
 
-                    # THRESHOLD: Only include FAQs with 3+ evidence cases
-                    if len(valid_evidence) >= 3:
-                        faq = FAQCandidate(
-                            question=faq_data.get("question", ""),
-                            question_ar=faq_data.get("question_ar", ""),
-                            answer=faq_data.get("answer", ""),
-                            answer_ar=faq_data.get("answer_ar", ""),
-                            frequency=0,  # Will be reconciled in Stage 5
-                            validation_status="PENDING",
-                            top_level=service_top_level,  # Set to inquiry category from cases
-                            sub_classification=service_name,  # Service as sub-classification
-                            evidence_case_ids=valid_evidence,
-                        )
-                        faq_list.append(faq)
-                        print(f"[Stage4-Service-FAQ] {service_name}: {faq.question_ar[:60]}... ({len(valid_evidence)} cases)")
-                    else:
-                        q_preview = faq_data.get("question_ar", "")[:50]
-                        print(f"[Stage4-Service-FAQ] FILTERED: {service_name} FAQ '{q_preview}' has only {len(valid_evidence)} cases (threshold: 3+)")
+                # THRESHOLD: Only include FAQs with 3+ evidence cases
+                if len(valid_evidence) >= 3:
+                    faq = FAQCandidate(
+                        question=faq_data.get("question", ""),
+                        question_ar=faq_data.get("question_ar", ""),
+                        answer=faq_data.get("answer", ""),
+                        answer_ar=faq_data.get("answer_ar", ""),
+                        frequency=0,  # Will be reconciled in Stage 5
+                        validation_status="PENDING",
+                        top_level=service_top_level,  # Set to inquiry category from cases
+                        sub_classification=service_name,  # Service as sub-classification
+                        evidence_case_ids=valid_evidence,
+                    )
+                    faq_list.append(faq)
+                    print(f"[Stage4-Service-FAQ] {service_name}: {faq.question_ar[:60]}... ({len(valid_evidence)} cases)")
+                else:
+                    q_preview = faq_data.get("question_ar", "")[:50]
+                    print(f"[Stage4-Service-FAQ] FILTERED: {service_name} FAQ '{q_preview}' has only {len(valid_evidence)} cases (threshold: 3+)")
 
         except Exception as e:
             print(f"[Stage4-Service-FAQ] Error generating FAQs for {service_name}: {e}")
@@ -1021,7 +1037,7 @@ Only include FAQs that are directly supported by the case examples above.
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=1000,
+                max_tokens=2000,  # INCREASED from 1000 for better translation
                 messages=[{"role": "user", "content": prompt}],
             )
 
@@ -1226,7 +1242,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=16000,
+            max_tokens=24000,  # INCREASED from 16000 for better English translation space
             system=build_analysis_system_prompt(),
             tools=[ANALYSIS_TOOL],
             tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
@@ -1376,41 +1392,47 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
                 f"  → Using allowlist-filtered count"
             )
             state.proactive_notification_case_count = proactive_friction_count
+        elif proactive_friction_count == 0 and state.proactive_notification_case_count > 0:
+            print(
+                f"[Stage4] VALIDATION WARNING: LLM returned proactive_notification_case_count={state.proactive_notification_case_count} "
+                f"but NO eligible friction points found after allowlist filter. "
+                f"This indicates the LLM may have miscounted. Retaining LLM value for now (will be reconciled in Stage 5)."
+            )
     #     elif proactive_friction_count == 0 and state.proactive_notification_case_count > 0:
     #         print(
     #             f"[Stage4] VALIDATION: no eligible no_proactive_notification entries found "
     #             f"in journey_map after allowlist filter. LLM count={state.proactive_notification_case_count} "
     #             f"retained (journey_map may be incomplete — will be re-checked in Stage 5)."
     #         )
-    #
-    #     # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
-    #     print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
-    #     (state.journey_map,
-    #      state.patterns,
-    #      state.notification_opportunities,
-    #      state.reconciled_notification_counts) = _reconcile_counts(
-    #         state.journey_map,
-    #         state.patterns,
-    #         state.all_classified,
-    #         state.notification_opportunities,
-    #         state.proactive_notification_case_count,
-    #     )
-    #     print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
-    #
-    #     if state.journey_map:
-    #         break  # Success — stop retrying
-    #
-    #     if attempt < max_attempts:
-    #         print(f"[Stage4] journey_map still empty after attempt {attempt} — retrying with explicit nudge...")
-    #     else:
-    #         print(
-    #             f"[Stage4] WARNING: journey_map is empty after {max_attempts} attempts. "
-    #             "Attempting focused journey_map-only retry..."
-    #         )
-    #
-    # # ❌ DISABLED: journey_map retry fallback
-    # if not state.journey_map:
-    #     state = _retry_journey_map_only(state, client, cases_text)
+
+        # Reconcile counts: replace LLM-supplied case_counts with authoritative counts from state.all_classified
+        print("[Stage4] Reconciling case counts with authoritative data from all_classified...")
+        (state.journey_map,
+         state.patterns,
+         state.notification_opportunities,
+         state.reconciled_notification_counts) = _reconcile_counts(
+            state.journey_map,
+            state.patterns,
+            state.all_classified,
+            state.notification_opportunities,
+            state.proactive_notification_case_count,
+        )
+        print(f"[Stage4] ✓ Reconciliation complete: {len(state.patterns)} patterns, {len(state.journey_map)} friction points")
+
+        if state.journey_map:
+            break  # Success — stop retrying
+
+        if attempt < max_attempts:
+            print(f"[Stage4] journey_map still empty after attempt {attempt} — retrying with explicit nudge...")
+        else:
+            print(
+                f"[Stage4] WARNING: journey_map is empty after {max_attempts} attempts. "
+                "Attempting focused journey_map-only retry..."
+            )
+
+    # Fallback: journey_map retry if still empty
+    if not state.journey_map:
+        state = _retry_journey_map_only(state, client, cases_text)
 
     if not state.journey_map:
         print(
@@ -1431,23 +1453,21 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
             print(f"[Stage4] ERROR in service-based extraction: {e}")
 
     # ── FALLBACK 1: Main LLM extraction (if service-split failed) ───────────────────
-    # TEMPORARILY DISABLED FOR TESTING
-    # if not state.faq_candidates and state.all_classified:
-    #     print("[Stage4] Service-split failed — running focused faq-only retry...")
-    #     state = _retry_faq_only(state, client, cases_text)
+    if not state.faq_candidates and state.all_classified:
+        print("[Stage4] Service-split failed — running focused faq-only retry...")
+        state = _retry_faq_only(state, client, cases_text)
 
     # ── FALLBACK 2: Grouped FAQ extraction (final fallback) ────────────────────────
-    # TEMPORARILY DISABLED FOR TESTING
-    # if not state.faq_candidates and state.all_classified:
-    #     print("[Stage4] faq-only retry failed — generating from grouped cases...")
-    #     try:
-    #         state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
-    #             state, client, groups
-    #         )
-    #         if state.faq_candidates:
-    #             print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates from grouped cases (fallback)")
-    #     except Exception as e:
-    #         print(f"[Stage4] ERROR generating grouped FAQs: {e}")
+    if not state.faq_candidates and state.all_classified:
+        print("[Stage4] faq-only retry failed — generating from grouped cases...")
+        try:
+            state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
+                state, client, groups
+            )
+            if state.faq_candidates:
+                print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates from grouped cases (fallback)")
+        except Exception as e:
+            print(f"[Stage4] ERROR generating grouped FAQs: {e}")
 
     if not state.faq_candidates:
         print(
