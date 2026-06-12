@@ -433,7 +433,15 @@ def _populate_all_cases_sheet(ws, cases: List[CaseRow], state: PipelineState) ->
                                 value = val
                             break
             elif header_col == 'الإدارة_العامة':
+                # Try CaseRow first, then fallback to raw_df if empty
                 value = case.admin or ''
+                if not value and raw_row is not None:
+                    for col_name in ['الإدارة_العامة', 'الإدارة العامة', 'الاداره العامه', 'الاداره عامه', 'الادارة عامة', 'الإداره_العامة', 'الإداره العامة', 'إدارة عامة']:
+                        if col_name in raw_row.index:
+                            val = raw_row[col_name]
+                            if val == val:  # pd.notna check
+                                value = str(val) if str(val) not in ('nan', 'NaT', 'None') else ''
+                            break
             elif header_col == 'المالك':
                 # Extract from raw_df if available
                 if raw_row is not None:

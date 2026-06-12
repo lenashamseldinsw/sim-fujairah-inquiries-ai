@@ -81,6 +81,8 @@ COLUMN_MAPPING = {
     'الإدارة_العامة': 'الإدارة_العامة',
     'الاداره العامه': 'الإدارة_العامة',
     'الادارة العامة': 'الإدارة_العامة',
+    'الإدارة العامة ': 'الإدارة_العامة',  # trailing space
+    'إدارة عامة': 'الإدارة_العامة',  # shortened form
 }
 
 # Required normalized columns (critical for pipeline)
