@@ -130,6 +130,63 @@ def reconcile_faq_frequencies(
     return reconciled_faqs
 
 
+def filter_faqs_against_guidebook(
+    faq_list: List[FAQCandidate],
+    guidebook_path: Optional[str]
+) -> List[FAQCandidate]:
+    """
+    Filter out FAQs that already exist in the guidebook.
+
+    Only keep FAQs that are NOT already documented in guidebook_final.json.
+    This prevents recommending FAQs for issues that are already covered.
+
+    Args:
+        faq_list: FAQs to filter
+        guidebook_path: Path to guidebook JSON (if None, skip filtering)
+
+    Returns:
+        Filtered list of FAQs not in guidebook
+    """
+    if not guidebook_path or not faq_list:
+        return faq_list
+
+    try:
+        with open(guidebook_path, encoding="utf-8") as f:
+            guidebook = json.load(f)
+    except Exception as e:
+        print(f"[Stage5] Warning: Could not load guidebook for FAQ filtering: {e}")
+        return faq_list
+
+    # Extract existing FAQ questions from guidebook (both Arabic and English)
+    existing_questions = set()
+    for faq in guidebook.get('faq', []):
+        q_ar = (faq.get('question_ar') or '').strip().lower()
+        q_en = (faq.get('question') or '').strip().lower()
+        if q_ar:
+            existing_questions.add(q_ar)
+        if q_en:
+            existing_questions.add(q_en)
+
+    print(f"[Stage5] Found {len(existing_questions)} existing FAQs in guidebook")
+
+    # Filter generated FAQs: keep only those NOT in guidebook
+    filtered = []
+    for faq in faq_list:
+        faq_q_ar = (faq.question_ar or '').strip().lower()
+        faq_q_en = (faq.question or '').strip().lower()
+
+        # Check for exact matches (normalized)
+        is_existing = (faq_q_ar in existing_questions or faq_q_en in existing_questions)
+
+        if is_existing:
+            print(f"[Stage5] FILTERED: FAQ '{(faq.question_ar or faq.question or '')[:60]}' already in guidebook")
+        else:
+            filtered.append(faq)
+
+    print(f"[Stage5] ✓ Filtered FAQs: {len(faq_list)} → {len(filtered)} (removed {len(faq_list) - len(filtered)} existing)")
+    return filtered
+
+
 def find_guidebook_json() -> Optional[str]:
     """
     Find the complaints guidebook JSON file from multiple possible locations.
@@ -366,10 +423,11 @@ Return bilingual output (English and Arabic) for all content.
 def run_stage5(
     state: PipelineState,
     api_key: str,
-    guidebook_data: Optional[Dict] = None
+    guidebook_data: Optional[Dict] = None,
+    guidebook_path: Optional[str] = None
 ) -> PipelineState:
     """
-    Stage 5: Gap analysis.
+    Stage 5: Gap analysis and FAQ validation.
 
     Input: state with patterns, journey_map, faq_candidates from Stage 4
     Output: state with gap_table and validated_faqs
@@ -378,21 +436,29 @@ def run_stage5(
         state: Pipeline state
         api_key: Anthropic API key
         guidebook_data: Filtered guidebook dict with services, faq, fees_schedules
+        guidebook_path: Path to full guidebook JSON for FAQ deduplication
     """
+    # Find guidebook path if not provided
+    if not guidebook_path:
+        guidebook_path = find_guidebook_json()
+
     # When journey_map is empty, gap analysis cannot run — but we can still validate
     # faq_candidates so that Stage 6 has FAQ data for the digital_transformation section.
     if not state.journey_map:
         if state.faq_candidates:
             print(
                 "[Stage5] journey_map is empty — skipping gap analysis. "
-                "Promoting faq_candidates to validated_faqs without guidebook cross-check."
+                "Filtering and validating faq_candidates."
             )
             for faq in state.faq_candidates:
                 faq.validation_status = 'OK'
 
+            # Filter FAQs: remove any that already exist in guidebook
+            filtered_faqs = filter_faqs_against_guidebook(state.faq_candidates, guidebook_path)
+
             # Reconcile FAQ frequencies against actual case counts
             print("[Stage5] Reconciling FAQ frequencies against all_classified...")
-            reconciled = reconcile_faq_frequencies(state.faq_candidates, [], state.all_classified)
+            reconciled = reconcile_faq_frequencies(filtered_faqs, [], state.all_classified)
             state.validated_faqs = reconciled
         else:
             print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
@@ -818,16 +884,23 @@ def run_stage5(
                         if status == 'OK':
                             validated.append(faq)
 
+                    # Filter FAQs: remove any that already exist in guidebook
+                    filtered_validated = filter_faqs_against_guidebook(validated, guidebook_path)
+
                     # Reconcile FAQ frequencies against actual case counts from journey_map and all_classified
                     print("[Stage5] Reconciling FAQ frequencies against journey_map and all_classified...")
-                    state.validated_faqs = reconcile_faq_frequencies(validated, state.journey_map, state.all_classified)
+                    state.validated_faqs = reconcile_faq_frequencies(filtered_validated, state.journey_map, state.all_classified)
                 else:
                     # If no validations provided, assume all OK
                     for faq in state.faq_candidates:
                         faq.validation_status = 'OK'
+
+                    # Filter FAQs: remove any that already exist in guidebook
+                    filtered_faqs = filter_faqs_against_guidebook(state.faq_candidates, guidebook_path)
+
                     # Reconcile FAQ frequencies against actual case counts from journey_map and all_classified
                     print("[Stage5] Reconciling FAQ frequencies against journey_map and all_classified...")
-                    state.validated_faqs = reconcile_faq_frequencies(state.faq_candidates, state.journey_map, state.all_classified)
+                    state.validated_faqs = reconcile_faq_frequencies(filtered_faqs, state.journey_map, state.all_classified)
 
                 break
         else:

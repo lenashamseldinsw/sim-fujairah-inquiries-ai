@@ -298,7 +298,7 @@ class PipelineOrchestrator:
             # Load filtered guidebook data
             guidebook_data = load_guidebook_for_stage5(self.guidebook_path, friction_clusters)
 
-            self.state = run_stage5(self.state, self.api_key, guidebook_data)
+            self.state = run_stage5(self.state, self.api_key, guidebook_data, self.guidebook_path)
 
             # gap_table must be populated — if empty after retries, the LLM failed all attempts
             if not self.state.gap_table:

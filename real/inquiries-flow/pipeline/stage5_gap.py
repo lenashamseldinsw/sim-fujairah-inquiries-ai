@@ -256,6 +256,63 @@ def reconcile_faq_frequencies(
     return reconciled_faqs
 
 
+def filter_faqs_against_guidebook(
+    faq_list: List[FAQCandidate],
+    guidebook_path: Optional[str]
+) -> List[FAQCandidate]:
+    """
+    Filter out FAQs that already exist in the guidebook.
+
+    Only keep FAQs that are NOT already documented in guidebook_final.json.
+    This prevents recommending FAQs for issues that are already covered.
+
+    Args:
+        faq_list: FAQs to filter
+        guidebook_path: Path to guidebook JSON (if None, skip filtering)
+
+    Returns:
+        Filtered list of FAQs not in guidebook
+    """
+    if not guidebook_path or not faq_list:
+        return faq_list
+
+    try:
+        with open(guidebook_path, encoding="utf-8") as f:
+            guidebook = json.load(f)
+    except Exception as e:
+        print(f"[Stage5] Warning: Could not load guidebook for FAQ filtering: {e}")
+        return faq_list
+
+    # Extract existing FAQ questions from guidebook (both Arabic and English)
+    existing_questions = set()
+    for faq in guidebook.get('faq', []):
+        q_ar = (faq.get('question_ar') or '').strip().lower()
+        q_en = (faq.get('question') or '').strip().lower()
+        if q_ar:
+            existing_questions.add(q_ar)
+        if q_en:
+            existing_questions.add(q_en)
+
+    print(f"[Stage5] Found {len(existing_questions)} existing FAQs in guidebook")
+
+    # Filter generated FAQs: keep only those NOT in guidebook
+    filtered = []
+    for faq in faq_list:
+        faq_q_ar = (faq.question_ar or '').strip().lower()
+        faq_q_en = (faq.question or '').strip().lower()
+
+        # Check for exact matches (normalized)
+        is_existing = (faq_q_ar in existing_questions or faq_q_en in existing_questions)
+
+        if is_existing:
+            print(f"[Stage5] FILTERED: FAQ '{(faq.question_ar or faq.question or '')[:60]}' already in guidebook")
+        else:
+            filtered.append(faq)
+
+    print(f"[Stage5] ✓ Filtered FAQs: {len(faq_list)} → {len(filtered)} (removed {len(faq_list) - len(filtered)} existing)")
+    return filtered
+
+
 def build_gap_analysis_prompt(
     patterns: List[Dict],
     journey_map: List[Dict],
@@ -336,10 +393,11 @@ Return bilingual output (English and Arabic) for all content.
 def run_stage5(
     state: PipelineState,
     api_key: str,
-    guidebook_data: Optional[Dict] = None
+    guidebook_data: Optional[Dict] = None,
+    guidebook_path: Optional[str] = None
 ) -> PipelineState:
     """
-    Stage 5: Gap analysis.
+    Stage 5: Gap analysis and FAQ validation.
 
     Input: state with patterns, journey_map, faq_candidates from Stage 4
     Output: state with gap_table and validated_faqs
@@ -348,17 +406,25 @@ def run_stage5(
         state: Pipeline state
         api_key: Anthropic API key
         guidebook_data: Filtered guidebook dict with services, faq, fees_schedules
+        guidebook_path: Path to full guidebook JSON for FAQ deduplication
     """
+    # Find guidebook path if not provided
+    if not guidebook_path:
+        guidebook_path = find_guidebook_json() if 'find_guidebook_json' in globals() else None
+
     # When journey_map is empty, gap analysis cannot run — but we can still validate
     # faq_candidates so that Stage 6 has FAQ data for the digital_transformation section.
     if not state.journey_map:
         if state.faq_candidates:
             print(
                 "[Stage5] journey_map is empty — skipping gap analysis. "
-                "Reconciling faq_candidates frequencies using all_classified."
+                "Filtering and validating faq_candidates."
             )
+            # Filter FAQs: remove any that already exist in guidebook
+            filtered_faqs = filter_faqs_against_guidebook(state.faq_candidates, guidebook_path)
+
             # Reconcile FAQ frequencies using sub_classification matching
-            reconciled = reconcile_faq_frequencies(state.faq_candidates, state.journey_map or [], state.all_classified or [])
+            reconciled = reconcile_faq_frequencies(filtered_faqs, state.journey_map or [], state.all_classified or [])
             for faq in reconciled:
                 faq.validation_status = 'OK'
             state.validated_faqs = reconciled
@@ -560,14 +626,21 @@ def run_stage5(
                         if status == 'OK':
                             validated.append(faq)
 
+                    # Filter FAQs: remove any that already exist in guidebook
+                    filtered_validated = filter_faqs_against_guidebook(validated, guidebook_path)
+
                     # Reconcile frequencies using sub_classification matching
-                    reconciled = reconcile_faq_frequencies(validated, state.journey_map or [], state.all_classified or [])
+                    reconciled = reconcile_faq_frequencies(filtered_validated, state.journey_map or [], state.all_classified or [])
                     state.validated_faqs = reconciled
                 else:
                     # If no validations provided, reconcile all candidates
                     for faq in state.faq_candidates:
                         faq.validation_status = 'OK'
-                    reconciled = reconcile_faq_frequencies(state.faq_candidates, state.journey_map or [], state.all_classified or [])
+
+                    # Filter FAQs: remove any that already exist in guidebook
+                    filtered_faqs = filter_faqs_against_guidebook(state.faq_candidates, guidebook_path)
+
+                    reconciled = reconcile_faq_frequencies(filtered_faqs, state.journey_map or [], state.all_classified or [])
                     state.validated_faqs = reconciled
 
                 break
