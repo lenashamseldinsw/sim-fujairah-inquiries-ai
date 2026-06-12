@@ -216,6 +216,9 @@ def _generate_faq_candidates_by_service(
         if len(cases) < 2:  # Skip services with fewer than 2 cases
             continue
 
+        # Extract top_level from first case (all cases in complaints flow should have same top_level)
+        service_top_level = (cases[0].top_level or "شكوى").strip() if cases else "شكوى"
+
         # Build case summary for this service
         case_summary = f"\n=== Service: {service_name} ({len(cases)} total cases) ===\n"
 
@@ -283,7 +286,7 @@ IMPORTANT:
                             answer_ar=faq_data.get("answer_ar", ""),
                             frequency=0,  # Will be reconciled in Stage 5
                             validation_status="PENDING",
-                            top_level=None,  # Will be set to service's top_level in Stage 5
+                            top_level=service_top_level,  # Set to complaint category from cases
                             sub_classification=service_name,  # Service as sub-classification
                             evidence_case_ids=valid_evidence,
                         )
