@@ -691,7 +691,7 @@ def _retry_faq_only(
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=12000,  # INCREASED from 8000 for better translation
+                max_tokens=8000,  # Match complaints flow
                 system=system_prompt,
                 tools=[FAQ_ONLY_TOOL],
                 tool_choice={"type": "any"},
@@ -782,7 +782,7 @@ def _retry_journey_map_only(
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=8000,  # INCREASED from 4000 for better translation
+                max_tokens=4000,  # Match complaints flow
                 system=system_prompt,
                 tools=[JOURNEY_MAP_ONLY_TOOL],
                 tool_choice={"type": "any"},
@@ -920,7 +920,7 @@ CRITICAL RULES:
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=4000,  # INCREASED from 2000 to prevent truncation
+                max_tokens=2000,  # Match complaints flow
                 messages=[{"role": "user", "content": prompt}],
             )
 
@@ -1037,7 +1037,7 @@ Only include FAQs that are directly supported by the case examples above.
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=2000,  # INCREASED from 1000 for better translation
+                max_tokens=1000,  # Match complaints flow
                 messages=[{"role": "user", "content": prompt}],
             )
 
