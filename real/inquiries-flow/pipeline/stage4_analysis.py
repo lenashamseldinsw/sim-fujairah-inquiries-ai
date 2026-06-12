@@ -954,6 +954,22 @@ CRITICAL RULES:
 
                 # THRESHOLD: Only include FAQs with 3+ evidence cases
                 if len(valid_evidence) >= 3:
+                    # Determine FAQ sub_classification from actual evidence case sub_classifications
+                    # (not from service_name, which breaks semantic link to actual classifications)
+                    evidence_subs = {}
+                    for case in cases:
+                        if case.case_number in valid_evidence:
+                            sub = case.sub_classification or "unknown"
+                            evidence_subs[sub] = evidence_subs.get(sub, 0) + 1
+
+                    # Use most common sub_classification from evidence cases
+                    # Falls back to service_name if no sub_classifications found
+                    faq_sub = (
+                        max(evidence_subs.items(), key=lambda x: x[1])[0]
+                        if evidence_subs
+                        else service_name
+                    )
+
                     faq = FAQCandidate(
                         question=faq_data.get("question", ""),
                         question_ar=faq_data.get("question_ar", ""),
@@ -962,7 +978,7 @@ CRITICAL RULES:
                         frequency=0,  # Will be reconciled in Stage 5
                         validation_status="PENDING",
                         top_level=service_top_level,  # Set to inquiry category from cases
-                        sub_classification=service_name,  # Service as sub-classification
+                        sub_classification=faq_sub,  # Use actual case sub_classification, not service_name
                         evidence_case_ids=valid_evidence,
                     )
                     faq_list.append(faq)
