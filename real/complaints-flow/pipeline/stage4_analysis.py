@@ -182,6 +182,101 @@ def _overlap_ratio(text_a: str, text_b: str, min_word_len: int = 3) -> float:
     return len(words_a & words_b) / len(words_a)
 
 
+def _generate_faq_candidates_from_grouped_cases(
+    state: PipelineState,
+    client: anthropic.Anthropic,
+    groups: Dict[tuple, List],
+) -> List[FAQCandidate]:
+    """
+    Generate FAQ candidates from grouped cases without token explosion.
+
+    Instead of asking the LLM to extract FAQs from 1000+ cases, group cases
+    by sub_classification and ask the LLM to write 1-2 FAQs per group.
+    This stays within token budget while covering the full dataset.
+
+    Args:
+        state: Pipeline state
+        client: Anthropic API client
+        groups: Dict of (top_level, sub_classification) → [cases]
+
+    Returns:
+        List of FAQCandidate objects (frequency set to 0 initially, reconciled in Stage 5)
+    """
+    faq_list = []
+
+    # For each sub_classification group, ask LLM to write FAQ questions
+    for (top_level, sub_classification), cases in sorted(groups.items()):
+        if not cases:
+            continue
+
+        # Sample up to 5 cases per group (enough for LLM to understand pattern)
+        sample_cases = cases[:5]
+
+        # Build case summary for this group
+        case_sample_text = f"\n=== {top_level} > {sub_classification} ({len(cases)} total cases) ===\n"
+        for case in sample_cases:
+            case_sample_text += f"Case {case.case_number}:\n"
+            case_sample_text += f"  Description: {case.description[:200]}\n"
+            case_sample_text += f"  Resolution: {case.resolution_response[:200]}\n\n"
+
+        # Ask LLM to write FAQ for this group
+        prompt = f"""Based on these {len(cases)} customer complaints in the category '{sub_classification}',
+identify the key question(s) customers are asking. Write 1-2 FAQ pairs (question + answer)
+that would address this group.
+
+{case_sample_text}
+
+Return as JSON:
+{{
+  "faqs": [
+    {{"question": "...", "question_ar": "...", "answer": "...", "answer_ar": "..."}},
+    ...
+  ]
+}}
+
+Only include FAQs that are directly supported by the complaint examples above.
+"""
+
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            # Parse response
+            response_text = message.content[0].text if message.content else ""
+            import json as json_module
+
+            # Extract JSON from response
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                result = json_module.loads(json_str)
+
+                for faq_data in result.get("faqs", []):
+                    faq = FAQCandidate(
+                        question=faq_data.get("question", ""),
+                        question_ar=faq_data.get("question_ar", ""),
+                        answer=faq_data.get("answer", ""),
+                        answer_ar=faq_data.get("answer_ar", ""),
+                        frequency=0,  # Will be reconciled in Stage 5
+                        validation_status="PENDING",
+                        top_level=top_level,
+                        sub_classification=sub_classification,
+                        evidence_case_ids=[case.case_number for case in sample_cases],
+                    )
+                    faq_list.append(faq)
+                    print(f"[Stage4-FAQ-Gen] {sub_classification}: {faq.question_ar[:50]}...")
+
+        except Exception as e:
+            print(f"[Stage4-FAQ-Gen] Error generating FAQ for {sub_classification}: {e}")
+            continue
+
+    return faq_list
+
+
 def build_analysis_system_prompt(methodology_context: Optional[Dict[str, Any]] = None) -> str:
     """Build system prompt for analysis with two-level taxonomy and complaints-specific disambiguation.
 
@@ -1267,6 +1362,17 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
     if not state.faq_candidates and state.all_classified:
         print("[Stage4] faq_candidates is empty after all main attempts — running focused faq-only retry...")
         state = _retry_faq_only(state, client, cases_text)
+
+    if not state.faq_candidates and state.all_classified:
+        print("[Stage4] faq_candidates still empty after focused retry — generating from grouped cases...")
+        try:
+            state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
+                state, client, groups
+            )
+            if state.faq_candidates:
+                print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates from grouped cases")
+        except Exception as e:
+            print(f"[Stage4] ERROR generating grouped FAQs: {e}")
 
     if not state.faq_candidates:
         print(
