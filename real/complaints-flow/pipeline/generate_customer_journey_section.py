@@ -480,7 +480,7 @@ def generate_customer_journey_section(
 
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=6000,  # Increased from 4000 — friction_table with actions needs more space
+            max_tokens=8000,  # Large friction table with long Arabic descriptions
             messages=[{"role": "user", "content": prompt}],
         )
 
