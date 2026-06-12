@@ -1090,6 +1090,18 @@ class JSONReportBuilder:
         # ── Build table dicts ────────────────────────────────────────────────────
         gap_table_rows = dg_raw["gap_table"]
 
+        # FILTER: Remove gaps with 0 cases (matches Section 4 and 5.2 approach)
+        original_count = len(gap_table_rows)
+        gap_table_rows = [
+            row for row in gap_table_rows
+            if row.get("الحالات") and str(row.get("الحالات", "0")).strip() != "0"
+        ]
+        if len(gap_table_rows) < original_count:
+            print(
+                f"[JSONReportBuilder] INFO: Section 5.1 filtered out {original_count - len(gap_table_rows)} "
+                f"gaps with 0 cases. Remaining: {len(gap_table_rows)}"
+            )
+
         # SOURCE: state.gap_table — post-reconciliation
         # Override case counts from LLM with authoritative values from state.gap_table.
         # The LLM was called with pre-reconciliation counts; we sync them here.
