@@ -519,16 +519,7 @@ def generate_digital_gaps_section(
         f'   - State the core finding: {submission_channel_pct}% of cases came through digital submission channels (التطبيق / الموقع الإلكتروني/ بريد الكتروني/NCRM),\n'
         '     yet problems persist. The problem is not the absence of digital channels —\n'
         '     it is the absence of the right functions inside those channels.\n'
-        + (
-            f'     OPTIONAL: Additionally, {friction_digital_context_pct}% of friction cases are ROOTED IN A DIGITAL SERVICE CONTEXT\n'
-            '     (app error, online renewal, digital payment) — cite this if it strengthens the finding.\n'
-            f'     Frame as: "{friction_digital_context_pct}% من الحالات نشأت في سياق رقمي (التطبيق / الموقع)"\n'
-            if friction_digital_context_pct > 0 else
-            '     Focus on submission channel percentage — friction_digital_context is not available.\n'
-            '     Use gap count to anchor the claim: "المشكلة ليست في غياب القنوات الرقمية بل في غياب الوظائف\n'
-            '     الصحيحة داخلها" with {critical_count} critical gaps identified.\n'
-        )
-        + f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
+        f'   - Mention {critical_count} critical gaps and {medium_count} high-severity gaps,\n'
         + f'     citing «{top_gap_name}» as the largest ({top_gap_count} cases). Use « » (angle brackets), never double quotes, around topic names.\n'
         + proactive_instruction
         + f'   - When referencing the total of {total_rc_cases} cases in the root causes table:\n'
