@@ -1242,7 +1242,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=24000,  # INCREASED from 16000 for better English translation space
+            max_tokens=16000,  # Match complaints flow (avoid 10-minute timeout)
             system=build_analysis_system_prompt(),
             tools=[ANALYSIS_TOOL],
             tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
