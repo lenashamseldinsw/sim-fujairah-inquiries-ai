@@ -761,7 +761,7 @@ def generate_digital_gaps_section(
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=8000,
+        max_tokens=12000,  # 18 gaps × long descriptions + root_cause table
         messages=[{"role": "user", "content": prompt}],
     )
 
