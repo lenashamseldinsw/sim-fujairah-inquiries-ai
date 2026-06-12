@@ -841,6 +841,125 @@ def _retry_journey_map_only(
     return state
 
 
+def _generate_faq_candidates_by_service(
+    state: PipelineState,
+    client: anthropic.Anthropic,
+) -> List[FAQCandidate]:
+    """
+    Generate FAQ candidates by splitting dataset by service type.
+
+    For each service (excluding "أخرى"), extract FAQs from all cases in that service.
+    This keeps token budgets low while ensuring LLM sees full service context.
+
+    Only include FAQs with 3+ evidence cases (threshold).
+
+    Args:
+        state: Pipeline state with all_classified cases
+        client: Anthropic API client
+
+    Returns:
+        List of FAQCandidate objects (frequency set to 0, reconciled in Stage 5)
+    """
+    faq_list = []
+
+    # Extract unique services, excluding "أخرى" (Other)
+    service_groups = defaultdict(list)
+    for case in state.all_classified:
+        service = (case.service_name or "").strip()
+        if service and service != "أخرى":
+            service_groups[service].append(case)
+
+    print(f"[Stage4-Service-FAQ] Found {len(service_groups)} services, processing FAQs...")
+
+    for service_name, cases in sorted(service_groups.items()):
+        if len(cases) < 2:  # Skip services with fewer than 2 cases
+            continue
+
+        # Build case summary for this service
+        case_summary = f"\n=== Service: {service_name} ({len(cases)} total cases) ===\n"
+
+        # Show all case descriptions for this service (not just samples)
+        for case in cases:
+            case_summary += f"Case {case.case_number}:\n"
+            case_summary += f"  Description: {case.description[:200]}\n"
+            case_summary += f"  Resolution: {case.resolution_response[:200]}\n\n"
+
+        # Ask LLM to extract FAQs from all cases in this service
+        prompt = f"""You are analyzing customer cases for the service: '{service_name}'
+
+Below are all {len(cases)} cases for this service. Extract the key FAQ questions that customers are asking.
+
+{case_summary}
+
+For each FAQ, identify 3+ specific case numbers from above that this FAQ answers.
+
+Return as JSON:
+{{
+  "faqs": [
+    {{"question": "...", "question_ar": "...", "answer": "...", "answer_ar": "...", "case_ids": ["case_number1", "case_number2", "case_number3", ...]}},
+    ...
+  ]
+}}
+
+IMPORTANT:
+- Only include FAQs supported by 3+ cases
+- case_ids must be actual case numbers from the list above
+- Answer in Arabic for answer_ar
+- Be specific to this service's context
+"""
+
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            response_text = message.content[0].text if message.content else ""
+            import json as json_module
+
+            # Extract JSON from response
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                result = json_module.loads(json_str)
+
+                # Valid case numbers for this service
+                valid_case_numbers = {case.case_number for case in cases}
+
+                for faq_data in result.get("faqs", []):
+                    # Get evidence case IDs and filter to valid ones
+                    evidence_ids = faq_data.get("case_ids", [])
+                    valid_evidence = [cid for cid in evidence_ids if cid in valid_case_numbers]
+
+                    # THRESHOLD: Only include FAQs with 3+ evidence cases
+                    if len(valid_evidence) >= 3:
+                        faq = FAQCandidate(
+                            question=faq_data.get("question", ""),
+                            question_ar=faq_data.get("question_ar", ""),
+                            answer=faq_data.get("answer", ""),
+                            answer_ar=faq_data.get("answer_ar", ""),
+                            frequency=0,  # Will be reconciled in Stage 5
+                            validation_status="PENDING",
+                            top_level=None,  # Will be set to service's top_level in Stage 5
+                            sub_classification=service_name,  # Service as sub-classification
+                            evidence_case_ids=valid_evidence,
+                        )
+                        faq_list.append(faq)
+                        print(f"[Stage4-Service-FAQ] {service_name}: {faq.question_ar[:60]}... ({len(valid_evidence)} cases)")
+                    else:
+                        q_preview = faq_data.get("question_ar", "")[:50]
+                        print(f"[Stage4-Service-FAQ] FILTERED: {service_name} FAQ '{q_preview}' has only {len(valid_evidence)} cases (threshold: 3+)")
+
+        except Exception as e:
+            print(f"[Stage4-Service-FAQ] Error generating FAQs for {service_name}: {e}")
+            continue
+
+    print(f"[Stage4-Service-FAQ] ✓ Generated {len(faq_list)} FAQ candidates from {len(service_groups)} services")
+    return faq_list
+
+
 def _generate_faq_candidates_from_grouped_cases(
     state: PipelineState,
     client: anthropic.Anthropic,
@@ -1301,7 +1420,18 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
         state = _retry_faq_only(state, client, cases_text)
 
     if not state.faq_candidates and state.all_classified:
-        print("[Stage4] faq_candidates still empty after focused retry — generating from grouped cases...")
+        print("[Stage4] faq_candidates still empty after focused retry — generating by service type...")
+        try:
+            state.faq_candidates = _generate_faq_candidates_by_service(
+                state, client
+            )
+            if state.faq_candidates:
+                print(f"[Stage4] ✓ Generated {len(state.faq_candidates)} FAQ candidates by service")
+        except Exception as e:
+            print(f"[Stage4] ERROR generating service-based FAQs: {e}")
+
+    if not state.faq_candidates and state.all_classified:
+        print("[Stage4] faq_candidates still empty after service split — generating from grouped cases...")
         try:
             state.faq_candidates = _generate_faq_candidates_from_grouped_cases(
                 state, client, groups

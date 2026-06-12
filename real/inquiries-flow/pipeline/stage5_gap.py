@@ -209,64 +209,47 @@ def reconcile_faq_frequencies(
     all_classified: List[Any]
 ) -> List[FAQCandidate]:
     """
-    Reconcile FAQ frequencies using Stage 4 audit trail (assigned_faq_id).
+    Reconcile FAQ frequencies using evidence_case_ids (LLM-provided case evidence).
 
-    AUDIT TRAIL VALIDATION: Count actual case assignments
-    - Stage 4 builds audit trail: each case tagged with assigned_faq_id (FAQ1, FAQ2, etc.)
-    - This function counts cases matching each FAQ's ID
-    - Frequency = actual count of cases where assigned_faq_id matches this FAQ
-    - Result: COUNTIF-verifiable frequencies based on real case assignments, not LLM guesses
+    EVIDENCE-BASED VALIDATION: Count actual cases the LLM explicitly cited
+    - Stage 4 LLM extracts FAQs with explicit evidence_case_ids
+    - This function validates those IDs against all_classified (ensuring they exist)
+    - Frequency = count of valid evidence_case_ids (cases LLM explicitly cited)
+    - Result: Accurate frequencies based on LLM's explicit evidence, not inference
 
-    Falls back to evidence_case_ids if audit trail is not available (backward compatibility).
+    Advantages:
+    - Works for service-split FAQ generation (LLM chooses evidence per service)
+    - Works for main LLM extraction (LLM chooses evidence from samples)
+    - No loose word-overlap matching that causes undercounting/overcounting
+    - Threshold enforced at generation time (3+ cases minimum)
     """
     if not faq_list or not all_classified:
         return faq_list
 
-    # Check if audit trail exists (assigned_faq_id fields populated by Stage 4)
-    has_audit_trail = any(
-        getattr(case, 'assigned_faq_id', None)
-        for case in all_classified
-    )
+    # Build case number lookup for validation
+    case_numbers = {case.case_number for case in all_classified}
 
     reconciled_faqs = []
 
     for faq_index, faq in enumerate(faq_list):
         q_text = (faq.question_ar or faq.question or '').strip()
-        reconciled_frequency = 0
-        signal_used = "rejected (no audit trail or evidence)"
 
-        if has_audit_trail:
-            # ── PRIMARY: Use audit trail from Stage 4 ─────────────────────────────
-            # Each case is tagged with assigned_faq_id (FAQ1, FAQ2, etc.)
-            # Count cases where assigned_faq_id matches this FAQ's position
-            faq_id = f"FAQ{faq_index + 1}"
-            matching_cases = [
-                case for case in all_classified
-                if getattr(case, 'assigned_faq_id', None) == faq_id
-            ]
-            reconciled_frequency = len(matching_cases)
-            signal_used = f"audit trail: {reconciled_frequency} cases tagged {faq_id}"
+        # Get evidence_case_ids from Stage 4
+        evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
 
-            if reconciled_frequency == 0:
-                # FAQ has no matching cases in audit trail
-                signal_used = f"audit trail: no cases tagged {faq_id}"
+        # Validate evidence against actual cases
+        valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
+        reconciled_frequency = len(valid_evidence)
 
+        if len(valid_evidence) < len(evidence_ids):
+            # Some evidence cases don't exist (LLM hallucinated)
+            signal = f"evidence: {len(valid_evidence)}/{len(evidence_ids)} valid (hallucinations filtered)"
         else:
-            # ── FALLBACK: Use evidence_case_ids (backward compatibility) ──────────
-            # If audit trail not available, validate evidence_case_ids against actual cases
-            evidence_ids = getattr(faq, 'evidence_case_ids', []) or []
-
-            if evidence_ids:
-                case_numbers = {case.case_number for case in all_classified}
-                valid_evidence = [cid for cid in evidence_ids if cid in case_numbers]
-                reconciled_frequency = len(valid_evidence)
-                signal_used = f"evidence: {len(valid_evidence)}/{len(evidence_ids)} valid cases"
-            else:
-                signal_used = "rejected (no evidence_case_ids)"
+            signal = f"evidence: {len(valid_evidence)} cases verified"
 
         print(
             f"[Stage5] FAQ {faq_index + 1} '{q_text[:50]}': "
-            f"{getattr(faq, 'frequency', 0)} → {reconciled_frequency} [{signal_used}]"
+            f"{getattr(faq, 'frequency', 0)} → {reconciled_frequency} [{signal}]"
         )
         reconciled_faqs.append(faq.model_copy(update={"frequency": reconciled_frequency}))
 
