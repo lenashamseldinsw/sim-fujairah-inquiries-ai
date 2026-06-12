@@ -430,12 +430,14 @@ def run_stage5(
 
     # Call Claude with tool-use — retry up to 3 times if gap_table comes back empty
     MAX_ATTEMPTS = 3
+    tool_call_failed = False
+
     for attempt in range(1, MAX_ATTEMPTS + 1):
         if attempt > 1:
-            print(f"[Stage5] Retrying LLM call (attempt {attempt}/{MAX_ATTEMPTS}) — gap_table was empty on previous attempt")
+            print(f"[Stage5] Retrying LLM call (attempt {attempt}/{MAX_ATTEMPTS}) — previous attempt returned empty gap_table")
 
         # Build system prompt with optional methodology context
-        system_prompt = "You are an expert analyst of government customer service complaints. Provide gap analysis based on the guidebook and complaint patterns. Return detailed, bilingual recommendations."
+        system_prompt = "You are an expert analyst of government customer service complaints. Provide gap analysis based on the guidebook and complaint patterns. Return detailed, bilingual recommendations. IMPORTANT: You MUST call the analyze_gaps tool with a non-empty gap_table array."
 
         if methodology_context:
             methodology_text = "\n\n### السياق: معايير الأداء من المنهجية (الإصدار 4.0)\n\n"
@@ -454,30 +456,37 @@ def run_stage5(
 
             system_prompt += methodology_text
 
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=16000,  # Large datasets need room for full gap_table + faq_validations
-            system=system_prompt,
-            tools=[GAP_ANALYSIS_TOOL],
-            tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=16000,  # Large datasets need room for full gap_table + faq_validations
+                system=system_prompt,
+                tools=[GAP_ANALYSIS_TOOL],
+                tool_choice={"type": "any"},  # Force tool use to prevent silent fallback to text
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+        except Exception as e:
+            print(f"[Stage5] ERROR on attempt {attempt}: {str(e)}")
+            tool_call_failed = True
+            continue
 
         # Extract tool use result
         print(f"[Stage5] Attempt {attempt}: message has {len(message.content)} blocks")
+        tool_found = False
+
         for i, block in enumerate(message.content):
             print(f"[Stage5] Block {i}: type={block.type}")
             if block.type == "text":
                 print(f"[Stage5]   Text: {block.text[:200]}")
             if block.type == "tool_use":
+                tool_found = True
                 print(f"[Stage5] Tool call received: {block.name}")
                 print(f"[Stage5] Input type: {type(block.input)}")
-                print(f"[Stage5] Input value: {block.input}")
                 print(f"[Stage5] Keys in response: {list(block.input.keys()) if isinstance(block.input, dict) else 'N/A'}")
                 print(f"[Stage5] gap_table length: {len(block.input.get('gap_table', []))}")
                 print(f"[Stage5] faq_validations length: {len(block.input.get('faq_validations', []))}")
@@ -485,7 +494,7 @@ def run_stage5(
                 if block.input.get('gap_table'):
                     print(f"[Stage5] First gap: {block.input['gap_table'][0]}")
                 else:
-                    print(f"[Stage5] gap_table raw value: {block.input.get('gap_table')}")
+                    print(f"[Stage5] WARNING: gap_table is empty in tool response")
 
                 analysis = block.input
 
@@ -823,16 +832,27 @@ def run_stage5(
                 break
         else:
             # No tool_use block found in this attempt
-            print(f"[Stage5] WARNING: No tool call in LLM response on attempt {attempt}")
+            if message.content:
+                print(f"[Stage5] WARNING: No tool_use block found on attempt {attempt}. Message content was: {[b.type for b in message.content]}")
+            else:
+                print(f"[Stage5] WARNING: Empty message content on attempt {attempt}")
 
         if state.gap_table:
             print(f"[Stage5] ✓ gap_table populated with {len(state.gap_table)} rows on attempt {attempt}")
             break
-
-        if attempt < MAX_ATTEMPTS:
-            print(f"[Stage5] WARNING: gap_table empty after attempt {attempt} — retrying...")
+        else:
+            if tool_found:
+                print(f"[Stage5] Tool was called but gap_table is still empty after processing")
+            if attempt < MAX_ATTEMPTS:
+                print(f"[Stage5] Will retry (attempt {attempt + 1}/{MAX_ATTEMPTS})...")
 
     if not state.gap_table:
-        print(f"[Stage5] WARNING: gap_table is empty after all {MAX_ATTEMPTS} LLM attempts — tool call may have failed or guidebook content unavailable")
+        error_msg = (
+            f"[Stage5] FAILED: gap_table is empty after all {MAX_ATTEMPTS} LLM attempts. "
+            f"LLM did not produce gap analysis despite having {len(state.journey_map)} friction clusters. "
+            f"Check logs for: tool call failures, empty gap_table arrays, or API errors."
+        )
+        print(error_msg)
+        raise RuntimeError(error_msg)
 
     return state
