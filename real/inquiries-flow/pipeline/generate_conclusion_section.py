@@ -491,7 +491,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=3000,
+        max_tokens=4000,  # Increased from 3000 — more space for three prose sections + pivot table
         messages=[{"role": "user", "content": prompt}],
     )
 
