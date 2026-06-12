@@ -198,38 +198,43 @@ def _translate_single_section_json(
         return None
 
 
-def translate_report_sections_parallel(
-    report_sections_ar: Dict[str, Dict[str, Any]],
+def translate_complete_report_json_parallel(
+    report_json: Dict[str, Any],
     api_key: str,
     max_workers: int = 9,
-) -> Optional[Dict[str, Dict[str, Any]]]:
+) -> Optional[Dict[str, Any]]:
     """
-    Translate 9 report sections in parallel using threads with retry logic.
+    Translate complete report JSON by splitting into 9 sections and translating in parallel.
 
-    Each section is translated independently with up to MAX_ATTEMPTS retries.
-    Sections that fail translation are kept in Arabic as fallback.
+    The report JSON has a 'sections' key containing 9 section dicts. Each section is translated
+    independently with up to MAX_ATTEMPTS retries. Sections that fail are kept in Arabic.
 
     Args:
-        report_sections_ar: Dict with 9 section keys (executive_summary, methodology, etc.)
+        report_json: Complete Arabic report JSON with 'sections' key
         api_key: Anthropic API key
         max_workers: Number of parallel threads (default 9)
 
     Returns:
-        report_sections_en: Same structure as report_sections_ar with translated string values,
-                           or None if all sections fail
+        Complete English report JSON with same structure, or None if all sections fail
     """
-    if not report_sections_ar:
-        print("[TranslateSectionsParallel] report_sections_ar is empty — skipping translation.")
+    if not report_json:
+        print("[TranslateReportParallel] report_json is empty — skipping translation.")
         return None
 
     if not api_key:
-        print("[TranslateSectionsParallel] No API key provided — skipping translation.")
+        print("[TranslateReportParallel] No API key provided — skipping translation.")
         return None
 
-    print(f"[TranslateSectionsParallel] Starting parallel translation of {len(report_sections_ar)} sections...")
+    # Extract sections from report JSON
+    sections = report_json.get('sections', [])
+    if not sections:
+        print("[TranslateReportParallel] No sections found in report_json — skipping translation.")
+        return None
 
-    def translate_section_with_retry(section_key: str, section_data: Dict[str, Any]) -> tuple[str, Optional[Dict[str, Any]]]:
-        """Translate one section with up to MAX_ATTEMPTS retries."""
+    print(f"[TranslateReportParallel] Starting parallel translation of complete report ({len(sections)} sections)...")
+
+    def translate_section_with_retry(section_index: int, section_data: Dict[str, Any]) -> tuple[int, Optional[Dict[str, Any]]]:
+        """Translate one section of the report with up to MAX_ATTEMPTS retries."""
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 section_json_str = json.dumps(section_data, ensure_ascii=False, indent=2)
@@ -237,62 +242,66 @@ def translate_report_sections_parallel(
 
                 if translated:
                     if attempt > 1:
-                        print(f"[TranslateSectionsParallel] ✓ Section '{section_key}' translated (attempt {attempt})")
+                        print(f"[TranslateReportParallel] ✓ Section {section_index+1}/{len(sections)} translated (attempt {attempt})")
                     else:
-                        print(f"[TranslateSectionsParallel] ✓ Section '{section_key}' translated")
-                    return section_key, translated
+                        print(f"[TranslateReportParallel] ✓ Section {section_index+1}/{len(sections)} translated")
+                    return section_index, translated
 
                 # Empty response, retry
-                print(f"[TranslateSectionsParallel] Section '{section_key}' attempt {attempt}: empty response, retrying...")
+                print(f"[TranslateReportParallel] Section {section_index+1} attempt {attempt}: empty response, retrying...")
                 if attempt == MAX_ATTEMPTS:
-                    return section_key, None
+                    return section_index, None
                 continue
 
             except json.JSONDecodeError as exc:
-                print(f"[TranslateSectionsParallel] Section '{section_key}' attempt {attempt}: JSON parse failed: {exc}")
+                print(f"[TranslateReportParallel] Section {section_index+1} attempt {attempt}: JSON parse failed: {exc}")
                 if attempt == MAX_ATTEMPTS:
-                    return section_key, None
+                    return section_index, None
                 continue
 
             except Exception as exc:
-                print(f"[TranslateSectionsParallel] Section '{section_key}' attempt {attempt}: {type(exc).__name__}: {exc}")
+                print(f"[TranslateReportParallel] Section {section_index+1} attempt {attempt}: {type(exc).__name__}: {exc}")
                 if attempt == MAX_ATTEMPTS:
-                    return section_key, None
+                    return section_index, None
                 continue
 
-        return section_key, None
+        return section_index, None
 
-    # Run all sections in parallel using ThreadPoolExecutor
-    report_sections_en: Dict[str, Dict[str, Any]] = {}
-    section_order = list(report_sections_ar.keys())
+    # Run all sections in parallel
+    translated_sections: Dict[int, Dict[str, Any]] = {}
     successful_count = 0
-    failed_sections = []
+    failed_indices = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all section translations
         futures = {
-            executor.submit(translate_section_with_retry, key, data): key
-            for key, data in report_sections_ar.items()
+            executor.submit(translate_section_with_retry, idx, section): idx
+            for idx, section in enumerate(sections)
         }
 
         # Collect results as they complete
         for future in as_completed(futures):
-            section_key, translated = future.result()
+            section_index, translated = future.result()
 
             if translated:
-                report_sections_en[section_key] = translated
+                translated_sections[section_index] = translated
                 successful_count += 1
             else:
                 # Fallback: keep original Arabic section
-                print(f"[TranslateSectionsParallel] ⚠️  Section '{section_key}' translation failed, keeping Arabic")
-                report_sections_en[section_key] = report_sections_ar[section_key]
-                failed_sections.append(section_key)
+                print(f"[TranslateReportParallel] ⚠️  Section {section_index+1} translation failed, keeping Arabic")
+                translated_sections[section_index] = sections[section_index]
+                failed_indices.append(section_index + 1)
 
     # Summary
-    print(f"[TranslateSectionsParallel] ✅ Complete — {successful_count}/{len(report_sections_ar)} sections translated")
-    if failed_sections:
-        print(f"[TranslateSectionsParallel] Failed sections kept in Arabic: {', '.join(failed_sections)}")
+    print(f"[TranslateReportParallel] ✅ Complete — {successful_count}/{len(sections)} sections translated")
+    if failed_indices:
+        print(f"[TranslateReportParallel] Failed sections kept in Arabic: {', '.join(map(str, failed_indices))}")
 
-    # Return sections in original order
-    result = {key: report_sections_en[key] for key in section_order if key in report_sections_en}
+    # Reconstruct report JSON with translated sections in original order
+    translated_sections_list = [translated_sections[i] for i in range(len(sections))]
+
+    # Deep copy metadata and reconstruct with translated sections
+    result = json.loads(json.dumps(report_json, ensure_ascii=False))
+    result['sections'] = translated_sections_list
+
     return result if result else None

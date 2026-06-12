@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage6_json_report import generate_json_report
-from .translate_report_en import translate_report_to_english, translate_report_sections_parallel
+from .translate_report_en import translate_complete_report_json_parallel
 from .generate_workload_map_section import generate_workload_map_section
 from .generate_customer_journey_section import generate_customer_journey_section
 from .generate_digital_gaps_section import generate_digital_gaps_section, _DIGITAL_SUBMISSION_CHANNELS
@@ -2138,24 +2138,19 @@ def run_stage6(
     # Generate Excel
     generate_excel(state, excel_path)
 
-    # Generate report dictionary first so state.report_json is always populated
-    # (generate_word_report may be skipped when word_path is None)
+    # Generate complete Arabic report JSON
+    # (This includes all sections, tables, headers, narrative text - everything)
     state.report_json = generate_json_report(state)
+    print(f"[Stage6] Generated complete Arabic report JSON ({len(json.dumps(state.report_json)):,} chars)")
 
-    # Translate Arabic report sections to English using parallel threads
-    # This translates 9 sections in parallel (safer, faster, better fault tolerance)
-    # than translating the entire report_json in one massive call
-    print("[Stage6] Starting parallel English translation of 9 report sections...")
-    translated_sections = translate_report_sections_parallel(state.report_sections_ar, api_key)
+    # Translate complete report JSON to English by translating each of the 9 sections in parallel
+    # This approach ensures ALL content is translated (tables, headers, narrative text, etc.)
+    # not just the section data - no hardcoded Arabic text remains
+    print("[Stage6] Starting parallel English translation of complete report (9 sections)...")
+    state.report_json_en = translate_complete_report_json_parallel(state.report_json, api_key)
 
-    if translated_sections:
-        # Store translated sections for the English report builder
-        state.report_sections_en = translated_sections
-        # Build English JSON report from translated sections
-        from .stage6_json_report import JSONReportBuilder
-        builder = JSONReportBuilder(state)
-        state.report_json_en = builder.build_report(lang='en')
-        print("[Stage6] English translation of report sections complete.")
+    if state.report_json_en:
+        print(f"[Stage6] English translation of complete report JSON complete ({len(json.dumps(state.report_json_en)):,} chars)")
     else:
         print("[Stage6] WARNING: English translation failed or was skipped.")
 
