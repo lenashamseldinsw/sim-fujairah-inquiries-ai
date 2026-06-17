@@ -32,7 +32,7 @@ class CaseRow(BaseModel):
     date_closed: Optional[str] = None  # تاريخ_إغلاق_الطلب — empty string means not yet closed
 
     # Complaints-specific fields
-    severity: Optional[str] = None  # شدة_الطلب: طلب روتينى | طلب حرج | طلب معقد
+    severity: Optional[str] = None  # شدة_الطلب: طلب روتينى | طلب عاجل | طلب معقد
     complaint_category: Optional[str] = None  # نوع_الشكوى: pipeline output classification
     resolved_by: Optional[str] = None  # تم_الحل_بواسطة
     owner: Optional[str] = None  # المالك: CRITICAL for stage6 output, read from input, not computed
@@ -197,7 +197,7 @@ class PipelineState(BaseModel):
 
     # --- COMPLAINTS-SPECIFIC METADATA ---
     complaint_severity_distribution: Dict[str, int] = Field(default_factory=dict)
-    # e.g. {"طلب روتينى": 222, "طلب حرج": 17, "طلب معقد": 2}
+    # e.g. {"طلب روتينى": 222, "طلب عاجل": 17, "طلب معقد": 2}
 
     rejection_rate: float = 0.0  # % of cases with الحالة == 'طلب مرفوض'
     digital_channel_rate: float = 0.0  # % submitted via digital channels
