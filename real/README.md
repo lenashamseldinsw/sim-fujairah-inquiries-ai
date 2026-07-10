@@ -1,28 +1,28 @@
-# Real Version - AI-Powered Analysis Pipelines
+# Real Version — AI-Powered Analysis Pipelines
 
 ## Overview
 
-The **real version** implements full AI-powered analysis using 6-stage pipelines for both **inquiries and complaints flows**. Each flow has independent analysis logic, caching, and report generation.
+The **real version** runs full AI-powered analysis using a **6-stage pipeline**, implemented independently for two flows: **inquiries** and **complaints**. Each flow has its own analyzer, pipeline, supporting files, and outputs.
 
-**Recommended Entry Point**: `app_inq_comp.py` (unified dual-flow app)
+**Recommended entry point:** `app_inq_comp.py` (unified dual-flow app).
 
 ---
 
 ## 🚀 Running the Real Version
 
-### Unified App (Both Flows)
 ```bash
-cd real
-streamlit run app_inq_comp.py
-```
-Single landing page with flow selection → separate pages for inquiries & complaints analysis.
+# From project root
+make real            # alias for make real-unified (recommended)
+make real-unified    # both flows, unified app  → app_inq_comp.py
+make real-single     # legacy single-flow app   → app.py (inquiries only)
 
-### Legacy Single-Flow (Backward Compatibility)
-```bash
-cd real
-APP_MODE=inquiries streamlit run app.py
+# Or manually
+cd real && streamlit run app_inq_comp.py
 ```
-Only supports inquiries flow. Use `app_inq_comp.py` for complaints.
+
+Opens at `http://localhost:8501`.
+
+**API key:** read from Streamlit secrets (`~/.streamlit/secrets.toml` or the deployed app's secrets), **not** from `.env`. The `.env` here only sets `APP_MODE=real`.
 
 ---
 
@@ -30,207 +30,120 @@ Only supports inquiries flow. Use `app_inq_comp.py` for complaints.
 
 ```
 real/
-├── app_inq_comp.py                # Unified dual-flow UI (RECOMMENDED)
-├── app.py                         # Legacy single-flow UI (backward compat)
-├── report_display.py              # Unified report display handler
-├── .env                           # Environment config
-├── analysis/                      # Analyzer loaders (dynamic)
-│   ├── __init__.py               # Exports get_analyzer_for_flow(), etc.
-│   ├── base.py                   # Abstract Analyzer interface
-│   └── real.py                   # Legacy RealAnalyzer (single-flow)
-├── inquiries-flow/               # Inquiries pipeline
+├── app_inq_comp.py                  # Unified dual-flow UI (RECOMMENDED)
+├── app.py                           # Legacy single-flow UI (inquiries only)
+├── report_display.py                # Unified report display handler
+├── .env                             # APP_MODE=real (no API key here)
+├── analysis/                        # Thin routing layer (no analyzer here)
+│   ├── __init__.py                  # Dynamic loader: set_flow_context / get_analyzer_for_flow / get_display_for_flow
+│   ├── base.py                      # Abstract Analyzer interface
+│   └── dynamic_display.py           # Shared display base
+│
+├── inquiries-flow/                  # Inquiries pipeline (self-contained)
 │   ├── analysis/
-│   │   ├── __init__.py          # Exports inquiries analyzer
-│   │   ├── base.py              # Analyzer interface
-│   │   ├── real.py              # RealAnalyzer (6-stage pipeline)
-│   │   └── dynamic_display.py   # Report display
-│   ├── pipeline/                # 6-stage orchestrator + stages
-│   └── output/                  # Generated reports & cache
-├── complaints-flow/             # Complaints pipeline
-│   ├── analysis/
-│   │   ├── __init__.py          # Exports complaints analyzer
-│   │   ├── base.py              # Analyzer interface
-│   │   ├── real.py              # RealAnalyzer (6-stage pipeline)
-│   │   └── dynamic_display.py   # Report display
-│   ├── pipeline/                # 6-stage orchestrator + stages
-│   └── output/                  # Generated reports & cache
-├── inquiries-output/            # Root output (backward compat)
-├── complaints-output/           # Root output (backward compat)
-└── test_pipeline_*.py           # Test scripts per flow
+│   │   ├── __init__.py              # Exports RealAnalyzer + DynamicReportDisplay
+│   │   ├── base.py
+│   │   ├── real.py                  # RealAnalyzer for inquiries
+│   │   └── dynamic_display.py
+│   ├── pipeline/                    # 6-stage pipeline (see below)
+│   ├── inquiries-supporting-files/  # guidebook_final.json
+│   ├── sample-input/                # Sample .xlsx inputs
+│   ├── reference-inquiries-outputs/ # Reference report + Excel
+│   ├── pipeline-test-output/        # Generated reports (docx/xlsx/json)
+│   └── test_*.py                    # Flow-specific tests
+│
+└── complaints-flow/                 # Complaints pipeline (self-contained)
+    ├── analysis/
+    │   ├── __init__.py
+    │   ├── base.py
+    │   ├── real.py                  # RealAnalyzer for complaints
+    │   └── dynamic_display.py
+    ├── pipeline/                     # 6-stage pipeline (same shape as inquiries)
+    ├── complaints-supporting-files/  # guidebook_final.json + complaints-management-methodology-v4.json
+    └── test_*.py                     # Flow-specific tests
 ```
+
+> **Note:** There is **no** `real/analysis/real.py` and **no** `real/chart_parser.py`. The `RealAnalyzer` implementations live inside each flow's `analysis/real.py` and are loaded dynamically by `real/analysis/__init__.py`.
 
 ---
 
-## 🎯 Architecture
+## 🎯 Analyzer Routing (`real/analysis/__init__.py`)
 
-### Unified App (`app_inq_comp.py`)
+`app_inq_comp.py` selects a flow at runtime; the routing layer loads the correct flow's analyzer/display by importing that flow's `analysis/__init__.py`:
 
-**Flow**:
-1. Landing page with flow selection (Inquiries | Complaints)
-2. File upload and analysis (uses appropriate pipeline)
-3. Results display with dynamic viewer
-4. Download options (Word report, Excel, JSON)
-
-**Key Function**:
 ```python
-get_analyzer_for_flow(flow_type: str)  # Load correct pipeline
+set_flow_context(flow_type)                       # 'inquiries' or 'complaints'
+get_analyzer_for_flow(flow_type)                  # → RealAnalyzer() for that flow
+get_display_for_flow(flow_type, lang, cache_dir)  # → DynamicReportDisplay for that flow
 ```
 
-### Dynamic Analyzer Loading (`analysis/__init__.py`)
-
-Previously hard-coded to inquiries. Now:
-- `set_flow_context(flow_type)` - Set which flow to use
-- `get_analyzer_for_flow(flow_type)` - Load analyzer for 'inquiries' or 'complaints'
-- `get_display_for_flow(flow_type, lang, cache_dir)` - Load display for flow
-
-### Independent Pipelines
-
-Each flow has its own complete implementation:
-
-#### Inquiries Flow (`inquiries-flow/`)
-- **Pipeline**: 6-stage processing (classification → extraction → analysis → reconciliation → formatting → report generation)
-- **Analyzer**: `inquiries-flow/analysis/real.py:RealAnalyzer`
-- **Output**: `inquiries-flow/output/`
-- **Cache**: `inquiries-flow/output/cache/`
-
-#### Complaints Flow (`complaints-flow/`)
-- **Pipeline**: 6-stage processing (similar structure to inquiries)
-- **Analyzer**: `complaints-flow/analysis/real.py:RealAnalyzer`
-- **Output**: `complaints-flow/output/`
-- **Cache**: `complaints-flow/output/cache/`
+The default import (backward compatibility) loads the **inquiries** flow, exposing `RealAnalyzer`, `DynamicReportDisplay`, and `Analyzer`. Flow selection is also honoured via the `FLOW_TYPE` environment variable.
 
 ---
 
-## 🔄 How It Works
+## 🔄 The 6-Stage Pipeline
 
-### Step-by-Step Flow
+Both flows implement the same pipeline shape. Orchestrated by `pipeline/orchestrator.py` (`PipelineOrchestrator`), with shared state in `pipeline/state.py` saved to JSON after each stage for crash recovery.
 
-1. **User lands on app** → Selects "Inquiries" or "Complaints"
-2. **Flow context set** → App loads appropriate analyzer
-3. **User uploads file** → Routed to correct pipeline
-4. **Pipeline processes** → 6 stages with progress display
-5. **Results generated** → Word report, Excel, JSON
-6. **Display renders** → Dynamic viewer shows results
-7. **Downloads available** → User can download all outputs
+| Stage | File | Purpose |
+|-------|------|---------|
+| **1. Validation** | `stage1_validator.py` | Validate input schema; establish `total_cases` |
+| **2. Rule classification** | `stage2_rules.py` | Rule-based classification; queue low-confidence cases for the LLM |
+| **3. LLM classification** | `stage3_llm.py` | Claude classifies low-confidence cases; unresolved → human-review queue |
+| **4. Analysis** | `stage4_analysis.py` | Pattern/cluster detection, FAQ candidates, friction (journey) mapping |
+| **5. Gap analysis** | `stage5_gap.py` | Validate FAQs and identify gaps against the guidebook JSON |
+| **6. Artifacts** | `stage6_artifacts.py`, `stage6_json_report.py` | Generate Word + Excel + in-memory report JSON |
 
-### The 6-Stage Pipeline
+**Section generators** (invoked during report building, per flow in `pipeline/`):
+`generate_workload_map_section.py`, `generate_customer_journey_section.py`, `generate_digital_gaps_section.py`, `generate_digital_transformation_section.py`, `generate_ai_use_cases_section.py`, `generate_improvement_roadmap_section.py`, `generate_conclusion_section.py`.
 
-Each flow implements:
+**Report building & translation:** `build_report_ar.py`, `build_report_en.py`, `translate_report_en.py` produce the 9-section report; English translation runs the 9 sections **in parallel** for speed.
 
-1. **Stage 1**: File upload & initial validation
-2. **Stage 2**: Data classification and categorization
-3. **Stage 3**: Content extraction and structuring
-4. **Stage 4**: Analysis and pattern detection
-5. **Stage 5**: Data reconciliation and validation
-6. **Stage 6**: Report generation and caching
+---
+
+## 📊 Outputs
+
+Each run produces three artifacts (written to the flow's output folder, e.g. `inquiries-flow/pipeline-test-output/`):
+
+1. **Word report** (`.docx`) — built via `sword_word_builder`, bilingual-capable (Arabic default, English via parallel translation).
+2. **Excel workbook** (`.xlsx`) — per-case classifications and section data.
+3. **Report JSON** (`_data.json` / `report_final_ar_*.json`) — cached pipeline state and computed metrics.
 
 ---
 
 ## 🧪 Testing
 
-### Test Inquiries Pipeline
-```bash
-cd real
-python test_pipeline_inquiries.py
-```
+Tests live **inside each flow folder**, not at `real/` top level:
 
-### Test Complaints Pipeline
 ```bash
-cd real
-python test_pipeline_complaints.py
+# Inquiries
+cd real/inquiries-flow
+python test_report_sections.py
+python test_faq_frequency_consistency.py
+python test_dynamic_columns.py
+python test_parallel_translation.py
+python verify_json_structure.py
+
+# Complaints
+cd real/complaints-flow
+python test_workload_map_validation.py
+python test_roadmap_section8.py
+python test_closure_rate_diagnostic.py
+python test_section_3_4.py
 ```
 
 ---
 
 ## 🔧 Development
 
-### Adding a New Stage
+### Modify an analyzer
+Edit `inquiries-flow/analysis/real.py` or `complaints-flow/analysis/real.py` (implement `analyze`, `validate_file`, `get_processing_stages`).
 
-1. Create `inquiries-flow/pipeline/stage_X_name.py`
-2. Implement stage function:
-```python
-def stage_X_name(state: PipelineState) -> PipelineState:
-    """Process state and return updated state."""
-    # Do work
-    return state
-```
+### Add/modify a pipeline stage
+Edit the relevant `pipeline/stageN_*.py` and wire it in `pipeline/orchestrator.py`. State flows through `PipelineState` (`pipeline/state.py`).
 
-3. Register in orchestrator:
-```python
-stages = [
-    ("stage_X_name", stage_X_name),
-]
-```
-
-### Modifying Analyzer
-
-Edit `inquiries-flow/analysis/real.py` or `complaints-flow/analysis/real.py`:
-- Implement `analyze(uploaded_file)` method
-- Return properly structured report data
-- Handle all validation in `validate_file()`
-
-### Dynamic Display
-
-Edit `inquiries-flow/analysis/dynamic_display.py` or `complaints-flow/analysis/dynamic_display.py`:
-- Customize report rendering per flow
-- Adjust styling and layouts
-- Add flow-specific visualizations
-
----
-
-## 📊 Report Structure
-
-Both flows generate three outputs:
-
-### 1. Word Report
-- Generated with `sword_word_builder`
-- Includes sections, tables, charts
-- Bilingual (Arabic/English) support
-- Downloadable from UI
-
-### 2. Excel File
-- Structured data export
-- Multiple sheets per section
-- Raw counts and metrics
-- Downloadable from UI
-
-### 3. JSON Cache
-- Cached pipeline state
-- Reusable for reruns
-- Includes all computed metrics
-- Stored in `output/cache/`
-
----
-
-## 🔄 Workflow
-
-### Development (inquiries-flow/ or complaints-flow/)
-
-#### For Inquiries
-```bash
-cd real
-# Edit: inquiries-flow/analysis/real.py
-# Edit: inquiries-flow/pipeline/stage_*.py
-streamlit run app_inq_comp.py
-# Test: python test_pipeline_inquiries.py
-```
-
-#### For Complaints
-```bash
-cd real
-# Edit: complaints-flow/analysis/real.py
-# Edit: complaints-flow/pipeline/stage_*.py
-streamlit run app_inq_comp.py
-# Test: python test_pipeline_complaints.py
-```
-
-### Key Implementation Points
-
-- **Independent analyzers**: Each flow has own RealAnalyzer
-- **Separate pipelines**: 6 stages each, isolated per flow
-- **Unified UI**: `app_inq_comp.py` routes between flows
-- **Dynamic loading**: `get_analyzer_for_flow()` picks right one
-- **No merging**: Each version is self-contained
+### Adjust report sections
+Edit the matching `pipeline/generate_*_section.py`, and `build_report_ar.py` / `build_report_en.py` for assembly.
 
 ---
 
@@ -238,61 +151,30 @@ streamlit run app_inq_comp.py
 
 | Issue | Solution |
 |-------|----------|
-| "get_analyzer_for_flow not found" | Check `analysis/__init__.py` exports function |
-| Wrong analyzer loaded | Check `set_flow_context()` called before getting analyzer |
-| Pipeline stages not running | Check stage functions in `pipeline/` folder exist |
-| Reports not caching | Delete `output/cache/` and regenerate |
-| Import errors | Make sure you're in `real/` folder, `analysis/__init__.py` exists |
-| App won't start | Check `analysis/base.py` defines Analyzer abstract class |
+| Missing API key | Set `ANTHROPIC_API_KEY` in Streamlit secrets, **not** `.env` |
+| Wrong analyzer loaded | Ensure `set_flow_context()` (or `FLOW_TYPE`) is set before `get_analyzer_for_flow()` |
+| "Could not find guidebook JSON" (Stage 5) | Confirm `guidebook_final.json` exists in the flow's `*-supporting-files/` |
+| Stage 5 produces no gaps | Stage 4 must complete first (populates `journey_map`/`faq_candidates`); check `[Stage5]` logs |
+| Empty `customer_journey` section | `journey_map` empty after Stage 4 — check `[Stage4]` warning in logs |
+| `ModuleNotFoundError: analysis` | Run from inside `real/`; confirm `analysis/__init__.py` exists |
 
 ---
 
-## 📝 Environment Configuration
+## 🌍 Deployment (Streamlit Cloud)
 
-```
-APP_MODE=real
-INQUIRIES_OUTPUT=inquiries-flow/output
-COMPLAINTS_OUTPUT=complaints-flow/output
-```
-
-Create/update `real/.env` with above.
+1. Push the repo to GitHub.
+2. On https://streamlit.io/cloud, select the repo and set the entry file to `real/app_inq_comp.py`.
+3. Add `ANTHROPIC_API_KEY` (and any other secrets) in the app's **Secrets** settings.
+4. Deploy.
 
 ---
 
-## 🌍 Deployment
+## 📚 Related Docs
 
-### Streamlit Cloud
-
-1. Push repo to GitHub
-2. Go to https://streamlit.io/cloud
-3. Select repo and file: `real/app_inq_comp.py`
-4. Deploy
-
-### Docker
-
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY real/ .
-EXPOSE 8501
-CMD ["streamlit", "run", "app_inq_comp.py"]
-```
-
-```bash
-docker build -t fujairah-real .
-docker run -p 8501:8501 fujairah-real
-```
+- **[../CLAUDE.md](../CLAUDE.md)** — full development guide and architecture
+- **[../README.md](../README.md)** — project overview and navigation
+- **[../demo/README.md](../demo/README.md)** — stable demo version
 
 ---
 
-## 📚 Related Documentation
-
-- **[../CLAUDE.md](../CLAUDE.md)**: Full development guide and architecture
-- **[../README.md](../README.md)**: Project overview and quick links
-- **[../demo/README.md](../demo/README.md)**: Demo version (pre-built reports) documentation
-
----
-
-**Note**: This is the **real/AI-powered version** with full analysis pipelines. For stable pre-built reports, see the `demo/` folder.
+**Note:** This is the **AI-powered version** with full analysis pipelines. For stable pre-built reports, see the `demo/` folder.

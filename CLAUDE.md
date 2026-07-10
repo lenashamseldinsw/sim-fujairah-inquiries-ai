@@ -49,12 +49,11 @@ sim-fujairah-inquiries-ai/
 │   ├── app.py                     # Single-flow UI (legacy, for backward compatibility)
 │   ├── app_inq_comp.py            # UNIFIED UI for both inquiries + complaints flows
 │   ├── report_display.py          # Report display handler (supports both flows)
-│   ├── chart_parser.py            # Chart parsing utilities
-│   ├── analysis/
-│   │   ├── __init__.py            # UNIFIED analyzer loader (supports both flows)
+│   ├── analysis/                  # Thin routing layer (NO analyzer/real.py here)
+│   │   ├── __init__.py            # Dynamic loader: set_flow_context / get_analyzer_for_flow / get_display_for_flow
 │   │   ├── base.py                # Abstract Analyzer interface
-│   │   ├── dynamic_display.py     # Dynamic report display
-│   │   └── real.py                # RealAnalyzer (AI-based, legacy single-flow)
+│   │   └── dynamic_display.py     # Shared display base
+│   │   # NOTE: RealAnalyzer lives in each flow's analysis/real.py, loaded dynamically
 │   ├── inquiries-flow/            # Inquiries pipeline
 │   │   ├── analysis/
 │   │   │   ├── __init__.py        # Exports inquiries analyzer + display

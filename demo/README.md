@@ -1,37 +1,35 @@
-# Demo Version - Stable Pre-built Reports
+# Demo Version — Stable Pre-built Reports
 
 ## Overview
 
-The **demo version** displays pre-built, fully-extracted reports with **automatic caching** for instant loads. No AI analysis happens here—this is the stable, production-ready interface.
+The **demo version** displays pre-built, fully-extracted reports with **automatic caching** for instant loads. No AI analysis happens here — file uploads are simulated and the app renders reports that already exist on disk. This is the stable, presentation-ready interface.
 
-**Key Feature**: Adaptive Report System that auto-detects report structure and caches results.
+**Key feature:** Adaptive Report System that auto-detects report structure from Word headings and caches the extracted JSON.
 
 ---
 
 ## 🚀 Running the Demo
 
 ```bash
-cd demo
-streamlit run app.py
-```
-
-Opens at `http://localhost:8501`
-
-Or from project root:
-```bash
+# From project root
 make demo
+
+# Or manually
+cd demo && streamlit run app.py
 ```
+
+Opens at `http://localhost:8501`.
 
 ---
 
 ## ✨ Features
 
 - ✅ **100% Arabic UI** with full RTL support
-- 📦 **Pre-built Reports**: Sample inquiries and complaints reports included
-- ⚡ **Smart Caching**: Automatic extraction caching for instant report loads
-- 🔍 **Auto-Detection**: Detects report structure from Word headings
-- 📊 **Dynamic Display**: Sections, tables, and charts render automatically
-- 🔒 **Offline**: No external servers, all data stays local
+- 📦 **Pre-built reports** for inquiries and complaints, organized by period
+- ⚡ **Smart caching** — extracted structure cached as JSON for instant re-loads
+- 🔍 **Auto-detection** — sections detected from Word heading styles (no hardcoding)
+- 📊 **Dynamic display** — sections, tables, and charts render from whatever is detected
+- 🔒 **Offline** — no external servers; all files stay local
 
 ---
 
@@ -39,123 +37,70 @@ make demo
 
 ```
 demo/
-├── app.py                          # Main Streamlit app
-├── .env                            # Environment config (APP_MODE=demo)
-├── analysis/                       # Demo analyzer with extraction
-│   ├── __init__.py                # Exports all demo components
-│   ├── base.py                    # Abstract Analyzer interface
-│   ├── demo.py                    # DemoAnalyzer (simulated processing)
-│   ├── dynamic_display.py         # Dynamic report display
-│   ├── adaptive_extractor.py      # Extract + cache reports
-│   └── report_structure_detector.py  # Auto-detect report structure
-├── inquiries-output/              # Sample inquiries reports & cache
-├── complaints-output/             # Sample complaints reports & cache
-└── test_adaptive_system.py        # Test extraction utilities
+├── app.py                              # Main Streamlit app
+├── chart_parser.py                     # Chart XML parsing utilities
+├── .env                                # APP_MODE=demo
+├── test_adaptive_system.py             # Extraction test script
+├── analysis/
+│   ├── __init__.py                     # Exports demo components
+│   ├── base.py                         # Abstract Analyzer interface
+│   ├── demo.py                         # DemoAnalyzer (simulated processing)
+│   ├── dynamic_display.py              # DynamicReportDisplay (renders reports)
+│   ├── adaptive_extractor.py           # AdaptiveReportExtractor (extract + cache)
+│   └── report_structure_detector.py    # ReportStructureDetector (auto-detect)
+├── inquiries-output/                   # Inquiries reports, organized by period
+│   ├── 2025/                           # Full-year sample report + Excel
+│   ├── Q1-2026/                        # Quarterly report + Excel
+│   └── cache/                          # Cached extraction JSON
+└── complaints-output/                  # Complaints reports, organized by period
+    ├── 2025/
+    ├── Q1-2026/
+    └── cache/
 ```
+
+Report files inside each period folder are named in Arabic, e.g.:
+- `inquiries-output/Q1-2026/تقرير تحليل استفسارات المتعاملين — الربع الأول 2026.docx`
+- `complaints-output/Q1-2026/تقرير تحليل شكاوى المتعاملين — 2026.docx`
 
 ---
 
 ## 🎯 How It Works
 
-### Step-by-Step Flow
+1. **User uploads a file** → `DemoAnalyzer` simulates processing with progress stages (no real analysis).
+2. **Display handler** calls `AdaptiveReportExtractor.extract_report(path)` for the matching pre-built report.
+3. **Extractor checks the cache** → if `cache/[hash].json` exists, loads instantly.
+4. **On cache miss** → parses the Word document via `ReportStructureDetector`, then writes the JSON cache.
+5. **`DynamicReportDisplay`** renders the structure: a tab per section, tables with Arabic headers, and charts.
 
-1. **User uploads file** → `DemoAnalyzer` simulates processing with progress bars
-2. **Demo analyzer** returns immediately (simulated)
-3. **Display handler** calls `AdaptiveReportExtractor.extract_report()`
-4. **Extractor checks cache** → If JSON exists, loads instantly from `cache/`
-5. **If no cache** → Extracts structure from Word document (slow first time)
-6. **Saves cache** → Creates JSON file in `cache/` for future loads
-7. **Displays dynamically** → Renders sections, tables, charts based on extracted structure
+### Caching behaviour
 
-### Caching in Action
-
-- **First load of a report**: Extracts from Word → slow (~5 sec)
-- **Subsequent loads**: Uses `cache/[hash].json` → instant
-- **Force refresh**: Call with `force_refresh=True` to bypass cache
+- **First load of a report:** extracts from Word (~5–10 s).
+- **Subsequent loads:** reads `cache/[hash].json` (~instant).
+- **Force refresh:** `extractor.extract_report(path, force_refresh=True)`.
+- Cache key is derived from filename + modification time + size, so editing the source `.docx` invalidates the cache automatically.
 
 ---
 
-## 📊 Sample Reports
+## 🔑 Key Components
 
-### Inquiries Flow
-- **File**: `inquiries-output/تقرير تحليل استفسارات المتعاملين.docx`
-- **Cache**: `inquiries-output/cache/[hash].json`
-
-### Complaints Flow
-- **File**: `complaints-output/تقرير تحليل شكاوى المتعاملين.docx`
-- **Cache**: `complaints-output/cache/[hash].json`
-
----
-
-## 🔧 Key Components
-
-### DemoAnalyzer (`analysis/demo.py`)
-Simulates file processing with realistic progress stages:
-- File upload and validation (0-25%)
-- Data analysis and extraction (25-50%)
-- Processing (50-75%)
-- Report generation (75-100%)
-
-Returns immediately with simulated report structure.
-
-### AdaptiveReportExtractor (`analysis/adaptive_extractor.py`)
-Automatically extracts report structure from Word documents:
-- Detects sections from heading styles
-- Assigns tables to nearest section
-- **Caches extracted JSON** for instant subsequent loads
-- Handles both inquiries and complaints reports
-
-### DynamicReportDisplay (`analysis/dynamic_display.py`)
-Renders extracted reports dynamically:
-- Creates tabs for each section
-- Renders tables with Arabic headers
-- Displays charts and visualizations
-- **Automatically uses cached JSON** if available
-
-### ReportStructureDetector (`analysis/report_structure_detector.py`)
-Auto-detects report structure without hardcoding:
-- Parses Word heading styles
-- Builds hierarchical section tree
-- Identifies tables and charts
-- Works with any report format
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| `DemoAnalyzer` | `analysis/demo.py` | Simulates processing; defines progress stages; loads pre-built reports |
+| `AdaptiveReportExtractor` | `analysis/adaptive_extractor.py` | Extracts report structure from Word; manages JSON cache |
+| `ReportStructureDetector` | `analysis/report_structure_detector.py` | Detects sections/tables/charts from heading styles + formatting |
+| `DynamicReportDisplay` | `analysis/dynamic_display.py` | Renders extracted structure as Streamlit tabs, tables, charts (auto-uses cache) |
+| `Analyzer` | `analysis/base.py` | Abstract interface all analyzers implement |
 
 ---
 
 ## 🧪 Testing
-
-Run the extraction tests:
 
 ```bash
 cd demo
 python test_adaptive_system.py
 ```
 
-This tests:
-- Report extraction from Word documents
-- Cache creation and reuse
-- Structure detection accuracy
-
----
-
-## 🔄 Workflow
-
-### Development (demo/ folder)
-
-Edit these files:
-- **UI changes**: `app.py`
-- **Report display**: `analysis/dynamic_display.py`
-- **Extraction logic**: `analysis/adaptive_extractor.py`
-- **Report structure detection**: `analysis/report_structure_detector.py`
-
-### Testing
-
-```bash
-# Extract and cache reports
-python test_adaptive_system.py
-
-# Run the app
-streamlit run app.py
-```
+Exercises report extraction, cache creation/reuse, and structure detection.
 
 ---
 
@@ -163,58 +108,28 @@ streamlit run app.py
 
 | Issue | Solution |
 |-------|----------|
-| Report file not found | Check files exist in `inquiries-output/` or `complaints-output/` with correct Arabic names |
-| Cache not being used | Delete `*/cache/` folders, re-run to regenerate |
-| Extraction is slow | This is normal on first load (Word parsing); subsequent loads use cache |
-| Sections not detected | Ensure Word document uses proper heading styles for section titles |
-| Import errors | Make sure you're in `demo/` folder and `.env` exists with `APP_MODE=demo` |
+| Report file not found | Confirm the `.docx` exists in the right period subfolder (`2025/` or `Q1-2026/`); watch for trailing spaces in Arabic filenames |
+| Cache not being used | Delete the `cache/` folder in the relevant output dir and re-run |
+| First load is slow | Expected — Word parsing runs once, then the cache serves subsequent loads |
+| Sections not detected | Ensure the Word document uses proper heading styles for section titles |
+| `ModuleNotFoundError: analysis` | Run from inside `demo/` (or use `make demo`); confirm `.env` has `APP_MODE=demo` |
 
 ---
 
-## 📝 .env Configuration
+## 🌍 Deployment (Streamlit Cloud)
 
-```
-APP_MODE=demo
-```
-
-Required in `demo/.env` so the app knows to use DemoAnalyzer.
+1. Push the repo to GitHub.
+2. On https://streamlit.io/cloud, select the repo and set the entry file to `demo/app.py`.
+3. Deploy.
 
 ---
 
-## 🌍 Deployment
+## 📚 Related Docs
 
-### Streamlit Cloud
-
-1. Push repo to GitHub
-2. Go to https://streamlit.io/cloud
-3. Select repo and file: `demo/app.py`
-4. Deploy
-
-### Docker
-
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY demo/ .
-EXPOSE 8501
-CMD ["streamlit", "run", "app.py"]
-```
-
-```bash
-docker build -t fujairah-demo .
-docker run -p 8501:8501 fujairah-demo
-```
+- **[../CLAUDE.md](../CLAUDE.md)** — full development guide and architecture
+- **[../README.md](../README.md)** — project overview and navigation
+- **[../real/README.md](../real/README.md)** — real (AI-powered) version
 
 ---
 
-## 📚 Related Documentation
-
-- **[../CLAUDE.md](../CLAUDE.md)**: Full development guide and architecture
-- **[../README.md](../README.md)**: Project overview and quick links
-- **[../real/README.md](../real/README.md)**: Real version (AI analysis) documentation
-
----
-
-**Note**: This is a **demo/stable version** with pre-built reports. For AI-powered real analysis, see the `real/` folder.
+**Note:** This is the **stable demo** with pre-built reports. For AI-powered analysis, see the `real/` folder.
