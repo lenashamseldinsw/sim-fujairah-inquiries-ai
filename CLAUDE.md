@@ -49,6 +49,15 @@ sim-fujairah-inquiries-ai/
 │   ├── app.py                     # Single-flow UI (legacy, for backward compatibility)
 │   ├── app_inq_comp.py            # UNIFIED UI for both inquiries + complaints flows
 │   ├── report_display.py          # Report display handler (supports both flows)
+│   ├── core42/                    # Core42 LLM integration, shared by both flows
+│   │   ├── settings.py            # Env config, base-URL normalisation, model tiers
+│   │   ├── client.py              # Chat-completions client (lazy singleton)
+│   │   ├── messages.py            # Core42Client — the Messages-shaped facade
+│   │   ├── json_repair.py         # Truncation / fence / <think> repair cascade
+│   │   ├── retry.py               # Error classification + 10s floor for 429s
+│   │   ├── concurrency.py         # One process-wide in-flight cap
+│   │   └── tokens.py              # Per-stage token and cost tracking
+│   ├── smoke_core42*.py           # Standalone gateway probes (real API calls)
 │   ├── analysis/                  # Thin routing layer (NO analyzer/real.py here)
 │   │   ├── __init__.py            # Dynamic loader: set_flow_context / get_analyzer_for_flow / get_display_for_flow
 │   │   ├── base.py                # Abstract Analyzer interface
@@ -60,7 +69,7 @@ sim-fujairah-inquiries-ai/
 │   │   │   ├── base.py            # Analyzer interface
 │   │   │   ├── real.py            # RealAnalyzer for inquiries (6-stage pipeline)
 │   │   │   └── dynamic_display.py # Report display for inquiries
-│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages
+│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages (llm.py = Core42 shim)
 │   │   └── output/                # Generated reports and cache
 │   ├── complaints-flow/           # Complaints pipeline
 │   │   ├── analysis/
@@ -68,7 +77,7 @@ sim-fujairah-inquiries-ai/
 │   │   │   ├── base.py            # Analyzer interface
 │   │   │   ├── real.py            # RealAnalyzer for complaints (6-stage pipeline)
 │   │   │   └── dynamic_display.py # Report display for complaints
-│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages
+│   │   ├── pipeline/              # 6-stage pipeline orchestrator + stages (llm.py = Core42 shim)
 │   │   └── output/                # Generated reports and cache
 │   ├── inquiries-output/          # Root output folder (backward compatibility)
 │   ├── complaints-output/         # Root output folder (backward compatibility)
@@ -135,6 +144,128 @@ cd real && streamlit run app.py
 ```
 
 **Note:** `app.py` only supports inquiries. Use `app_inq_comp.py` for complaints.
+
+## Core42 Integration (Real Version)
+
+The real pipelines call **Core42**, an OpenAI-compatible gateway, through the
+official `openai` SDK with a custom `base_url`. Everything provider-specific
+lives in `real/core42/`, shared by both flows; no pipeline stage talks to the SDK
+directly.
+
+### Configuration
+
+Credentials are read from `real/.env` first, then from Streamlit secrets
+(`.streamlit/secrets.toml` — Streamlit Cloud has no `.env`). `../.env.example`
+documents every setting; the ones that matter:
+
+| Variable | What it does |
+|---|---|
+| `CORE42_API_KEY` | Shared by every endpoint. The app refuses to start without it. |
+| `CORE42_BASE_URL` | **No** `/chat/completions` suffix — the SDK appends the path. A trailing suffix is stripped automatically. |
+| `CORE42_MODEL` | Reasoning tier: analysis, gap analysis, report prose. |
+| `CORE42_MODEL_FAST` | Bulk tier: Stage 3 per-case classification. Same value is fine. |
+| `LLM_MAX_OUTPUT_TOKENS` | Hard ceiling per call, sent as `max_completion_tokens`. |
+| `LLM_OUTPUT_TOKEN_HEADROOM` | Multiplier on each call site's `max_tokens`, because reasoning tokens eat the output budget before any text is produced. |
+| `LLM_MAX_CONCURRENCY` | In-flight requests **per process**. Streamlit workers multiply it. |
+| `LLM_MAX_RETRIES` / `LLM_RETRY_DELAY` | Attempts = retries + 1. 429s use a 10s floor of their own. |
+| `CORE42_TOOL_MODE` | `auto` (default), `native`, or `json` — see *Tool calling* below. |
+
+Settings are cached and the client is a module singleton, so **editing `.env`
+while the app runs changes nothing**. Restart the process.
+
+### Package layout
+
+```
+real/core42/
+├── settings.py     # Env config, base-URL normalisation, model tiers, fail-fast
+├── client.py       # Chat-completions client: lazy singleton, max_retries=0
+├── messages.py     # Core42Client — the Messages-shaped facade the pipeline calls
+├── json_repair.py  # Repair cascade: <think> blocks, fences, prose, trailing commas, truncation
+├── retry.py        # Error classification + the 10s back-off floor for 429s
+├── concurrency.py  # One process-wide in-flight cap (llm_slot)
+└── tokens.py       # Per-stage token and cost tracking
+```
+
+Each flow reaches the package through `pipeline/llm.py`, a shim that inserts
+`real/` on `sys.path` and re-exports. Pipeline stages only ever write
+`from .llm import Core42Client, CHAT_MODEL` — a relative import, which is what
+makes them survive the `sys.modules` purge that keeps the two flows from
+importing each other's stages. The name `core42` deliberately matches none of the
+purge patterns, so the client singleton, the concurrency gate and the token
+ledger all survive a flow switch.
+
+### The adapter, and why it exists
+
+The pipeline was written against `anthropic.Anthropic`. Rather than rewrite 34
+call sites and their response handling, `core42.Core42Client` keeps that surface
+and maps it onto the gateway:
+
+| Call site writes | Adapter sends |
+|---|---|
+| `messages=[...]`, `system=...` | OpenAI chat messages (system first) |
+| `tools=[{name, input_schema}]` | OpenAI function tools (`function.parameters`) |
+| `tool_choice={"type": "any"}` | `tool_choice="required"` |
+| `max_tokens=N` | `max_completion_tokens=N × headroom` |
+| `temperature=0.2` | **nothing** — reasoning models reject a non-default temperature |
+| reads `message.content[0].text` | a `TextBlock` |
+| reads `block.type == "tool_use"`, `block.input` | a `ToolUseBlock` built from `tool_calls` |
+| reads `message.stop_reason` | mapped from `finish_reason` (`length` → `max_tokens`) |
+
+Models are named by **tier**, not by deployment: call sites pass `CHAT_MODEL` or
+`FAST_MODEL` and `settings.resolve_model()` maps those onto whatever the
+environment configures, so switching model is one variable and never a code
+change.
+
+### Tool calling, and its fallback
+
+Stages 3, 4 and 5 force a tool call and read the arguments back as structured
+data. If the deployment's model rejects function tools, the adapter logs the
+rejection at ERROR, caches the verdict for the process, and retries in JSON mode
+with the tool's schema inlined in the prompt — returning the parsed object as a
+`tool_use` block. The same fallback runs when a forced tool call comes back as
+prose. So a gateway without tool support costs quality, never a crash.
+`python real/smoke_core42_tools.py` says which path a deployment will take.
+
+### JSON repair
+
+Gateway models return unparseable JSON in five recurring ways, all handled before
+any parse: `<think>` reasoning blocks (closed, or left open by truncation),
+markdown fences, surrounding prose, trailing commas, and **truncation** — which
+Core42 does far more often than other providers. Every stage of the cascade runs
+on the fence-stripped original, so a failed repair cannot corrupt the next
+attempt, and the aggressive clean preserves Arabic (a naive non-printable strip
+deletes the entire report). Each truncation repair is logged at WARNING: a
+silently repaired truncation is how a half-empty report ships. Both flows'
+`pipeline/json_utils.py` strip `<think>` blocks before their own strategies run.
+
+### Operational notes
+
+* **Concurrency is capped once, globally.** Stage 3 fans out to 5 threads, Stage
+  6 to 7, and the translation to 9; every outbound call passes through
+  `llm_slot()`, which wraps the network call only — never a retry back-off, or
+  the effective concurrency collapses to whatever fraction is not sleeping.
+* **Retries have one owner.** The SDK client is built with `max_retries=0`;
+  `core42/retry.py` is the only retry layer. Deterministic failures (bad key, bad
+  model, malformed request) are never retried.
+* **Every run reports its spend.** `PipelineOrchestrator.report_token_usage()`
+  prints calls, tokens and cost per stage at the end of a full run, and the
+  result lands in `results['token_usage']`.
+
+### Smoke tests
+
+Standalone by design — they read `.env` directly and make real API calls, so they
+prove the credentials and the endpoint independently of any application code.
+When something breaks, they say in five seconds whether the problem is ours or
+the gateway's.
+
+```bash
+cd real
+python smoke_core42.py             # key, base URL, api-key header, models, JSON mode
+python smoke_core42_tools.py       # native function calling vs. the JSON fallback
+python smoke_core42_rate_limits.py # where LLM_MAX_CONCURRENCY should sit
+```
+
+---
 
 ## Adaptive Report System (Demo Only)
 
@@ -206,8 +337,8 @@ Each version runs independently:
 
 Local `.env` files in each folder:
 
-- **`demo/.env`**: Sets `APP_MODE=demo`
-- **`real/.env`**: Sets `APP_MODE=real`
+- **`demo/.env`**: Sets `APP_MODE=demo` (the demo makes no LLM calls)
+- **`real/.env`**: Sets `APP_MODE=real` plus the Core42 credentials and limits — see *Core42 Integration* above
 - **Root `.env.*` files**: For reference, not used by the app
 
 ## Workflow: Demo vs Real Development
@@ -227,7 +358,7 @@ Work in the `demo/` folder:
 Work in the `real/` folder:
 
 1. Implement AI-based analysis in `real/analysis/real.py`
-2. Add Claude API integration to `RealAnalyzer`
+2. LLM calls go through `real/core42/` — see *Core42 Integration*
 3. Update `real/app.py` if UI logic needs to differ
 4. Test with `make real`
 5. Push to `real` branch when features are complete
@@ -262,7 +393,7 @@ When working on this codebase, **identify which version** the request applies to
   
 - **Edit `real/`** if the request involves:
   - Implementing the agentic AI analysis
-  - Adding Claude API integration
+  - Changing the Core42 integration or prompts
   - Building analysis agents
   - Real analyzer logic
 
@@ -310,8 +441,7 @@ And display components from `demo/analysis/`:
 
 Edit `real/analysis/real.py`:
 - Implement all stub methods
-- Add Claude API integration
-- Build analysis agents using Claude's agent framework
+- Call Core42 through `Core42Client` from `pipeline/llm.py`
 - Return properly structured report data
 
 The real analyzer will use display components from `real/analysis/`:
@@ -438,7 +568,7 @@ Previously hard-coded to inquiries. Now dynamically loads analyzers via `get_ana
 
 - Scaffold for `RealAnalyzer` with TODO comments
 - Will implement the full agentic AI analysis
-- Should use Claude API integration
+- Calls Core42 via `pipeline/llm.py`
 - Will implement its own analysis logic (not extraction-based)
 
 ## How the Demo Works

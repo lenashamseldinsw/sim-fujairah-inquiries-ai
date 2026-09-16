@@ -1,15 +1,15 @@
 """
 STAGE 3: LLM Classifier (Complaints Pipeline)
 
-Classifies low-confidence complaint cases from Stage 2 using Claude API.
+Classifies low-confidence complaint cases from Stage 2 using Core42.
 All cases are complaints (شكوى) — no multi-type taxonomy.
 Uses 6 complaint sub-categories for fine-grained classification.
 Cases with LLM confidence < 0.65 go to human_review_queue.
-Uses Haiku for speed and cost efficiency on this high-volume task.
+Uses the fast Core42 tier for speed and cost efficiency on this high-volume task.
 """
 
 import json
-import anthropic
+from .llm import Core42Client, FAST_MODEL
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, List
@@ -212,15 +212,15 @@ SPECIAL INSTRUCTIONS:
 - Return exactly one classification per case in input order"""
 
 
-def _process_batch(client: anthropic.Anthropic, batch: List[Dict], batch_num: int, total_batches: int) -> List[Dict]:
+def _process_batch(client: Core42Client, batch: List[Dict], batch_num: int, total_batches: int) -> List[Dict]:
     """
-    Process a single batch of complaint cases against the Haiku classifier.
+    Process a single batch of complaint cases against the fast-tier classifier.
 
     Designed to be called from a thread pool — no shared mutable state is read or
     written; all inputs are passed by value and the return value is a plain list.
 
     Args:
-        client: Anthropic API client (thread-safe for concurrent requests)
+        client: Core42 API client (thread-safe for concurrent requests)
         batch: Slice of case dicts for this batch
         batch_num: 1-based batch index (for logging only)
         total_batches: Total number of batches (for logging only)
@@ -243,7 +243,7 @@ def _process_batch(client: anthropic.Anthropic, batch: List[Dict], batch_num: in
 
     try:
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # Haiku for speed/cost on bulk classification
+            model=FAST_MODEL,  # fast tier: speed/cost on bulk classification
             max_tokens=8000,  # Need room for 25 case classifications (each ~150 tokens)
             system=build_system_prompt(),
             tools=[CLASSIFIER_TOOL],
@@ -316,16 +316,16 @@ def _process_batch(client: anthropic.Anthropic, batch: List[Dict], batch_num: in
         ]
 
 
-def classify_with_llm(client: anthropic.Anthropic, cases: List[Dict], progress_callback=None) -> List[Dict]:
+def classify_with_llm(client: Core42Client, cases: List[Dict], progress_callback=None) -> List[Dict]:
     """
-    Classify complaint cases using Claude Haiku with array tool-use for proper batch handling.
+    Classify complaint cases using the fast Core42 tier with array tool-use for proper batch handling.
 
     Batches run concurrently (max 5 threads) for a ~5x speedup on large datasets.
     Each batch is a fully independent API call — no cross-batch dependencies — so
     threading has zero effect on classification quality.
 
     Args:
-        client: Anthropic API client
+        client: Core42 API client
         cases: List of case dicts
         progress_callback: Optional function(pct, msg_ar, msg_en) for UI updates
 
@@ -429,7 +429,7 @@ def run_stage3(state: PipelineState, api_key: str, progress_callback=None) -> Pi
         state.human_review_queue = []
         return state
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
     llm_results = classify_with_llm(client, state.llm_queue, progress_callback=progress_callback)
 
     # Index results by case_number for fast lookup

@@ -1102,7 +1102,7 @@ def get_analyzer_for_flow(flow_type: str):
         # Get API key from Streamlit secrets and pass it to analyzer
         api_key = None
         try:
-            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            api_key = st.secrets.get("CORE42_API_KEY")
             if api_key:
                 print(f"[ANALYZER] ✓ API key loaded from Streamlit secrets: {api_key[:20]}...")
             else:
@@ -1118,8 +1118,8 @@ def get_analyzer_for_flow(flow_type: str):
     except ValueError as e:
         error_msg = str(e)
         print(f"[ANALYZER] ✗ ValueError: {error_msg}")
-        if "ANTHROPIC_API_KEY" in error_msg:
-            raise ValueError("API key not configured. Please set ANTHROPIC_API_KEY in Streamlit secrets.")
+        if "CORE42_API_KEY" in error_msg:
+            raise ValueError("API key not configured. Please set CORE42_API_KEY in Streamlit secrets.")
         raise
     except Exception as e:
         print(f"[ANALYZER] ✗ Exception: {type(e).__name__}: {str(e)}")

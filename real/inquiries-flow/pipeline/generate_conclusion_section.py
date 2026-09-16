@@ -45,8 +45,7 @@ import json
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
 
-import anthropic
-
+from .llm import Core42Client, CHAT_MODEL
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 from .generate_digital_gaps_section import _DIGITAL_SUBMISSION_CHANNELS
@@ -309,7 +308,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
 
     Args:
         state:   PipelineState (all prior stages must be complete)
-        api_key: Anthropic API key
+        api_key: Core42 API key
 
     Returns:
         Dict with keys:
@@ -480,7 +479,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     )
 
     # ── API call ──────────────────────────────────────────────────────────────
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
     print(
         f"[Conclusion] Calling API — total_cases={total_cases}, "
         f"reclass={reclass_count} ({reclass_rate:.1f}%), "
@@ -490,7 +489,7 @@ def generate_conclusion_section(state: PipelineState, api_key: str) -> Dict[str,
     )
 
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=CHAT_MODEL,
         max_tokens=4000,  # Increased from 3000 — more space for three prose sections + pivot table
         messages=[{"role": "user", "content": prompt}],
     )

@@ -42,8 +42,7 @@ Table: نقطة الاحتكاك | الحالات | السبب الجذري | ا
 import json
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
-import anthropic
-
+from .llm import Core42Client, CHAT_MODEL
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
@@ -212,7 +211,7 @@ def generate_customer_journey_section(
 
     Args:
         state:   Pipeline state with journey_map, patterns, gap_table populated.
-        api_key: Anthropic API key.
+        api_key: Core42 API key.
 
     Returns:
         Dict with keys matching the JSON output schema below.
@@ -341,7 +340,7 @@ def generate_customer_journey_section(
         )
 
         # ── API call ──────────────────────────────────────────────────────────
-        client = anthropic.Anthropic(api_key=api_key)
+        client = Core42Client(api_key=api_key)
         print(
             f"[CustomerJourney] Calling API — total_cases={total_cases}, "
             f"friction_count={friction_count}, "
@@ -349,7 +348,7 @@ def generate_customer_journey_section(
         )
 
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=CHAT_MODEL,
             max_tokens=8000,  # Large friction table (18 rows) with long Arabic descriptions
             messages=[{"role": "user", "content": prompt}],
         )

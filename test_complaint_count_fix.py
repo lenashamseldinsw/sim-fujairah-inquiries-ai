@@ -37,9 +37,9 @@ def main():
         print(f"ERROR: Input file not found: {input_file}")
         return 1
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("CORE42_API_KEY")
     if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY environment variable not set")
+        print("ERROR: CORE42_API_KEY environment variable not set")
         return 1
 
     print("=" * 60)

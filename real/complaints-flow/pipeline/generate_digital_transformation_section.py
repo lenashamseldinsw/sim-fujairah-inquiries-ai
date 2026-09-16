@@ -59,8 +59,6 @@ No fallbacks. No placeholder returns. Every failure raises so the caller
 
 import json
 from typing import Dict, Any, List, Optional
-import anthropic
-
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
@@ -208,7 +206,7 @@ def generate_digital_transformation_section(state: PipelineState, api_key: str) 
 
     Args:
         state: Pipeline state with validated FAQs and notification opportunities
-        api_key: Anthropic API key for LLM calls (if needed for refinement)
+        api_key: Core42 API key for LLM calls (if needed for refinement)
 
     Returns:
         ISSUE 4 FIX: Dict with 'section_body', 'faq_table', 'notification_table' keys

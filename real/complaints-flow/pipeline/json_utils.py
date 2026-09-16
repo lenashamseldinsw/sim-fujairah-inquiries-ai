@@ -68,6 +68,15 @@ def _repair_embedded_quotes(text: str) -> str:
     return ''.join(result)
 
 
+def _strip_reasoning_blocks(text: str) -> str:
+    """Remove <think> reasoning, closed or left open by a truncated response."""
+    text = re.sub(r'<think>.*?</think>', '', text or '', flags=re.DOTALL)
+    open_think = text.find('<think>')
+    if open_think != -1:
+        text = text[:open_think]
+    return text.strip()
+
+
 def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[Dict[str, Any]]:
     """
     Robustly extract a JSON object from LLM response text.
@@ -120,6 +129,12 @@ def parse_json_response(response_text: str, tag: str = "JSONParse") -> Optional[
                 pass
 
         return None
+
+    # Core42's reasoning models prefix their answer with a <think> block —
+    # closed when the reply completed, unclosed when it was truncated mid-thought.
+    # Strip it before any strategy runs: an unclosed block otherwise swallows the
+    # fence detection below and every strategy then works on reasoning noise.
+    response_text = _strip_reasoning_blocks(response_text)
 
     stripped = response_text.strip()
 

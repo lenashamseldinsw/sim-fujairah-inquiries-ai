@@ -11,8 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 import pandas as pd
-import anthropic
-
+from .llm import APIError, reset_token_tracking, token_summary
 from .state import PipelineState, CaseRow, save_state_to_json, load_state_from_json, extract_month_year_range
 from .stage1_validator import run_stage1
 from .stage2_rules import run_stage2
@@ -30,7 +29,7 @@ class PipelineOrchestrator:
         Initialize orchestrator.
 
         Args:
-            api_key: Anthropic API key
+            api_key: Core42 API key
             temp_dir: Temp directory for state files (default: system temp)
         """
         self.api_key = api_key
@@ -56,6 +55,7 @@ class PipelineOrchestrator:
             self.state_file.unlink()
 
         self.state = PipelineState()
+        reset_token_tracking()
 
     def save_state(self) -> None:
         """Save current state to JSON."""
@@ -187,7 +187,7 @@ class PipelineOrchestrator:
 
             msg = f"LLM classified {len(self.state.llm_classified)} cases, {len(self.state.human_review_queue)} sent to human review"
             return True, msg
-        except anthropic.APIError as e:
+        except APIError as e:
             return False, f"API error: {str(e)}"
         except Exception as e:
             return False, f"Stage 3 error: {str(e)}"
@@ -213,7 +213,7 @@ class PipelineOrchestrator:
                 f"{len(self.state.journey_map)} friction points"
             )
             return True, msg
-        except anthropic.APIError as e:
+        except APIError as e:
             return False, f"API error: {str(e)}"
         except Exception as e:
             return False, f"Stage 4 error: {str(e)}"
@@ -268,7 +268,7 @@ class PipelineOrchestrator:
 
             msg = f"Gap analysis complete: {len(self.state.gap_table)} gaps identified, {len(self.state.validated_faqs)} FAQs validated"
             return True, msg
-        except anthropic.APIError as e:
+        except APIError as e:
             return False, f"API error: {str(e)}"
         except Exception as e:
             return False, f"Stage 5 error: {str(e)}"
@@ -306,6 +306,26 @@ class PipelineOrchestrator:
             return False, f"Validation failed: {str(e)}"
         except Exception as e:
             return False, f"Stage 6 error: {str(e)}"
+
+    def report_token_usage(self) -> Dict[str, Any]:
+        """Print and return what this run spent on Core42, broken down by stage.
+
+        Aggregate cost says nothing actionable; cost per stage says which prompt
+        to cut. Called at the end of a full run.
+        """
+        usage = token_summary()
+        print(
+            f"[Core42] {usage['calls']} call(s), "
+            f"{usage['input_tokens']:,} in / {usage['output_tokens']:,} out tokens, "
+            f"${usage['cost_usd']:.4f}"
+        )
+        for stage, totals in sorted(usage["by_stage"].items()):
+            print(
+                f"[Core42]   {stage}: {totals['calls']} call(s), "
+                f"{totals['input_tokens']:,} in / {totals['output_tokens']:,} out, "
+                f"${totals['cost_usd']:.4f}"
+            )
+        return usage
 
     def run_full_pipeline(
         self,
@@ -391,6 +411,7 @@ class PipelineOrchestrator:
             return results
 
         results['success'] = True
+        results['token_usage'] = self.report_token_usage()
         return results
 
     def get_state_summary(self) -> Dict[str, Any]:

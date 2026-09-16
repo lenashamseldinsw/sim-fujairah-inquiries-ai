@@ -15,7 +15,7 @@ Also validates FAQ candidates from Stage 4 against guidebook.
 """
 
 import json
-import anthropic
+from .llm import Core42Client, CHAT_MODEL
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
 from pathlib import Path
@@ -434,7 +434,7 @@ def run_stage5(
 
     Args:
         state: Pipeline state
-        api_key: Anthropic API key
+        api_key: Core42 API key
         guidebook_data: Filtered guidebook dict with services, faq, fees_schedules
         guidebook_path: Path to full guidebook JSON for FAQ deduplication
     """
@@ -464,7 +464,7 @@ def run_stage5(
             print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
         return state
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
 
     # Extract methodology context if present
     methodology_context = None
@@ -494,7 +494,7 @@ def run_stage5(
         locked_case_counts
     )
 
-    # Call Claude with tool-use — retry up to 3 times if gap_table comes back empty
+    # Call the LLM with tool-use — retry up to 3 times if gap_table comes back empty
     MAX_ATTEMPTS = 3
     tool_call_failed = False
 
@@ -524,7 +524,7 @@ def run_stage5(
 
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=CHAT_MODEL,
                 max_tokens=16000,  # Large datasets need room for full gap_table + faq_validations
                 system=system_prompt,
                 tools=[GAP_ANALYSIS_TOOL],

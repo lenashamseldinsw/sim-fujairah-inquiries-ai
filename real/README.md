@@ -22,7 +22,18 @@ cd real && streamlit run app_inq_comp.py
 
 Opens at `http://localhost:8501`.
 
-**API key:** read from Streamlit secrets (`~/.streamlit/secrets.toml` or the deployed app's secrets), **not** from `.env`. The `.env` here only sets `APP_MODE=real`.
+**LLM provider:** [Core42](../CLAUDE.md#core42-integration-real-version), an OpenAI-compatible gateway.
+Credentials are read from `real/.env` first and then from Streamlit secrets (`.streamlit/secrets.toml`, or the deployed app's secrets — Streamlit Cloud has no `.env`).
+At minimum set `CORE42_API_KEY`, `CORE42_BASE_URL` and `CORE42_MODEL`; see `../.env.example` for every setting.
+
+Before a first run on a new deployment, prove the gateway independently of the app:
+
+```bash
+cd real
+python smoke_core42.py             # key, base URL, api-key header, model, JSON mode
+python smoke_core42_tools.py       # does this deployment support function calling?
+python smoke_core42_rate_limits.py # where LLM_MAX_CONCURRENCY should sit
+```
 
 ---
 
@@ -33,7 +44,16 @@ real/
 ├── app_inq_comp.py                  # Unified dual-flow UI (RECOMMENDED)
 ├── app.py                           # Legacy single-flow UI (inquiries only)
 ├── report_display.py                # Unified report display handler
-├── .env                             # APP_MODE=real (no API key here)
+├── .env                             # APP_MODE=real + Core42 credentials and limits
+├── smoke_core42*.py                 # Standalone gateway probes (real API calls)
+├── core42/                          # Core42 integration, shared by both flows
+│   ├── settings.py                  # Env config, base-URL normalisation, fail-fast
+│   ├── client.py                    # Chat-completions client (lazy singleton)
+│   ├── messages.py                  # Core42Client — the Messages-shaped facade
+│   ├── json_repair.py               # Truncation / fence / <think> repair cascade
+│   ├── retry.py                     # Error classification + 10s floor for 429s
+│   ├── concurrency.py               # One process-wide in-flight cap
+│   └── tokens.py                    # Per-stage token and cost tracking
 ├── analysis/                        # Thin routing layer (no analyzer here)
 │   ├── __init__.py                  # Dynamic loader: set_flow_context / get_analyzer_for_flow / get_display_for_flow
 │   ├── base.py                      # Abstract Analyzer interface
@@ -151,7 +171,12 @@ Edit the matching `pipeline/generate_*_section.py`, and `build_report_ar.py` / `
 
 | Issue | Solution |
 |-------|----------|
-| Missing API key | Set `ANTHROPIC_API_KEY` in Streamlit secrets, **not** `.env` |
+| `Core42 is not configured` | Set `CORE42_API_KEY` + `CORE42_BASE_URL` in `real/.env` or Streamlit secrets, then **fully restart** — settings are cached and the client is a singleton |
+| 401 on every call | The gateway needs the `api-key` header as well as the bearer token; confirm the key, then run `python smoke_core42.py` |
+| `unsupported parameter` | Something sent `max_tokens`; the client sends `max_completion_tokens` |
+| Reports come back thin or half-empty | Output ceiling hit — look for `finish_reason=length` and `repaired by closing open JSON structures` in the logs, then raise `LLM_MAX_OUTPUT_TOKENS` / `LLM_OUTPUT_TOKEN_HEADROOM` |
+| 429 storm, run slower than before | Lower `LLM_MAX_CONCURRENCY` (it is per process — Streamlit workers multiply it); `smoke_core42_rate_limits.py` finds the ceiling |
+| Stage 3/4/5 fall back to JSON mode | The deployment rejected function calling — expected, logged at ERROR once. Confirm with `smoke_core42_tools.py`; set `CORE42_TOOL_MODE=json` to skip the one-time rejection |
 | Wrong analyzer loaded | Ensure `set_flow_context()` (or `FLOW_TYPE`) is set before `get_analyzer_for_flow()` |
 | "Could not find guidebook JSON" (Stage 5) | Confirm `guidebook_final.json` exists in the flow's `*-supporting-files/` |
 | Stage 5 produces no gaps | Stage 4 must complete first (populates `journey_map`/`faq_candidates`); check `[Stage5]` logs |
@@ -164,7 +189,9 @@ Edit the matching `pipeline/generate_*_section.py`, and `build_report_ar.py` / `
 
 1. Push the repo to GitHub.
 2. On https://streamlit.io/cloud, select the repo and set the entry file to `real/app_inq_comp.py`.
-3. Add `ANTHROPIC_API_KEY` (and any other secrets) in the app's **Secrets** settings.
+3. Add `CORE42_API_KEY`, `CORE42_BASE_URL`, `CORE42_MODEL`, `CORE42_MODEL_FAST` (and any other secrets) in the app's **Secrets** settings.
+   Streamlit Cloud has no `.env`, so secrets are the only source there.
+   `LLM_MAX_CONCURRENCY` is per worker process — divide the budget you want by the worker count.
 4. Deploy.
 
 ---

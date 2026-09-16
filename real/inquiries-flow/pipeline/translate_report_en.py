@@ -19,7 +19,7 @@ and returns None so the pipeline continues without crashing.
 """
 
 import json
-import anthropic
+from .llm import Core42Client, CHAT_MODEL, APIError
 from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -64,7 +64,7 @@ def _strip_fences(text: str) -> str:
 def translate_report_to_english(
     report_json: Dict[str, Any],
     api_key: str,
-    model: str = "claude-sonnet-4-6",
+    model: str = CHAT_MODEL,
 ) -> Optional[Dict[str, Any]]:
     """
     Translate all Arabic string values in report_json to English.
@@ -74,8 +74,8 @@ def translate_report_to_english(
 
     Args:
         report_json: The Arabic report dict produced by generate_json_report().
-        api_key:     Anthropic API key.
-        model:       Model slug — defaults to claude-sonnet-4-6 to match the pipeline.
+        api_key:     Core42 API key.
+        model:       Core42 model tier — defaults to the reasoning tier, as the pipeline does.
 
     Returns:
         A deep copy of report_json with Arabic values replaced by English translations,
@@ -97,7 +97,7 @@ def translate_report_to_english(
 
     print(f"[TranslateEN] Sending report JSON ({len(report_json_str):,} chars) to {model} for translation...")
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
     user_content = _USER_TEMPLATE.format(report_json_str=report_json_str)
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -112,8 +112,8 @@ def translate_report_to_english(
                 system=_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_content}],
             )
-        except anthropic.APIError as exc:
-            print(f"[TranslateEN] Anthropic API error on attempt {attempt}: {exc}")
+        except APIError as exc:
+            print(f"[TranslateEN] Core42 API error on attempt {attempt}: {exc}")
             if attempt == MAX_ATTEMPTS:
                 return None
             continue
@@ -157,14 +157,14 @@ def translate_report_to_english(
 def _translate_single_section_json(
     section_json_str: str,
     api_key: str,
-    model: str = "claude-sonnet-4-6",
+    model: str = CHAT_MODEL,
 ) -> Optional[Dict[str, Any]]:
     """
     Translate a single report section JSON string to English.
 
     Args:
         section_json_str: JSON string of one report section
-        api_key: Anthropic API key
+        api_key: Core42 API key
         model: Model to use for translation
 
     Returns:
@@ -174,7 +174,7 @@ def _translate_single_section_json(
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        client = Core42Client(api_key=api_key)
         user_content = _USER_TEMPLATE.format(report_json_str=section_json_str)
 
         message = client.messages.create(
@@ -211,7 +211,7 @@ def translate_complete_report_json_parallel(
 
     Args:
         report_json: Complete Arabic report JSON with 'sections' key
-        api_key: Anthropic API key
+        api_key: Core42 API key
         max_workers: Number of parallel threads (default 9)
 
     Returns:

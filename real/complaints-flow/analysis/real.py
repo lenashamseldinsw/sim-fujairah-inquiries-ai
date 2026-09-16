@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import os
 from datetime import datetime
-import anthropic
 from .base import Analyzer
 
 # Import pipeline (located in parent complaints-flow folder)
@@ -37,23 +36,34 @@ for mod_key in list(sys.modules.keys()):
 
 # Now import fresh from this flow's pipeline
 from pipeline.orchestrator import PipelineOrchestrator
+from pipeline.llm import Core42Client, get_settings
 
 class RealAnalyzer:
     def __init__(self, api_key=None):
         # Try to get API key from parameter, then st.secrets, then environment
         if api_key is None:
             try:
-                api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                api_key = st.secrets.get("CORE42_API_KEY")
             except:
                 api_key = None
 
         if api_key is None:
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            api_key = os.environ.get("CORE42_API_KEY")
 
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in secrets or environment")
+            # Last resort: the Core42 settings layer, which loads .env itself and
+            # falls back to Streamlit secrets — so a key set only in real/.env
+            # still works when the analyzer is built outside the Streamlit app.
+            api_key = get_settings().api_key
+
+        if not api_key:
+            raise ValueError(
+                "CORE42_API_KEY not found in secrets or environment. Set "
+                "CORE42_API_KEY and CORE42_BASE_URL in real/.env or in "
+                ".streamlit/secrets.toml, then restart the app."
+            )
         self.api_key = api_key
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.client = Core42Client(api_key=api_key)
 
         # Create temp directory for outputs
         self.output_dir = Path(tempfile.gettempdir()) / "complaints_output"

@@ -15,7 +15,7 @@ Also validates FAQ candidates from Stage 4 against guidebook.
 """
 
 import json
-import anthropic
+from .llm import Core42Client, CHAT_MODEL
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
 from .state import PipelineState, GapRow, FAQCandidate
@@ -404,7 +404,7 @@ def run_stage5(
 
     Args:
         state: Pipeline state
-        api_key: Anthropic API key
+        api_key: Core42 API key
         guidebook_data: Filtered guidebook dict with services, faq, fees_schedules
         guidebook_path: Path to full guidebook JSON for FAQ deduplication
     """
@@ -432,7 +432,7 @@ def run_stage5(
             print("[Stage5] journey_map and faq_candidates are both empty — nothing to process.")
         return state
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
 
     # Build locked case counts from journey_map before API call
     # This maps friction clusters to their case counts for injection into results
@@ -450,14 +450,14 @@ def run_stage5(
         locked_case_counts
     )
 
-    # Call Claude with tool-use — retry up to 3 times if gap_table comes back empty
+    # Call the LLM with tool-use — retry up to 3 times if gap_table comes back empty
     MAX_ATTEMPTS = 3
     for attempt in range(1, MAX_ATTEMPTS + 1):
         if attempt > 1:
             print(f"[Stage5] Retrying LLM call (attempt {attempt}/{MAX_ATTEMPTS}) — gap_table was empty on previous attempt")
 
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=CHAT_MODEL,
             max_tokens=16000,  # Large datasets need room for full gap_table + faq_validations
             system="You are an expert analyst of government customer service. Provide gap analysis based on the guidebook and customer interaction patterns. Return detailed, bilingual recommendations.",
             tools=[GAP_ANALYSIS_TOOL],

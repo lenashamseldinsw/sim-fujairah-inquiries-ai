@@ -123,7 +123,7 @@ def test_parallel_translation(api_key: str) -> bool:
     Test the parallel translation function.
 
     Args:
-        api_key: Anthropic API key
+        api_key: Core42 API key
 
     Returns:
         True if test passed, False otherwise
@@ -348,9 +348,9 @@ if __name__ == "__main__":
     import os
 
     # Get API key
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("CORE42_API_KEY")
     if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable not set")
+        print("Error: CORE42_API_KEY environment variable not set")
         sys.exit(1)
 
     # Run test

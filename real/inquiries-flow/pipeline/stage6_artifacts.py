@@ -12,7 +12,7 @@ Report dict is stored in state.report_json for passing to display functions.
 
 import json
 import sys
-import anthropic
+from .llm import Core42Client, CHAT_MODEL, get_settings
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Any, List
@@ -438,7 +438,7 @@ def generate_word_report(
         output_path: Base path for .docx output (Arabic). English docx is saved
                      alongside it with an ``_en`` suffix before the extension.
         language: Kept for backward compatibility.
-        api_key: Anthropic API key for LLM report generation.
+        api_key: Core42 API key for LLM report generation.
     """
     if output_path is None:
         print("⚠️  Skipping Word report generation (no output_path provided)")
@@ -738,7 +738,7 @@ def _generate_report_sections(state: PipelineState, api_key: str = "") -> None:
 def _fix_unescaped_newlines(json_str: str) -> str:
     """Fix unescaped newlines in JSON string values (from LLM responses).
 
-    When Claude returns JSON with literal newlines in Arabic text,
+    When the model returns JSON with literal newlines in Arabic text,
     this escapes them properly so json.loads() can parse it.
     """
     result = []
@@ -925,13 +925,13 @@ def _root_cause_label(root_cause_category: str) -> str:
 
 def generate_executive_summary_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
     """
-    Generate the executive summary section using Claude API.
+    Generate the executive summary section using Core42.
 
-    Extracts all necessary metrics from state and calls Claude with the detailed prompt.
+    Extracts all necessary metrics from state and calls Core42 with the detailed prompt.
 
     Args:
         state: Pipeline state with classified cases and analysis results
-        api_key: Anthropic API key
+        api_key: Core42 API key
 
     Returns:
         Dict with section_key and content following the specified JSON structure
@@ -1210,11 +1210,11 @@ RULES:
 - CRITICAL: Do NOT use double-quote characters (") inside any string value. Use « » for citations.
 """
 
-        client = anthropic.Anthropic(api_key=api_key)
-        print(f"[ExecSummary] Calling API with model claude-sonnet-4-6")
+        client = Core42Client(api_key=api_key)
+        print(f"[ExecSummary] Calling Core42 with the {CHAT_MODEL} tier")
         print(f"[ExecSummary] total_cases={total_cases}, reclassified={misclassification_count}")
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=CHAT_MODEL,
             max_tokens=4000,  # Increased to handle full response
             messages=[
                 {
@@ -1651,7 +1651,7 @@ def build_bilingual_report_sections(exec_summary: Dict[str, Any], methodology: D
 
 def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str, Any]:
     """
-    Generate the methodology section using Claude API.
+    Generate the methodology section using Core42.
 
     Covers:
     - 2.1 المصادر المُحلَّلة (Sources analyzed table)
@@ -1660,7 +1660,7 @@ def generate_methodology_section(state: PipelineState, api_key: str) -> Dict[str
 
     Args:
         state: Pipeline state with classified cases and analysis results
-        api_key: Anthropic API key
+        api_key: Core42 API key
 
     Returns:
         Dict with section_key and content following the specified JSON structure
@@ -1844,7 +1844,7 @@ classification_logic:
   fallthrough_confidence: 0.70–0.75
 
 llm_stage:
-  model: "claude-haiku-4-5-20251001"
+  model: {get_settings().model_fast}
   trigger: "confidence < {confidence_threshold_stage2}"
   llm_confidence_threshold: {llm_confidence_threshold}
   low_confidence_action: "routed to human review queue — excluded from report counts"
@@ -2103,7 +2103,7 @@ def run_stage6(
         excel_path: Path to save Excel workbook
         word_path: Path to save Word document
         language: 'ar' or 'en'
-        api_key: Anthropic API key for Word report generation
+        api_key: Core42 API key for Word report generation
 
     Returns:
         Updated state with report_json dictionary

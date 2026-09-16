@@ -113,8 +113,7 @@ No fallbacks. No placeholder returns. Every failure raises so the caller
 
 import json
 from typing import Dict, Any, List, Tuple
-import anthropic
-
+from .llm import Core42Client, CHAT_MODEL
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
@@ -624,7 +623,7 @@ def generate_improvement_roadmap_section(
 
     Args:
         state:   Pipeline state (stages 1–7 must be complete)
-        api_key: Anthropic API key
+        api_key: Core42 API key
 
     Returns:
         Dict with keys: section, section_body, roadmap_table
@@ -759,9 +758,9 @@ def generate_improvement_roadmap_section(
     )
 
     # ── LLM call ──────────────────────────────────────────────────────────────
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=CHAT_MODEL,
         max_tokens=4000,
         system=(
             "You are a government report writer specialising in formal Arabic public-sector analysis. "

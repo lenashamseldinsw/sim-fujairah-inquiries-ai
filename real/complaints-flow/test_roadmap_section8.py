@@ -35,9 +35,9 @@ def test_roadmap_sources():
     print("=" * 80)
 
     # Get API key
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("CORE42_API_KEY")
     if not api_key:
-        print("❌ ANTHROPIC_API_KEY environment variable not set")
+        print("❌ CORE42_API_KEY environment variable not set")
         return False
 
     # Run pipeline through stage 5 to populate state

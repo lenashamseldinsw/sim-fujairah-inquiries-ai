@@ -81,8 +81,7 @@ No fallbacks. No placeholder returns. Every failure raises so the caller
 
 import json
 from typing import Dict, Any, List, Optional, Tuple
-import anthropic
-
+from .llm import Core42Client, CHAT_MODEL
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response
 
@@ -702,7 +701,7 @@ def generate_ai_use_cases_section(
     )
 
     # ── API call ─────────────────────────────────────────────────────────────
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
     print(
         f"[AIUseCases] Calling API — "
         f"total_cases={total_cases}, "
@@ -712,7 +711,7 @@ def generate_ai_use_cases_section(
     )
 
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=CHAT_MODEL,
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )

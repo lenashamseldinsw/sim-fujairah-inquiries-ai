@@ -56,12 +56,12 @@ def main():
         return False
 
     # Get API key from environment, Streamlit secrets, or secrets.toml
-    api_key = os.getenv('ANTHROPIC_API_KEY', '')
+    api_key = os.getenv('CORE42_API_KEY', '')
 
     if not api_key:
         try:
             import streamlit as st
-            api_key = st.secrets.get('ANTHROPIC_API_KEY', '')
+            api_key = st.secrets.get('CORE42_API_KEY', '')
         except:
             pass
 
@@ -76,12 +76,12 @@ def main():
             if secrets_path.exists():
                 with open(secrets_path, 'rb') as f:
                     secrets = tomllib.load(f)
-                    api_key = secrets.get('ANTHROPIC_API_KEY', '')
+                    api_key = secrets.get('CORE42_API_KEY', '')
         except ImportError:
             pass  # tomli not available, skip secrets.toml loading
 
     if not api_key:
-        print("❌ ANTHROPIC_API_KEY not found in environment, Streamlit, or ~/.streamlit/secrets.toml")
+        print("❌ CORE42_API_KEY not found in environment, Streamlit, or ~/.streamlit/secrets.toml")
         return False
 
     # Initialize orchestrator with output directory

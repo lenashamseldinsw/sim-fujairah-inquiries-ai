@@ -9,12 +9,12 @@ Extracts:
 - Notification opportunities
 
 Groups cases by (top_level, sub_classification) tuple for domain-specific analysis.
-Uses Claude API with tool-use for structured output.
+Uses Core42 with tool-use for structured output.
 Guidebook is chunked and embedded at startup (chromadb, in-memory).
 """
 
 import json
-import anthropic
+from .llm import Core42Client, CHAT_MODEL
 from typing import Dict, Any, List
 from collections import defaultdict
 from .state import PipelineState, PatternCluster, JourneyFriction, FAQCandidate
@@ -660,7 +660,7 @@ FAQ_ONLY_TOOL = {
 
 def _retry_faq_only(
     state: PipelineState,
-    client: anthropic.Anthropic,
+    client: Core42Client,
     cases_text: str,
 ) -> PipelineState:
     """
@@ -690,7 +690,7 @@ def _retry_faq_only(
         print(f"[Stage4] faq-only focused retry (attempt {attempt}/2)...")
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=CHAT_MODEL,
                 max_tokens=8000,  # Match complaints flow
                 system=system_prompt,
                 tools=[FAQ_ONLY_TOOL],
@@ -741,7 +741,7 @@ def _retry_faq_only(
 
 def _retry_journey_map_only(
     state: PipelineState,
-    client: anthropic.Anthropic,
+    client: Core42Client,
     cases_text: str,
 ) -> PipelineState:
     """
@@ -781,7 +781,7 @@ def _retry_journey_map_only(
         print(f"[Stage4] journey_map-only focused retry (attempt {attempt}/2)...")
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=CHAT_MODEL,
                 max_tokens=4000,  # Match complaints flow
                 system=system_prompt,
                 tools=[JOURNEY_MAP_ONLY_TOOL],
@@ -843,7 +843,7 @@ def _retry_journey_map_only(
 
 def _generate_faq_candidates_by_service(
     state: PipelineState,
-    client: anthropic.Anthropic,
+    client: Core42Client,
 ) -> List[FAQCandidate]:
     """
     Generate FAQ candidates by splitting dataset by service type.
@@ -855,7 +855,7 @@ def _generate_faq_candidates_by_service(
 
     Args:
         state: Pipeline state with all_classified cases
-        client: Anthropic API client
+        client: Core42 API client
 
     Returns:
         List of FAQCandidate objects (frequency set to 0, reconciled in Stage 5)
@@ -919,7 +919,7 @@ CRITICAL RULES:
 
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=CHAT_MODEL,
                 max_tokens=2000,  # Match complaints flow
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -981,7 +981,7 @@ CRITICAL RULES:
 
 def _generate_faq_candidates_from_grouped_cases(
     state: PipelineState,
-    client: anthropic.Anthropic,
+    client: Core42Client,
     groups: Dict[tuple, List],
 ) -> List[FAQCandidate]:
     """
@@ -993,7 +993,7 @@ def _generate_faq_candidates_from_grouped_cases(
 
     Args:
         state: Pipeline state
-        client: Anthropic API client
+        client: Core42 API client
         groups: Dict of (top_level, sub_classification) → [cases]
 
     Returns:
@@ -1036,7 +1036,7 @@ Only include FAQs that are directly supported by the case examples above.
 
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=CHAT_MODEL,
                 max_tokens=1000,  # Match complaints flow
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -1193,7 +1193,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
     if not state.all_classified:
         return state
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = Core42Client(api_key=api_key)
 
     # Aggregate cases by (top_level, sub_classification) tuple for structured analysis
     groups = defaultdict(list)
@@ -1241,7 +1241,7 @@ def run_stage4(state: PipelineState, api_key: str) -> PipelineState:
     #
         print(f"[Stage4] Calling LLM (attempt {attempt}/{max_attempts})...")
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=CHAT_MODEL,
             max_tokens=16000,  # Match complaints flow (avoid 10-minute timeout)
             system=build_analysis_system_prompt(),
             tools=[ANALYSIS_TOOL],

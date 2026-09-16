@@ -49,8 +49,7 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 from collections import defaultdict
-import anthropic
-
+from .llm import Core42Client, CHAT_MODEL
 from .state import PipelineState, convert_month_year_to_arabic
 from .json_utils import parse_json_response, extract_methodology_context
 from .utils import normalize_arabic
@@ -309,7 +308,7 @@ def _sub_classification_breakdown(
 
 def generate_workload_map_section(state: PipelineState, api_key: str) -> Optional[Dict[str, Any]]:
     """
-    Generate Section 3 (Workload Map) for complaints pipeline via Claude API.
+    Generate Section 3 (Workload Map) for complaints pipeline via Core42.
 
     Complaints variant:
     - Pre-computes 4 subsections (3.1 complaint subs, 3.2 channels, 3.3 resolution, 3.4 departments)
@@ -502,7 +501,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
             'Use angle brackets « » instead of double quotes when citing names.\n'
         )
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = Core42Client(api_key=api_key)
         print(
             f"[WorkloadMap] Calling API — total_cases={total_cases}, "
             f"complaint_subs={len(complaint_subs)}, "
@@ -511,7 +510,7 @@ def generate_workload_map_section(state: PipelineState, api_key: str) -> Optiona
         )
 
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=CHAT_MODEL,
             max_tokens=8000,
             messages=[{"role": "user", "content": prompt}],
         )
