@@ -278,6 +278,36 @@ def _build_reclassification_samples(state: PipelineState, max_samples: int = 5) 
 class JSONReportBuilder:
     """Builds demo-compatible report dictionary from pipeline state (complaints version)."""
 
+
+    # The report's design accent. Charts use it for the "this is the headline series"
+    # slot, and a tenant that sent brand colours should see theirs there instead.
+    #
+    # Only this one slot is themed. The greys beside it are neutral, and the red in
+    # the severity palette is *semantic* — it means critical, the same way the
+    # platform-locked status colours do — so repainting it in a tenant's brand would
+    # destroy the meaning rather than apply an identity.
+    DESIGN_ACCENT = "#B68A35"
+
+    @property
+    def accent(self) -> str:
+        """The brand accent for charts: the tenant's primary, or the design default.
+
+        Read off ``state.branding``, which ``pipeline.py`` populates only when the
+        caller actually set ``brand`` — so an absent brand renders exactly as this
+        report always has.
+        """
+        branding = getattr(self.state, "branding", None) or {}
+        brand = branding.get("brand") if isinstance(branding, dict) else None
+        primary = brand.get("primary") if isinstance(brand, dict) else None
+        if not isinstance(primary, str):
+            return self.DESIGN_ACCENT
+        token = primary.strip()
+        if len(token.lstrip("#")) == 3:
+            token = "#" + "".join(c * 2 for c in token.lstrip("#"))
+        if not token.startswith("#"):
+            token = "#" + token
+        return token if re.fullmatch(r"#[0-9a-fA-F]{6}", token) else self.DESIGN_ACCENT
+
     def __init__(self, state: PipelineState):
         self.state = state
         self.section_counter = 0
@@ -462,7 +492,7 @@ class JSONReportBuilder:
                     "data": [float(subcategory_counts.get(c, 0)) for c in categories]
                 }
             ],
-            "colors": ["#B68A35"],
+            "colors": [self.accent],
             "orientation": "vertical"
         }
 
@@ -486,6 +516,8 @@ class JSONReportBuilder:
         'شكوى معقدة': 'طلب معقد',
     }
     _SEVERITY_ORDER = ['طلب عادي', 'طلب عاجل', 'طلب معقد']
+    # Index 0 is the accent slot and is themed at use; '#999999' is neutral and
+    # '#FF0000' means critical — semantic, and deliberately not brandable.
     _SEVERITY_COLORS = ['#B68A35', '#999999', '#FF0000']
 
     def build_service_distribution_chart(self) -> Optional[Dict[str, Any]]:
@@ -524,7 +556,7 @@ class JSONReportBuilder:
                     "data": values,
                 }
             ],
-            "colors": ["#B68A35"],
+            "colors": [self.accent],
             "orientation": "vertical"
         }
 
@@ -554,7 +586,7 @@ class JSONReportBuilder:
                     "data": [float(accepted), float(rejected)],
                 }
             ],
-            "colors": ["#B68A35", "#FF0000"],
+            "colors": [self.accent, "#FF0000"],
         }
 
     def build_severity_chart(self) -> Optional[Dict[str, Any]]:
@@ -594,7 +626,8 @@ class JSONReportBuilder:
 
         values = [float(counts[s]) for s in categories]
         colors = [
-            self._SEVERITY_COLORS[self._SEVERITY_ORDER.index(s)]
+            (self.accent if self._SEVERITY_ORDER.index(s) == 0
+             else self._SEVERITY_COLORS[self._SEVERITY_ORDER.index(s)])
             for s in categories
         ]
 
@@ -644,7 +677,7 @@ class JSONReportBuilder:
         if on_time > 0:
             categories.append("ضمن الوقت المحدد")
             values.append(float(on_time))
-            colors.append("#B68A35")
+            colors.append(self.accent)
         if late > 0:
             categories.append("خارج الوقت المحدد")
             values.append(float(late))

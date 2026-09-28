@@ -20,6 +20,7 @@ numbers, and a smoke run's output ends up pasted into tickets and chat.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 import time
@@ -27,6 +28,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Progress is the whole point of this script, and Python buffers stdout when it is
+# not a terminal — so piping it to a file or a CI log showed nothing at all until the
+# run ended, minutes later. Flushing every line costs nothing here.
+print = functools.partial(print, flush=True)  # noqa: A001
 
 POLL_INTERVAL_SEC = 10.0
 TERMINAL = {"succeeded", "failed", "cancelled"}

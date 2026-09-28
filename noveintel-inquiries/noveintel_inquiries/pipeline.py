@@ -128,12 +128,21 @@ def _materialise_branding(entity: EntityInfo, workdir: Path) -> dict[str, Any]:
         "center_name_ar": entity.center_name_ar,
         "center_name_en": entity.center_name_en,
         "closing_statement": entity.closing_statement,
-        "brand": {
-            "primary": entity.brand.primary,
-            "secondary": entity.brand.secondary,
-        },
         "logo_path": None,
     }
+
+    # ``brand`` is passed on ONLY when the caller actually set it, and the difference
+    # matters. ``BrandColors`` defaults to the NoveAI platform palette — it is a
+    # shared contract model and must not carry any one organisation's colours — but
+    # the report's own design palette is neither NoveAI's nor a tenant's. So an
+    # absent ``brand`` has to stay absent all the way to the builder, which then
+    # renders in the design the report has always used. Sending the defaults here
+    # instead would repaint every existing report in NoveAI navy.
+    if "brand" in entity.model_fields_set:
+        branding["brand"] = {
+            "primary": entity.brand.primary,
+            "secondary": entity.brand.secondary,
+        }
 
     try:
         data = entity.logo_bytes()

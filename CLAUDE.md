@@ -171,13 +171,52 @@ injected into the report dict per run, rather than being read from a hard-coded
 `assets/` path. It is deliberately *not* a module global: one worker can build two
 tenants' reports at once, and a global is how one run's logo reaches the other's cover.
 
-### Known limitation
+### Branding and theming
 
-`entity.brand` is carried through the contract but **not yet applied to the Word
-theme** — the logo, names and closing statement are. The palette is still the flow's
-fixed design, baked into module-level style objects in `stages/build_report_ar.py`.
-Theming it means turning those constants into a per-build theme threaded through the
-builder, which is worth doing deliberately with the report output diffed.
+`EntityInfo` drives the document: the logo (per run, from `logo_base64`), the
+organisation names, the closing statement, and — since theming landed — the palette.
+`brand.primary` colours headings, banners, table headers, the cover, the table of
+contents and each chart's accent series; `brand.secondary` colours accents.
+
+Two rules worth knowing before touching this:
+
+**Omitting `brand` is not the same as sending its defaults.** `BrandColors` defaults to
+the NoveAI platform palette, because it is a *shared contract model* and must carry no
+organisation's colours. But an unbranded report must look the way it always has, so
+`pipeline.py` passes `brand` on only when the caller actually set it
+(`model_fields_set`), and the builders fall back to their own design palette when it is
+absent. Sending the defaults through instead would silently repaint every existing
+report navy. `tests/test_theme.py` pins this.
+
+**Semantic colours are not brandable.** The red in the severity palette means critical,
+like the platform-locked `STATUS_COLORS`; the greys beside it carry no identity.
+Repainting those in a tenant's brand would destroy meaning. Only the accent slot is
+themed.
+
+### Job durability
+
+Two independent settings, defaulting to the development pair:
+
+| | `<PREFIX>_JOB_BACKEND` | `<PREFIX>_JOB_DISPATCH` |
+|---|---|---|
+| Development / single box | `local` | `inprocess` |
+| Load-balanced | `table` | `inprocess` |
+| Production | `table` | `queue` |
+
+`backend` is where job state lives — `local` (this worker's memory, mirrored to disk)
+or `table` (Azure Table Storage, readable by every instance). `dispatch` is where the
+run executes — `inprocess` (dies with the worker) or `queue` (a queue-triggered
+function; an unacknowledged message is redelivered).
+
+A redelivered run **starts over rather than resuming**: the stages are not
+checkpointed, and stitching one process's stage 4 onto another's stage 5 would produce
+a report whose figures came from two different runs.
+
+`function_app.py` holds the queue trigger and the poison-queue handler, and is the only
+file in either service that imports `azure.*`. `jobs/table_storage.py` imports the
+tables SDK inside a method so the module stays importable without it;
+`tests/test_api.py::TestPackageBoundaries` enforces both by parsing the AST and by
+importing the package with `azure` and `streamlit` poisoned.
 
 ### Editing these
 

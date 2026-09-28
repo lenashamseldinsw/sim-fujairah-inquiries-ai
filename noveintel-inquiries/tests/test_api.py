@@ -256,24 +256,64 @@ class TestPolling:
 
 
 class TestPackageBoundaries:
-    def test_the_package_imports_no_hosting_or_ui_dependency(self):
-        """Rule 1: nothing under the package may import azure.* or streamlit.
+    def test_no_module_level_import_of_a_hosting_or_ui_package(self):
+        """Rule 1: importing the package must not require a hosting or UI SDK.
 
-        The Azure wrapper is two files at the project root, and deleting them must
-        leave a complete uvicorn deployment.
+        Checked by parsing, not by searching the text. A substring scan flags its own
+        documentation — this very file discusses ``azure`` — and prose is not an
+        import. The AST says what the module actually does.
+
+        Module level specifically. ``jobs/table_storage.py`` imports the Azure tables
+        SDK *inside* a method on purpose: that is what lets the module be imported,
+        and the rest of the package tested, on a machine with no Azure libraries.
+        Hoisting it to the top would break exactly the property this protects.
         """
+        import ast
         from pathlib import Path
 
         import noveintel_inquiries
 
+        banned = ("azure", "streamlit")
         root = Path(noveintel_inquiries.__file__).parent
         offenders = []
-        for path in root.rglob("*.py"):
-            text = path.read_text(encoding="utf-8")
-            for banned in ("import azure", "from azure", "streamlit"):
-                if banned in text:
-                    offenders.append(f"{path.relative_to(root)}: {banned}")
+
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in tree.body:  # module level only
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [node.module or ""]
+                for name in names:
+                    if name.split(".")[0] in banned:
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}: {name}")
+
         assert not offenders, offenders
+
+    def test_the_package_imports_with_those_packages_unavailable(self):
+        """The invariant the rule exists for, asserted end to end.
+
+        The AST check above can be satisfied by a lazy import that still runs on the
+        import path. This one proves the thing that matters: with ``azure`` and
+        ``streamlit`` poisoned in ``sys.modules``, the package — including the job
+        layer and its table backend — still imports.
+        """
+        import subprocess
+        import sys
+
+        code = (
+            "import sys;"
+            "sys.modules['azure'] = None; sys.modules['streamlit'] = None;"
+            "import noveintel_inquiries;"
+            "import noveintel_inquiries.jobs;"
+            "from noveintel_inquiries.jobs import TableStorageJobStore;"
+            "assert TableStorageJobStore('UseDevelopmentStorage=true')"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True
+        )
+        assert result.returncode == 0, result.stderr
 
     def test_the_contract_imports_without_fastapi_or_pandas(self):
         """``api.models`` must be usable by a caller who will never run the service."""

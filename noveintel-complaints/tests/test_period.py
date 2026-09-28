@@ -13,6 +13,7 @@ import pytest
 
 from noveintel_complaints.api.models import PeriodGranularity
 from noveintel_complaints.engine import derive_granularity, parse_dates, resolve_period
+from noveintel_complaints.stages.state import extract_month_year_range
 
 
 class TestGranularity:
@@ -73,3 +74,46 @@ class TestParsing:
         """The source systems here are configured for the region: 03/04 is 3 April.
         Reading it the other way silently moves a case between quarters."""
         assert parse_dates(["03/04/2025"]) == [date(2025, 4, 3)]
+
+
+class TestMonthYearExtraction:
+    """``stages.state.extract_month_year_range`` — the label Stage 6 cannot run without.
+
+    Regression tests for a defect a live run found. The Streamlit path handed this
+    function pandas Timestamps, whose ``str()`` uses a space separator, so only that
+    form was ever exercised. A JSON caller sends ISO 8601 with a ``T`` — the format
+    this API documents as safest — which parsed as nothing, left ``month_year`` None,
+    and failed Stage 6 with an error blaming Stage 3.
+    """
+
+    def test_iso_8601_with_a_t_separator(self):
+        cases = [
+            {"date_opened": "2025-07-17T12:01:16"},
+            {"date_opened": "2025-02-17T09:07:08"},
+        ]
+        assert extract_month_year_range(cases) == "February - July 2025"
+
+    def test_a_space_separator_still_works(self):
+        """What the Streamlit path produced. Must not regress."""
+        assert (
+            extract_month_year_range([{"date_opened": "2025-02-17 09:07:08"}])
+            == "February 2025"
+        )
+
+    @pytest.mark.parametrize(
+        "value", ["2025-02-17", "17/02/2025", "2025-02-17T09:07:08", "2025-02-17 09:07:08"]
+    )
+    def test_every_documented_format_yields_a_label(self, value):
+        assert extract_month_year_range([{"date_opened": value}]) == "February 2025"
+
+    def test_arabic_month_names(self):
+        assert (
+            extract_month_year_range([{"date_opened": "2025-02-17T09:07:08"}], lang="ar")
+            == "فبراير 2025"
+        )
+
+    def test_unparseable_dates_give_none_not_a_wrong_label(self):
+        """None is what Stage 6 checks for. A plausible-looking wrong label would be
+        worse: it would print on the cover of a report about a different period."""
+        assert extract_month_year_range([{"date_opened": "not a date"}]) is None
+        assert extract_month_year_range([]) is None

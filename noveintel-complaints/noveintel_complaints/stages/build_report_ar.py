@@ -6,6 +6,7 @@ following the design palette in design-palette.md.
 
 import dataclasses
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -97,6 +98,71 @@ PIE_CHART_STYLE = ChartStyle(
 )
 
 # ---------------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------------
+#
+# The palette above is the *renderer's* default, not a tenant's. That distinction
+# is load-bearing: ``EntityInfo`` carries no tenant colours — its ``brand`` defaults
+# to the NoveAI platform palette, and putting a particular organisation's gold in
+# the shared contract would be exactly the defaulted-identity mistake the contract
+# exists to prevent.
+#
+# So the fallback lives here, where it belongs: a request that does not set
+# ``brand`` is rendered in the design this report has always used, and one that does
+# set it is rendered in the tenant's colours. ``pipeline.py`` only puts ``brand``
+# into the branding pack when the caller actually supplied it, which is what makes
+# the two cases distinguishable at all.
+
+
+@dataclasses.dataclass(frozen=True)
+class _Theme:
+    """The two colours the document's chrome is drawn in."""
+
+    primary: str    # headings, banners, table headers, rules
+    secondary: str  # accents
+
+
+DEFAULT_THEME = _Theme(primary=GOLD, secondary=GOLD)
+
+_HEX_RE = re.compile(r"^[0-9a-fA-F]{6}$")
+
+
+def _hex(value: object) -> str | None:
+    """A contract colour as the Word builder wants it: six hex digits, no '#'.
+
+    Returns ``None`` for anything unusable, so a malformed colour falls back to the
+    design palette rather than reaching python-docx, where a bad value produces a
+    document that opens with a repair prompt.
+    """
+    if not isinstance(value, str):
+        return None
+    token = value.strip().lstrip("#")
+    if len(token) == 3:  # #abc is shorthand for #aabbcc
+        token = "".join(c * 2 for c in token)
+    return token.upper() if _HEX_RE.match(token) else None
+
+
+def _theme(data: dict) -> _Theme:
+    """This run's palette: the tenant's brand where given, the design default where not."""
+    brand = _branding(data).get("brand")
+    if not isinstance(brand, dict):
+        return DEFAULT_THEME
+    primary = _hex(brand.get("primary"))
+    if primary is None:
+        return DEFAULT_THEME
+    # A tenant that names one colour means it; the second falls back to the first
+    # rather than to the design palette, which would mix two unrelated identities.
+    return _Theme(primary=primary, secondary=_hex(brand.get("secondary")) or primary)
+
+
+def _table_style(theme: _Theme) -> TableStyle:
+    """The table style for this run. A function, not a constant: the header colour
+    follows the tenant's brand, and a module-level constant is fixed at import."""
+    return dataclasses.replace(TABLE_STYLE, header_bg_color=theme.primary)
+
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -161,6 +227,8 @@ def _make_config(data: dict) -> DocumentConfig:
 
     header_text = f"{parts[0].strip()}  ·  {period}"
 
+    theme = _theme(data)
+
     return DocumentConfig(
         page_size="Letter",
         margin_top=2.54,
@@ -170,9 +238,9 @@ def _make_config(data: dict) -> DocumentConfig:
         default_font="Dubai",
         default_font_size=12,
         default_rtl=True,
-        accent_color=GOLD,
-        secondary_color=GOLD,
-        heading_color=GOLD,
+        accent_color=theme.primary,
+        secondary_color=theme.secondary,
+        heading_color=theme.primary,
         heading1_size=16,
         heading2_size=13,
         heading3_size=12,
@@ -183,15 +251,15 @@ def _make_config(data: dict) -> DocumentConfig:
         header_type="text",
         header_text=header_text,
         header_alignment="CENTER",
-        header_text_color=GOLD,
+        header_text_color=theme.primary,
         header_font_size=10,
-        header_bottom_border_color=GOLD,
+        header_bottom_border_color=theme.primary,
         footer_type="text_and_page_number",
         footer_text="سري — للاستخدام الداخلي  |  صفحة ",
         footer_alignment="CENTER",
         footer_text_color=MID_GRAY,
         footer_font_size=9,
-        footer_top_border_color=GOLD,
+        footer_top_border_color=theme.primary,
         skip_first_page_header_footer=False,
     )
 
@@ -207,6 +275,7 @@ def _build_cover(builder: WordBuilder, data: dict):
     parts = doc_name.split("—")
     period = parts[1].strip() if len(parts) > 1 else ""
 
+    theme = _theme(data)
     cover = CoverPage()
 
     cover.add_spacer(12)
@@ -215,29 +284,29 @@ def _build_cover(builder: WordBuilder, data: dict):
         cover.add_picture(logo_path, width_cm=4.19, height_cm=2.74, alignment="CENTER")
 
 
-    cover.add_horizontal_separator(native=True, color=GOLD)
+    cover.add_horizontal_separator(native=True, color=theme.primary)
 
     cover.add_heading(
         doc_name,
         level=1,
-        style=TextStyle(size=26, alignment="CENTER", color=GOLD, space_before=12, space_after=12),
+        style=TextStyle(size=26, alignment="CENTER", color=theme.primary, space_before=12, space_after=12),
         rtl=True,
     )
 
-    cover.add_horizontal_separator(native=True, color=GOLD)
+    cover.add_horizontal_separator(native=True, color=theme.primary)
 
     cover.add_spacer(16)
 
     if period:
         cover.add_paragraph(
             period,
-            style=TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=0, space_after=8),
+            style=TextStyle(size=14, bold=True, color=theme.primary, alignment="CENTER", space_before=0, space_after=8),
             rtl=True,
         )
 
     cover.add_spacer(16)
 
-    stat_style = TextStyle(size=14, bold=True, color=GOLD, alignment="CENTER", space_before=8, space_after=8)
+    stat_style = TextStyle(size=14, bold=True, color=theme.primary, alignment="CENTER", space_before=8, space_after=8)
 
     if total_complaints:
         cover.add_paragraph(f"إجمالي الشكاوى: {total_complaints} شكوى", style=stat_style, rtl=True)
@@ -267,7 +336,7 @@ def _build_cover(builder: WordBuilder, data: dict):
 # ---------------------------------------------------------------------------
 
 
-def _render_table(builder: WordBuilder, table: dict):
+def _render_table(builder: WordBuilder, table: dict, theme: _Theme = DEFAULT_THEME):
     columns = table.get("columns", [])
     rows = table.get("rows", [])
     if not columns or not rows:
@@ -305,7 +374,7 @@ def _render_table(builder: WordBuilder, table: dict):
 
     builder.add_table(
         ordered_rows,
-        style=TABLE_STYLE,
+        style=_table_style(theme),
         rtl=True,
     )
 
@@ -355,7 +424,7 @@ def _render_chart(builder: WordBuilder, chart: dict):
 # ---------------------------------------------------------------------------
 
 
-def _render_section(builder: WordBuilder, section: dict, depth: int = 1):
+def _render_section(builder: WordBuilder, section: dict, depth: int = 1, theme: _Theme = DEFAULT_THEME):
     level = min(depth, 3)
     title = section.get("title", "")
     if title:
@@ -373,13 +442,13 @@ def _render_section(builder: WordBuilder, section: dict, depth: int = 1):
                 )
 
     for table in section.get("tables", []):
-        _render_table(builder, table)
+        _render_table(builder, table, theme)
 
     for chart in section.get("charts", []):
         _render_chart(builder, chart)
 
     for subsection in section.get("subsections", []):
-        _render_section(builder, subsection, depth=depth + 1)
+        _render_section(builder, subsection, depth=depth + 1, theme=theme)
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +463,7 @@ def build_report(json_path: str | Path, output_path: str | Path):
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
+    theme = _theme(data)
     config = _make_config(data)
     builder = WordBuilder(config)
 
@@ -404,7 +474,7 @@ def build_report(json_path: str | Path, output_path: str | Path):
     builder.add_toc(
         TocStyle(
             heading_text="المحتويات",
-            heading_bg_color=GOLD,
+            heading_bg_color=theme.primary,
             heading_text_color="FFFFFF",
             heading_font="Dubai",
             entry_font="Dubai",
@@ -415,7 +485,7 @@ def build_report(json_path: str | Path, output_path: str | Path):
 
     # Body sections
     for section in data.get("sections", []):
-        _render_section(builder, section, depth=1)
+        _render_section(builder, section, depth=1, theme=theme)
 
     builder.save(str(output_path))
     print(f"Saved: {output_path}")

@@ -400,9 +400,19 @@ def extract_month_year_range(cases: list, lang: str = 'en') -> str:
         try:
             date_obj = None
 
+            # Normalise the ISO 8601 'T' separator to a space before anything else.
+            # The Streamlit path handed this function pandas Timestamps, whose str()
+            # uses a space, so only that form was ever seen. A caller posting JSON
+            # sends "2025-07-17T12:01:16" — the form this API documents as safest —
+            # and without this it reaches the YYYY-MM-DD branch, splits as
+            # ['2025', '07', '17T12:01:16'], fails int() and is dropped. Every date
+            # being dropped leaves month_year None, which fails Stage 6 with an error
+            # that blames Stage 3.
+            raw = str(date_str).replace('T', ' ', 1)
+
             # Try ISO datetime format: YYYY-MM-DD HH:MM:SS
-            if ' ' in str(date_str):
-                date_part = str(date_str).split(' ')[0]  # Get YYYY-MM-DD part
+            if ' ' in raw:
+                date_part = raw.split(' ')[0]  # Get YYYY-MM-DD part
                 parts = date_part.split('-')
                 if len(parts) == 3:
                     try:
@@ -412,8 +422,8 @@ def extract_month_year_range(cases: list, lang: str = 'en') -> str:
                         pass
 
             # Try DD/MM/YYYY
-            if date_obj is None and '/' in str(date_str):
-                parts = str(date_str).split('/')
+            if date_obj is None and '/' in raw:
+                parts = raw.split('/')
                 if len(parts) == 3:
                     try:
                         day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
@@ -422,8 +432,8 @@ def extract_month_year_range(cases: list, lang: str = 'en') -> str:
                         pass
 
             # Try YYYY-MM-DD
-            if date_obj is None and '-' in str(date_str):
-                parts = str(date_str).split('-')
+            if date_obj is None and '-' in raw:
+                parts = raw.split('-')
                 if len(parts) == 3:
                     try:
                         year, month, day = int(parts[0]), int(parts[1]), int(parts[2])

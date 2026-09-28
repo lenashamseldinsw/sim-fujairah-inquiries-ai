@@ -25,7 +25,9 @@ secrets file: this package is standalone by design.
     NOVECOMP_LOG_LEVEL=...     # optional, INFO by default
     NOVECOMP_MAX_RECORDS=...   # optional, reject a run larger than this
 
-    NOVECOMP_JOB_BACKEND=...   # optional, 'local' (the only one, for now)
+    NOVECOMP_JOB_BACKEND=...       # optional, 'local' or 'table'
+    NOVECOMP_JOB_DISPATCH=...      # optional, 'inprocess' or 'queue'
+    NOVECOMP_JOB_CONNECTION_STRING=  # required by 'table' and 'queue'
     NOVECOMP_JOB_DIR=...       # optional, where job state is written
     NOVECOMP_JOB_TTL_SEC=...   # optional, how long a finished job is kept
 
@@ -236,13 +238,22 @@ class JobSettings(BaseSettings):
     01, and because a real deployment will want to point it at something durable
     without touching anything else.
 
-    ``local`` keeps jobs in the worker's own memory and mirrors each state change to
-    a file under ``dir``. That is honest for a single-worker deployment and for
-    development, and it is **not** durable across a worker restart: a job that was
-    running when the process died is reported ``failed`` on the next poll rather than
-    silently resumed, because resuming half a pipeline would produce a report from two
-    different runs. See ``README.md`` for what a production deployment should use
-    instead.
+    Two axes, and they are independent. ``backend`` says where job *state* lives;
+    ``dispatch`` says where the *run* executes. The defaults — ``local`` and
+    ``inprocess`` — need no Azure account and are right for development and for a
+    single always-on instance.
+
+    ``local`` keeps jobs in the worker's own memory and mirrors each change to a file
+    under ``dir``. It is **not** durable across a restart: a job that was running when
+    the process died is reported ``failed`` on the next poll rather than silently
+    resumed, because resuming half a pipeline would produce a report from two
+    different runs. It is also invisible to other instances, so a poll can 404 against
+    the worker that did not accept the job.
+
+    ``backend="table"`` fixes the second problem: any instance can serve a poll.
+    ``dispatch="queue"`` fixes the first: an unacknowledged message is redelivered, so
+    a run that died with its worker is picked up again from the start. Production
+    wants both. See ``README.md``.
     """
 
     model_config = SettingsConfigDict(
@@ -255,8 +266,41 @@ class JobSettings(BaseSettings):
     backend: str = Field(
         default="local",
         description=(
-            "Which job store to use. Only 'local' exists today — in-process, mirrored "
-            "to disk. Not durable across a restart; see the class docstring."
+            "Where job state lives. 'local' is in-process, mirrored to disk: honest "
+            "for one worker, and neither durable across a restart nor visible to "
+            "another instance. 'table' is Azure Table Storage, which is both — any "
+            "instance can serve a poll, and a record outlives the worker that wrote "
+            "it. 'table' needs a connection string."
+        ),
+    )
+    dispatch: str = Field(
+        default="inprocess",
+        description=(
+            "Where a run executes. 'inprocess' runs it on this worker's event loop, "
+            "which is right for local development and a single always-on instance. "
+            "'queue' enqueues it for a queue-triggered function to pick up, which is "
+            "what makes a run survive the worker that accepted it: an unacknowledged "
+            "message is redelivered. 'queue' needs a connection string and a document "
+            "store, since the request is stored for the worker to read."
+        ),
+    )
+    connection_string: str = Field(
+        default="",
+        description=(
+            "Azure Storage connection string for the 'table' backend and the 'queue' "
+            "dispatcher. 'UseDevelopmentStorage=true' works against Azurite."
+        ),
+    )
+    table_name: str = Field(
+        default="jobs",
+        description="Table the job records are written to. Created if absent.",
+    )
+    queue_name: str = Field(
+        default="analysis-runs",
+        description=(
+            "Queue the work messages go to. The queue-triggered function in "
+            "function_app.py must bind to the same name, and its poison queue "
+            "('<name>-poison') is what catches a run that failed every delivery."
         ),
     )
     dir: Path = Field(

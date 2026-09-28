@@ -107,11 +107,26 @@ A logo that will not decode is **dropped with a log warning**, not raised on: a 
 without a logo is cosmetic, and throwing away six stages of analysis over a malformed
 data URI is not a trade anyone would choose.
 
-> **`brand` is accepted and echoed but does not yet reach the Word theme.** The logo,
-> the names and the closing statement *are* applied. The report's palette is the
-> flow's fixed design, baked into module-level style objects in
-> `stages/build_report_ar.py`. The field is in the contract now so that theming the
-> builders later is not a breaking change.
+**`brand` drives the document's look.** Headings, section banners, table headers, the
+cover and the table of contents take `primary`; accents take `secondary`. Charts take
+`primary` for their accent series.
+
+Two deliberate exceptions:
+
+* **Semantic colours are not brandable.** The red in the severity palette means
+  critical, and the neutral greys beside it carry no identity. Repainting them in a
+  tenant's brand would destroy meaning. This is the same reasoning that makes
+  `STATUS_COLORS` platform-locked.
+* **Omitting `brand` is not the same as sending its defaults.** `BrandColors` defaults
+  to the NoveAI palette because it is a shared contract model that must carry no
+  organisation's colours — but a request that leaves `brand` out renders in the
+  report's own design palette instead, which is what every report looked like before
+  theming existed. Send `brand` explicitly to override it, including if you genuinely
+  want the NoveAI palette.
+
+A malformed colour (`"navy"`, `"#12345"`, a non-string) falls back to the design
+palette rather than reaching the document, where a bad value produces a file Word
+offers to repair. `#abc` shorthand and a missing `#` are both accepted.
 
 `STATUS_COLORS` — `compliant` `#2E8B6B`, `watch` `#C68A2E`, `breach` `#B5393F` — is
 **platform-locked** and not tenant-configurable: a compliant cell must read the same

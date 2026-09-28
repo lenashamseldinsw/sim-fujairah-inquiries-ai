@@ -103,14 +103,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if callable(recover):
             recover()
         app.state.job_store = store
+
+        # Where the run executes. The queue dispatcher is not built here: it needs a
+        # queue client, which means the Azure SDK, which must not be imported from
+        # inside the package. ``function_app.py`` builds one and replaces this — the
+        # same injection the document store's Azure backend would use.
         app.state.job_runner = JobRunner(
             store,
             max_concurrent=job_settings.max_concurrent,
             max_runtime_sec=job_settings.max_runtime_sec,
         )
+        if job_settings.dispatch == "queue":
+            logger.warning(
+                "%s_JOB_DISPATCH=queue, but this process has no queue client — "
+                "runs will execute in-process until the host injects one. On Azure "
+                "that happens in function_app.py.",
+                "NOVEINQ",
+            )
         logger.info(
-            "Job store ready — backend %s, %d concurrent run(s), %.0fs ceiling.",
+            "Job store ready — backend %s, dispatch %s, %d concurrent run(s), "
+            "%.0fs ceiling.",
             job_settings.backend,
+            job_settings.dispatch,
             job_settings.max_concurrent,
             job_settings.max_runtime_sec,
         )

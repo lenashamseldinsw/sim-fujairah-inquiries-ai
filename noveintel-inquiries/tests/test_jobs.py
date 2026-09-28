@@ -9,6 +9,7 @@ instead, which a caller can retry.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -159,3 +160,180 @@ class TestJobRunner:
         await asyncio.sleep(0.05)
         await runner.shutdown(timeout=1.0)
         assert (await store.get("job1")).status is JobStatus.CANCELLED
+
+
+class TestQueueDispatch:
+    """The queue path: what the route does differently when a run executes elsewhere."""
+
+    def test_the_dispatcher_advertises_that_it_needs_the_request_stored(self):
+        """The route branches on this. A JobRunner's closure already holds the
+        request; a queued run's does not exist in the worker that will run it."""
+        from noveintel_inquiries.jobs import JobRunner, QueueDispatcher
+
+        assert QueueDispatcher.needs_stored_request is True
+        assert getattr(JobRunner, "needs_stored_request", False) is False
+
+    def test_submit_enqueues_the_job_id_and_nothing_else(self):
+        """A queue message caps at 64 KiB and a real export is megabytes, so the
+        payload cannot travel in the message."""
+        from noveintel_inquiries.jobs import QueueDispatcher, QueueSender
+
+        sent = []
+
+        class Recorder(QueueSender):
+            def send(self, message): sent.append(message)
+
+        QueueDispatcher(Recorder()).submit("abc123", lambda progress: None)
+        assert json.loads(sent[0]) == {"job_id": "abc123", "v": 1}
+
+    def test_a_failed_enqueue_raises_rather_than_stranding_the_job(self):
+        """The job row already says 'queued'. If nothing will pick it up, the caller
+        has to learn that now rather than by polling forever."""
+        from noveintel_inquiries.jobs import JobStoreError, QueueDispatcher, QueueSender
+
+        class Broken(QueueSender):
+            def send(self, message): raise RuntimeError("queue is down")
+
+        with pytest.raises(JobStoreError, match="not started"):
+            QueueDispatcher(Broken()).submit("abc123", lambda progress: None)
+
+    async def test_shutdown_is_a_no_op(self):
+        """This worker is not running anything, but the lifespan calls it regardless."""
+        from noveintel_inquiries.jobs import QueueDispatcher, QueueSender
+
+        await QueueDispatcher(QueueSender()).shutdown()
+
+
+class TestPendingRequests:
+    """Storing the request so a worker in another process can rebuild the run."""
+
+    async def test_round_trips_through_the_document_store(self, tmp_path):
+        from noveintel_inquiries.jobs import load_request, save_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        store = LocalDirectoryStore(tmp_path)
+        await save_request(store, "abc123", '{"records": []}')
+        assert await load_request(store, "abc123") == '{"records": []}'
+
+    async def test_filed_under_a_reserved_prefix_not_beside_the_artefacts(self, tmp_path):
+        """A payload is the run's input and is customer data. Listing a tenant's
+        reports must not turn one up."""
+        from noveintel_inquiries.jobs import save_request
+        from noveintel_inquiries.jobs.payloads import PREFIX
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        await save_request(LocalDirectoryStore(tmp_path), "abc123", "{}")
+        written = [p for p in (tmp_path / "reports").rglob("*.json")]
+        assert written and written[0].parent.name == PREFIX.strip("_") or PREFIX in str(written[0])
+
+    async def test_no_store_is_a_refusal_not_a_silent_success(self, tmp_path):
+        """A job whose input was never written is one the worker cannot run."""
+        from noveintel_inquiries.jobs import JobStoreError, save_request
+
+        with pytest.raises(JobStoreError, match="document store"):
+            await save_request(None, "abc123", "{}")
+
+    async def test_a_missing_payload_reports_why(self, tmp_path):
+        from noveintel_inquiries.jobs import JobStoreError, load_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        with pytest.raises(JobStoreError, match="cleaned up|could not be read"):
+            await load_request(LocalDirectoryStore(tmp_path), "gone")
+
+    @pytest.mark.parametrize("bad", ["../escape", "a/b", "abc-123"])
+    async def test_a_non_alphanumeric_job_id_is_refused(self, tmp_path, bad):
+        """Ids are hex generated here, but the day one comes from a caller this is a
+        write anywhere the process can reach."""
+        from noveintel_inquiries.jobs import JobStoreError, save_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        with pytest.raises(JobStoreError, match="alphanumeric"):
+            await save_request(LocalDirectoryStore(tmp_path), bad, "{}")
+
+
+class TestQueueWorker:
+    """``execute_job`` — the other half of the queue pairing."""
+
+    async def test_a_redelivered_finished_job_is_not_run_again(self, tmp_path):
+        """The handler completed but the acknowledgement was lost. Re-running would
+        spend a second run's tokens to overwrite a good result."""
+        from noveintel_inquiries.jobs import LocalJobStore, execute_job
+
+        store = LocalJobStore(tmp_path)
+        state = JobState(job_id="job1", status=JobStatus.SUCCEEDED,
+                         created_at=datetime.now(timezone.utc),
+                         finished_at=datetime.now(timezone.utc))
+        await store.create(state)
+        await execute_job("job1", jobs=store, store=None, request_type=object)
+        assert (await store.get("job1")).status is JobStatus.SUCCEEDED
+
+    async def test_a_vanished_job_is_dropped_not_raised_on(self, tmp_path):
+        """Raising would have the host redeliver a message about a job that is gone."""
+        from noveintel_inquiries.jobs import LocalJobStore, execute_job
+
+        await execute_job("nosuch", jobs=LocalJobStore(tmp_path), store=None,
+                          request_type=object)
+
+    async def test_an_unreadable_request_fails_the_job_with_a_reason(self, tmp_path):
+        from noveintel_inquiries.jobs import LocalJobStore, execute_job
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        store = LocalJobStore(tmp_path / "jobs")
+        await store.create(queued())
+        await execute_job("job1", jobs=store, store=LocalDirectoryStore(tmp_path / "s"),
+                          request_type=object)
+        state = await store.get("job1")
+        assert state.status is JobStatus.FAILED
+        assert state.error.code == "request_unavailable"
+
+    async def test_fail_job_records_a_poison_queue_outcome(self, tmp_path):
+        """A message that exhausted its deliveries names a job someone is polling."""
+        from noveintel_inquiries.api.models.jobs import JobError
+        from noveintel_inquiries.jobs import LocalJobStore, fail_job
+
+        store = LocalJobStore(tmp_path)
+        state = queued()
+        state.status = JobStatus.RUNNING
+        await store.create(state)
+        await fail_job(store, "job1", JobError(code="delivery_failed", message="gave up"))
+        assert (await store.get("job1")).status is JobStatus.FAILED
+
+
+class TestTableStoreWithoutAzure:
+    """The table backend must be importable and diagnosable with no SDK installed."""
+
+    def test_importing_it_needs_no_azure_package(self):
+        from noveintel_inquiries.jobs import TableStorageJobStore
+
+        assert TableStorageJobStore("UseDevelopmentStorage=true")
+
+    def test_the_factory_refuses_an_unconfigured_table_backend(self, monkeypatch):
+        from noveintel_inquiries.config import get_job_settings
+        from noveintel_inquiries.jobs import JobStoreError
+        from noveintel_inquiries.jobs.factory import create_job_store
+
+        monkeypatch.setenv("NOVEINQ_JOB_BACKEND", "table")
+        monkeypatch.setenv("NOVEINQ_JOB_CONNECTION_STRING", "")
+        get_job_settings.cache_clear()
+        create_job_store.cache_clear()
+        try:
+            with pytest.raises(JobStoreError, match="CONNECTION_STRING"):
+                create_job_store()
+        finally:
+            get_job_settings.cache_clear()
+            create_job_store.cache_clear()
+
+    def test_an_unknown_backend_names_the_valid_ones(self, monkeypatch):
+        from noveintel_inquiries.config import get_job_settings
+        from noveintel_inquiries.jobs import JobStoreError
+        from noveintel_inquiries.jobs.factory import create_job_store
+
+        monkeypatch.setenv("NOVEINQ_JOB_BACKEND", "cosmos")
+        get_job_settings.cache_clear()
+        create_job_store.cache_clear()
+        try:
+            with pytest.raises(JobStoreError, match="'local' or 'table'"):
+                create_job_store()
+        finally:
+            get_job_settings.cache_clear()
+            create_job_store.cache_clear()

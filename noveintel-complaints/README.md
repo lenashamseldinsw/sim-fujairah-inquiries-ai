@@ -142,25 +142,56 @@ App settings to set: `CORE42_API_KEY` (as a Key Vault reference),
 `AuthLevel.FUNCTION` means the platform checks `x-functions-key` before a request
 reaches the app.
 
-### ⚠️ Jobs are held per worker — read this before scaling out
+### Durability: pick a job backend and a dispatcher
 
-The `local` job backend keeps jobs in **the worker's own memory**, mirrored to disk.
-Three consequences, none of them hidden:
+Two independent settings, and the defaults are the development ones.
 
-1. **A poll only finds a job on the instance that accepted it.** Two instances behind
-   a load balancer will 404 each other's jobs. Run a single instance, use sticky
-   routing, or put a shared store behind `noveintel_complaints.jobs.JobStore`.
-2. **A restart loses running jobs.** They are reported `failed` with
-   `worker_restarted` rather than resumed — resuming half a pipeline would stitch one
-   process's stage 4 onto another's stage 5 and produce a report whose figures came
-   from two different runs. Retrying is safe.
-3. **A Consumption plan will recycle an idle worker mid-run.** Use an **always-on**
-   plan (Premium or a dedicated App Service plan with Always On), or move the job
-   layer to a queue-triggered function.
+| | `NOVECOMP_JOB_BACKEND` | `NOVECOMP_JOB_DISPATCH` |
+|---|---|---|
+| **Development / single box** | `local` | `inprocess` |
+| **Load-balanced, runs may be lost on restart** | `table` | `inprocess` |
+| **Production** | `table` | `queue` |
 
-For production at more than one instance, implement `JobStore` against Azure Table
-Storage or Cosmos DB and have the run itself be a queue-triggered function. The
-routes only ever see the Protocol, so nothing else moves.
+**`backend`** says where job state lives. `local` keeps it in the worker's own memory,
+mirrored to disk: a poll only finds a job on the instance that accepted it, so two
+instances behind a load balancer 404 each other's jobs. `table` is Azure Table
+Storage — any instance can serve any poll.
+
+**`dispatch`** says where the run executes. `inprocess` runs it on the worker's event
+loop, so the run dies with the worker. `queue` enqueues it for a queue-triggered
+function; a message whose handler died is redelivered, and the run starts again.
+
+> A redelivered run **starts over, it does not resume.** The stages are not
+> checkpointed, and stitching one process's stage 4 onto another's stage 5 would
+> produce a report whose figures came from two different runs.
+
+With `dispatch=queue` set, `function_app.py` wires up:
+
+* a **queue trigger** (`run_analysis_job`) that runs the pipeline with no HTTP
+  connection open, so the 230-second ceiling does not apply — set `functionTimeout`
+  in `host.json` above your longest expected run;
+* a **poison-queue handler** (`run_analysis_job_poison`) that marks a job failed once
+  its message has exhausted every delivery, so nobody polls a run that will never
+  finish.
+
+The request is stored in the document store under `_pending/` when the job is
+accepted, because a queue message caps at 64 KiB and a real export is megabytes. It
+is deleted when the run reaches a terminal state.
+
+```bash
+NOVECOMP_JOB_BACKEND=table
+NOVECOMP_JOB_DISPATCH=queue
+NOVECOMP_JOB_CONNECTION_STRING=<storage connection string>
+NOVECOMP_JOB_QUEUE_NAME=analysis-runs
+```
+
+**Both functions must agree on the backend.** With `local`, the queue worker writes
+to its own process memory and the HTTP instance serving the poll never sees it — set
+`table` whenever you set `queue`.
+
+**On a Consumption plan an idle worker is recycled**, which kills an in-process run.
+With `dispatch=queue` the message is redelivered and the run resumes on another
+worker, which is the main reason to use it. Still prefer an always-on plan.
 
 ---
 
@@ -223,13 +254,19 @@ each of which is named there:
 
 ## Known limitations
 
-**`entity.brand` is carried but not yet applied to the Word theme.** The logo, the
-organisation names and the closing statement *are* used. The report's palette is still
-the flow's fixed design, baked into module-level style objects in
-`stages/build_report_ar.py`. Theming it means turning those constants into a per-build
-theme threaded through the builder — a change worth making deliberately, with the
-report output diffed, rather than as a side effect of the port. The field is in the
-contract now so that doing it later is not a breaking change.
+**Chart severity colours are not brandable, deliberately.** `entity.brand` now
+drives the document's chrome — headings, banners, table headers, the cover, the table
+of contents — and the accent slot in every chart. What it does *not* touch is the red
+in the severity palette: red means critical, the same way the platform-locked status
+colours do, and repainting it in a tenant's brand would destroy meaning rather than
+apply an identity. The neutral greys beside it are left alone for the same reason.
+
+**A run sent with no `brand` renders exactly as it always has.** `BrandColors` defaults
+to the NoveAI platform palette because it is a shared contract model and must carry no
+organisation's colours — but those defaults are not what an unbranded report uses. The
+request only carries `brand` when the caller actually set it (`model_fields_set`), and
+the builder falls back to its own design palette when it is absent. Without that
+distinction, every existing report would silently repaint navy.
 
 **Parity covers stage 1 and the vendoring, not a full run.** A genuine end-to-end
 parity test would cost a full run against the live gateway on every CI build. What is
@@ -242,7 +279,7 @@ has not drifted, and that stage 1 reaches the same verdict on real input. Use
 ## Testing
 
 ```bash
-uv run pytest              # 99 tests, no gateway and no network needed
+uv run pytest              # 148 tests, no gateway and no network needed
 ```
 
 The engine, the contract, the error envelope, storage and the job layer are all real.

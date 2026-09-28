@@ -229,8 +229,20 @@ failure belongs to the run, not to the request asking about it.
 deliberately not distinguished; telling them apart would mean keeping expired ids
 forever.
 
-**With the `local` job backend a poll only finds a job on the instance that accepted
-it.** See the README before scaling out.
+**A poll finds a job only where the job store can see it.** With
+`NOVEINQ_JOB_BACKEND=local` that is the single instance that accepted it, so a
+load-balanced deployment 404s its own jobs; with `table` any instance can serve any
+poll. See the README's durability table.
+
+New job error codes when the durable path is in use:
+
+| `code` | Meaning |
+|---|---|
+| `worker_restarted` | The worker died mid-run (local backend only). Abandoned, not resumed — retrying is safe |
+| `runtime_exceeded` | The run passed `NOVEINQ_JOB_MAX_RUNTIME_SEC` and was abandoned |
+| `request_unavailable` | A queued run could not read its stored request. Retry the run |
+| `delivery_failed` | The queued message exhausted every delivery attempt. Check the worker logs for this job id |
+| `cancelled` | The worker was shutting down |
 
 ---
 

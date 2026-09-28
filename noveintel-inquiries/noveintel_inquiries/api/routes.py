@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, status
 
 from ..api.models.enums import JobStatus
 from ..config import get_pricing_settings, get_settings, get_storage_settings
-from ..jobs import JobNotFound
+from ..jobs import JobNotFound, JobStoreError, save_request
 from ..pipeline import generate_report, new_run_id, validate_records
 from .deps import (
     ApiSettingsDep,
@@ -234,12 +234,37 @@ async def create_analysis(
     )
     await jobs.create(state)
 
+    # A queued run executes in another process, where this request object does not
+    # exist — so it is stored for the worker to read back. Done before the message is
+    # sent, or a worker could dequeue the job before its input was written.
+    #
+    # ``submit`` ignores ``run`` for a queue dispatcher; it is built anyway so the
+    # in-process path stays a plain closure and neither branch is special-cased here.
+    if getattr(runner, "needs_stored_request", False):
+        try:
+            await save_request(store, job_id, inquiries.model_dump_json())
+        except JobStoreError as exc:
+            raise ApiError(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "not_configured",
+                f"The run could not be queued: {exc}",
+            ) from exc
+
     async def run(progress) -> object:
         return await generate_report(
             inquiries, store=store, progress=progress, run_id=job_id
         )
 
-    runner.submit(job_id, run)
+    try:
+        runner.submit(job_id, run)
+    except JobStoreError as exc:
+        # The job row says 'queued' but nothing will ever pick it up, so this has to
+        # surface now rather than leaving the caller polling forever.
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "not_configured",
+            f"The run was accepted but could not be dispatched: {exc}",
+        ) from exc
 
     logger.info(
         "[%s] Accepted a run: %d records, english=%s.",

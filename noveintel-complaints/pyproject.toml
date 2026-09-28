@@ -36,6 +36,11 @@ serve = [
 ]
 azure = [
     "azure-functions>=1.21.0",
+    # The durable job layer: Table Storage holds job state, a Storage queue carries
+    # the work. Only the Azure extra needs them — an on-prem install runs the local
+    # backend and pulls neither.
+    "azure-data-tables>=12.5.0",
+    "azure-storage-queue>=12.10.0",
 ]
 
 [dependency-groups]
