@@ -1,0 +1,57 @@
+[project]
+name = "noveintel-complaints"
+version = "0.1.0"
+description = "NoveIntelligence — 03 Customer Complaints Analytics: headless complaints-analysis core"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.0.0",
+    # The Core42 gateway is OpenAI-compatible and driven with the official SDK.
+    "openai>=1.99.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    # Stage 1's schema validation.
+    "pandera>=0.20.0",
+    "python-docx>=1.1.2",
+    "openpyxl>=3.1.5",
+    "lxml>=5.2.0",
+    "Pillow>=11.0.0",
+]
+
+# Three extras, because "the service", "running it" and "hosting it on Azure" are
+# three different things. FastAPI is the deliverable; `serve` is what you add to run
+# it yourself; `azure` is one hosting choice among others. An on-prem install never
+# pulls an Azure dependency, and an Azure deployment never ships uvicorn — there the
+# Functions host is the server.
+#
+#   on-prem   uv sync --extra api --extra serve
+#   azure     uv sync --extra api --extra azure
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+]
+serve = [
+    "uvicorn[standard]>=0.34.0",
+]
+azure = [
+    "azure-functions>=1.21.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["noveintel_complaints"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

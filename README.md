@@ -7,6 +7,12 @@
 - **`demo/`**: Stable, production-ready demo version with simulated outputs (main branch)
 - **`real/`**: Full agentic AI implementation with real analysis pipelines (real branch)
 
+On the `noveintel` branch the two real pipelines are additionally packaged as
+**headless HTTP services** — no Streamlit, deployable to Azure Functions:
+
+- **`noveintel-inquiries/`**: the inquiries pipeline as a FastAPI service
+- **`noveintel-complaints/`**: the complaints pipeline as a FastAPI service
+
 **See [CLAUDE.md](CLAUDE.md) for full development guide.**
 
 ---
@@ -25,6 +31,18 @@ Opens at `http://localhost:8501` with automatic report extraction and caching.
 cd real && streamlit run app_inq_comp.py
 ```
 Unified app supporting both inquiries and complaints flows with 6-stage AI pipelines.
+
+### NoveIntelligence APIs (headless, `noveintel` branch)
+```bash
+cd noveintel-inquiries        # or noveintel-complaints
+cp .env.example .env          # set CORE42_API_KEY
+uv sync --extra api --extra serve
+uv run uvicorn noveintel_inquiries.api.app:app --reload
+```
+Opens at `http://localhost:8000/docs`. **Runs are asynchronous** — `POST /v1/inquiries`
+returns a `job_id` to poll, because a full run takes minutes.
+See [noveintel-inquiries/README.md](noveintel-inquiries/README.md) and
+[noveintel-complaints/README.md](noveintel-complaints/README.md).
 
 ---
 

@@ -9,6 +9,15 @@
 - **real/README.md** - Real version setup and features
 - **MEMORY.md** - Implementation decisions and context (auto-memory system)
 
+**Exception — the NoveIntelligence services** (`noveintel-inquiries/`,
+`noveintel-complaints/`, on the `noveintel` branch). Each is a self-contained,
+independently deployable project rather than part of this app, and the
+[porting guide](api-youssef-porting-guide.md) it follows mandates its own
+`README.md`, `docs/api.md` and `docs/schema.md` — a caller integrating the API needs
+them next to the code, not in this file. Those five files per service are the
+complete allowance; do not add a sixth. Anything else belongs in the service's
+README or here.
+
 **Any notes or documentation needed** should be added to one of these files, not scattered as new .md files. If you find yourself creating a new .md file, it probably belongs in CLAUDE.md, README.md, or one of the folder-specific READMEs instead.
 
 **Why?** Scattered documentation becomes stale, unmaintainable, and hard to find. Consolidation keeps everything in one place.
@@ -96,6 +105,90 @@ sim-fujairah-inquiries-ai/
 - Analysis logic is completely separate
 - Each folder is runnable: `cd demo && streamlit run app.py`
 - Easier to manage dependencies and configurations per version
+
+## NoveIntelligence HTTP Services (`noveintel` branch)
+
+The two real pipelines are also packaged as **headless FastAPI services**, following
+[api-youssef-porting-guide.md](api-youssef-porting-guide.md) so that each
+NoveIntelligence module has the same shape: same layout, same config conventions,
+same error envelope, same shared models.
+
+```
+noveintel-inquiries/     the inquiries pipeline as a service   (prefix NOVEINQ_)
+noveintel-complaints/    the complaints pipeline as a service  (prefix NOVECOMP_)
+```
+
+Each is **self-contained and does not import from `real/`**. The six pipeline stages
+are vendored unchanged into `<service>/<package>/stages/`, along with the shared
+Core42 layer, the Word builder and the guidebook. A parity test compares every stage
+byte for byte against `real/<flow>-flow/pipeline/` and fails on any undeclared
+difference.
+
+### Running one
+
+```bash
+cd noveintel-inquiries
+cp .env.example .env          # set CORE42_API_KEY
+uv sync --extra api --extra serve
+uv run uvicorn noveintel_inquiries.api.app:app --reload   # http://localhost:8000/docs
+uv run pytest                                             # 99 tests, no network needed
+```
+
+### Two departures from the porting guide, and why
+
+**1. Runs are asynchronous.** `POST /v1/<flow>` answers `202` with a `job_id`; the
+caller polls `GET /v1/jobs/{job_id}`. Module 01 answers synchronously because a report
+there is two model calls. A run here is dozens of sequential calls across six stages —
+minutes on a real export, far past Azure's hard 230-second HTTP response ceiling. The
+guide's own §5.6 prescribes exactly this when a run cannot fit the budget.
+
+**2. There is no `engine/` + `narratives/` split.** The guide's rule 3 wants a
+deterministic layer computing every figure and a narrative layer writing prose around
+them. These stages *interleave* the two by design — stage 2 classifies by rule, stage 3
+hands the rest to the model, stages 4 and 5 reason over both — so splitting them would
+have been a rewrite, not a port, and would have thrown away the parity net. The rule is
+honoured in substance: `engine/` holds the genuinely pure part (period resolution,
+shared with module 01), and everything else the stages compute is surfaced as the
+bundle's `metrics`, which is the ground truth the prose is checked against.
+
+### What was changed in the vendored stages
+
+Everything else is byte-identical. Each service's README lists these, and
+`tests/test_engine_parity.py` enforces the list:
+
+| File | Change |
+|---|---|
+| `llm.py` | Relative import in place of a `sys.path` insertion |
+| `orchestrator.py` | Vendored guidebook path; `include_english` |
+| `stage5_gap.py` | Vendored guidebook path |
+| `stage6_artifacts.py` | Branding injection; the `include_english` gate |
+| `stage6_json_report.py` | A stable `key` on each chart, so consumers select by key not position |
+| `state.py` | The `branding` field |
+| `build_report_{ar,en}.py` | Vendored Word builder; per-run logo from `EntityInfo` |
+
+**The tenant logo now travels on the request** (`EntityInfo.logo_base64`) and is
+injected into the report dict per run, rather than being read from a hard-coded
+`assets/` path. It is deliberately *not* a module global: one worker can build two
+tenants' reports at once, and a global is how one run's logo reaches the other's cover.
+
+### Known limitation
+
+`entity.brand` is carried through the contract but **not yet applied to the Word
+theme** — the logo, names and closing statement are. The palette is still the flow's
+fixed design, baked into module-level style objects in `stages/build_report_ar.py`.
+Theming it means turning those constants into a per-build theme threaded through the
+builder, which is worth doing deliberately with the report output diffed.
+
+### Editing these
+
+- Changing the **analysis** → change it in `real/<flow>-flow/pipeline/` first, then
+  re-vendor into the service and update the parity test's exemption list if needed.
+- Changing the **API** (contract, routes, jobs, storage, config) → the service only.
+  `real/` is unaffected.
+- Changing something **shared between both services** → change both in the same
+  commit. The porting guide's §6 rule: a copied file must not diverge.
+
+---
 
 ## Running the Application
 

@@ -1,0 +1,36 @@
+# What must never reach wwwroot.
+#
+# .venv is the big one: it is hundreds of megabytes, and the platform installs from
+# requirements.txt anyway. Shipping it makes deployments slow and can shadow the
+# platform's own packages.
+.venv/
+.python-version
+uv.lock
+
+# Secrets, and the files that hold them locally.
+local.settings.json
+.env
+
+# Development-only.
+tests/
+scripts/
+docs/
+fixtures/
+bundle.json
+openapi.json
+out/
+
+# The local document store's contents. Anchored: unanchored, this would also exclude
+# the storage *package* — noveintel_complaints/storage/ — and the app would not import.
+/storage/
+# The local job store's mirror files. Anchored for the same reason: noveintel_complaints/jobs/ is a
+# package the app cannot start without.
+/jobs/
+
+.pytest_cache/
+.vscode/
+.git*
+__pycache__/
+*.pyc
+*.pyo
+README.md

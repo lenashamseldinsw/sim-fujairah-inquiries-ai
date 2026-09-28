@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+
+    "CORE42_API_KEY": "",
+    "CORE42_BASE_URL": "https://api.core42.ai/v1",
+    "CORE42_MODEL": "gpt-5.1",
+    "CORE42_REQUEST_TIMEOUT": "240",
+
+    "NOVECOMP_LOG_LEVEL": "INFO",
+    "NOVECOMP_STORAGE_DIR": "storage",
+    "NOVECOMP_JOB_DIR": "jobs"
+  }
+}

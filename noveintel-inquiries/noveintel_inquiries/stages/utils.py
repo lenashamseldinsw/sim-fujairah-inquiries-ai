@@ -1,0 +1,217 @@
+"""
+Utility functions for the pipeline:
+- Language detection
+- Arabic/English text processing
+- Embedding helpers (for guidebook chunking)
+"""
+
+import re
+from typing import Tuple, List
+
+
+def is_arabic(text: str) -> bool:
+    """Check if text contains Arabic characters."""
+    if not text:
+        return False
+    arabic_pattern = r'[\u0600-\u06FF]'
+    return bool(re.search(arabic_pattern, str(text)))
+
+
+def detect_language(text: str) -> str:
+    """
+    Detect language of text.
+
+    Returns: 'ar', 'en', or 'mixed'
+    """
+    if not text:
+        return 'unknown'
+
+    text_str = str(text)
+    arabic_count = len(re.findall(r'[\u0600-\u06FF]', text_str))
+    english_count = len(re.findall(r'[a-zA-Z]', text_str))
+
+    if arabic_count > 0 and english_count == 0:
+        return 'ar'
+    elif english_count > 0 and arabic_count == 0:
+        return 'en'
+    elif arabic_count > 0 and english_count > 0:
+        return 'mixed'
+    else:
+        return 'unknown'
+
+
+def normalize_arabic(text: str) -> str:
+    """Normalize Arabic text for comparison (remove diacritics, extra spaces)."""
+    if not text:
+        return ""
+
+    # Remove diacritics
+    text = re.sub(r'[\u064B-\u065F]', '', text)
+    # Normalize alef variants
+    text = text.replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+    # Collapse multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    # Remove leading/trailing spaces
+    text = text.strip()
+
+    return text.lower()
+
+
+def extract_arabic_words(text: str) -> List[str]:
+    """Extract Arabic words from text."""
+    if not text:
+        return []
+    # Match sequences of Arabic characters
+    pattern = r'[\u0600-\u06FF]+'
+    return re.findall(pattern, str(text))
+
+
+def extract_english_words(text: str) -> List[str]:
+    """Extract English words from text."""
+    if not text:
+        return []
+    # Match word boundaries for English
+    pattern = r'\b[a-zA-Z]+\b'
+    return re.findall(pattern, str(text), re.IGNORECASE)
+
+
+def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
+    """
+    Chunk text for embedding (guidebook PDF chunks).
+
+    Args:
+        text: Text to chunk
+        chunk_size: Approximate chunk size in characters
+        overlap: Character overlap between chunks
+
+    Returns:
+        List of text chunks
+    """
+    if not text:
+        return []
+
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        # Find chunk end
+        end = min(start + chunk_size, len(text))
+
+        # Try to break at a sentence boundary if not at end
+        if end < len(text):
+            # Look for last period, question mark, or exclamation within chunk
+            search_end = max(start + chunk_size - 100, start)
+            last_boundary = max(
+                text.rfind('.', start, end),
+                text.rfind('؟', start, end),
+                text.rfind('!', start, end),
+            )
+            if last_boundary > search_end:
+                end = last_boundary + 1
+
+        chunks.append(text[start:end].strip())
+        start = end - overlap
+
+    return [c for c in chunks if c]  # Filter out empty chunks
+
+
+def extract_numbers(text: str) -> List[str]:
+    """Extract numbers from text."""
+    if not text:
+        return []
+    return re.findall(r'\d+(?:[.,]\d+)?', str(text))
+
+
+def format_arabic_number(num: int) -> str:
+    """Format number with Arabic numerals if needed."""
+    # For now, just return string of number
+    # Can be extended to use Arabic-Indic numerals if needed
+    return str(num)
+
+
+def arabic_case_count(n) -> str:
+    """Return grammatically correct Arabic count string for 'case(s)'.
+
+    Arabic rules:
+      n == 0          → "لا حالات"
+      n == 1          → "حالة واحدة"
+      n == 2          → "حالتان"       (dual)
+      3 <= n <= 10    → "{n} حالات"   (plural)
+      n > 10          → "{n} حالة"    (singular — Arabic grammar for 11+)
+      n is "4+" etc.  → "{n} حالة"    (open-ended takes singular)
+    """
+    if isinstance(n, str) and '+' in n:
+        return f"{n} حالة"
+    try:
+        n = int(n)
+    except (ValueError, TypeError):
+        return f"{n} حالة"
+    if n == 0:
+        return "لا حالات"
+    if n == 1:
+        return "حالة واحدة"
+    if n == 2:
+        return "حالتان"
+    if 3 <= n <= 10:
+        return f"{n} حالات"
+    return f"{n} حالة"
+
+
+def normalize_friction_label(label: str, reconciled_count: int) -> str:
+    """
+    Replace any leading count phrase in a friction/gap label with the reconciled case count.
+
+    Strips patterns like:
+      "13 حالة — نص الاحتكاك"   →  "11 حالة — نص الاحتكاك"  (if reconciled_count=11)
+      "٩ حالات — نص الاحتكاك"  →  "11 حالة — نص الاحتكاك"
+      "نص بدون رقم"            →  "نص بدون رقم"  (unchanged)
+
+    Args:
+        label: Original friction/gap label (may contain embedded count)
+        reconciled_count: Correct case count from state (post-reconciliation)
+
+    Returns:
+        Normalized label with correct count, or unchanged label if no count pattern detected
+    """
+    if not label:
+        return label
+
+    # Match an optional leading number (Western or Arabic-Indic digits) followed
+    # by حالة (singular) or حالات (plural) and an optional separator
+    # Note: can't use حالات? because "حالة" ends with ة while حالات ends with ات
+    pattern = r'^[\d٠-٩]+\s*(?:حالة|حالات)\s*[—\-–]?\s*'
+    cleaned = re.sub(pattern, '', label).strip()
+
+    if not cleaned:
+        # Pattern matched but nothing remains; just return the count
+        return arabic_case_count(reconciled_count)
+
+    # If we found and stripped a count pattern, prepend the correct count
+    if cleaned != label.strip():
+        count_str = arabic_case_count(reconciled_count)
+        return f"{count_str} — {cleaned}"
+
+    # No count pattern found; return label as-is
+    return label
+
+
+def calculate_similarity(text1: str, text2: str) -> float:
+    """
+    Simple similarity metric using word overlap.
+    For production, use proper embeddings with chromadb.
+
+    Returns: Float between 0.0 and 1.0
+    """
+    if not text1 or not text2:
+        return 0.0
+
+    words1 = set(normalize_arabic(text1).split())
+    words2 = set(normalize_arabic(text2).split())
+
+    if not words1 or not words2:
+        return 0.0
+
+    intersection = len(words1 & words2)
+    union = len(words1 | words2)
+
+    return intersection / union if union > 0 else 0.0
