@@ -286,6 +286,50 @@ class TestQueueWorker:
         assert state.status is JobStatus.FAILED
         assert state.error.code == "request_unavailable"
 
+    async def test_a_failed_run_deletes_its_stored_request(self, tmp_path):
+        """The stored request is a full copy of the caller's export. A failed run
+        needs it no more than a successful one — this was found left behind by a live
+        run on the Functions host."""
+        from noveintel_inquiries.jobs import JobStoreError, LocalJobStore, execute_job, load_request, save_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        jobs = LocalJobStore(tmp_path / "jobs")
+        files = LocalDirectoryStore(tmp_path / "files")
+        await jobs.create(queued())
+        # Valid JSON that is not a valid request: the run fails before any stage.
+        await save_request(files, "job1", '{"records": []}')
+
+        from noveintel_inquiries.api import models
+        request_type = next(
+            getattr(models, n) for n in dir(models) if n.startswith("Generate")
+        )
+        await execute_job("job1", jobs=jobs, store=files, request_type=request_type)
+
+        assert (await jobs.get("job1")).status is JobStatus.FAILED
+        with pytest.raises(JobStoreError):
+            await load_request(files, "job1")
+
+    async def test_the_request_survives_when_the_failure_cannot_be_recorded(self, tmp_path):
+        """If the job store is unreachable the queue redelivers, and the retry needs
+        the request — so it is deleted only after the outcome is safely written."""
+        from noveintel_inquiries.api.models.jobs import JobError
+        from noveintel_inquiries.jobs import JobStoreError, fail_job, load_request, save_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        class Unreachable:
+            async def get(self, job_id):
+                return queued(job_id)
+
+            async def update(self, state):
+                raise JobStoreError("table unreachable")
+
+        files = LocalDirectoryStore(tmp_path)
+        await save_request(files, "job1", "{}")
+        with pytest.raises(JobStoreError):
+            await fail_job(Unreachable(), "job1",
+                           JobError(code="x", message="y"), store=files)
+        assert await load_request(files, "job1") == "{}"
+
     async def test_fail_job_records_a_poison_queue_outcome(self, tmp_path):
         """A message that exhausted its deliveries names a job someone is polling."""
         from noveintel_inquiries.api.models.jobs import JobError

@@ -65,8 +65,6 @@ from noveintel_complaints.storage import create_document_store
 
 logger = logging.getLogger(__name__)
 
-app = func.FunctionApp()
-
 _settings = get_job_settings()
 QUEUE_NAME = _settings.queue_name
 POISON_QUEUE = f"{_settings.queue_name}-poison"
@@ -74,13 +72,12 @@ POISON_QUEUE = f"{_settings.queue_name}-poison"
 # is referenced by the variable the deployment sets.
 CONNECTION_SETTING = "NOVECOMP_JOB_CONNECTION_STRING"
 
-
 class _AzureQueueSender(QueueSender):
     """Puts a message on a Storage queue.
 
     Lives here rather than in the package because it is the one part of the job layer
     that needs the Azure SDK. ``QueueDispatcher`` takes it as a collaborator, so the
-    package stays SDK-free and this stays five lines of glue.
+    package stays SDK-free and this stays a few lines of glue.
     """
 
     def __init__(self, connection_string: str, queue_name: str) -> None:
@@ -102,43 +99,30 @@ class _AzureQueueSender(QueueSender):
         self._client.send_message(message)
 
 
-@app.function_name("http_app")
-@app.route(route="{*route}", auth_level=func.AuthLevel.FUNCTION)
-async def http_app(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
-    """Serve the FastAPI app, with the queue dispatcher injected on first use.
+def _queue_runner(_job_store) -> QueueDispatcher:
+    """Build the queue dispatcher. Called by the app's own startup code.
 
-    Injected here rather than in the app's lifespan because building it needs the
-    Azure SDK — see the module docstring. The app starts with an in-process runner and
-    this replaces it, the same way a real document-store backend would be injected.
+    Handed over through ``app.state.job_runner_factory`` rather than swapped in from
+    a request handler: the app's lifespan decides which runner to use, and only runs
+    once the host has started it — see ``AsgiFunctionApp`` below.
     """
-    _ensure_dispatcher()
-    return await func.AsgiMiddleware(fastapi_app).handle_async(req, context)
-
-
-def _ensure_dispatcher() -> None:
-    """Swap the in-process runner for a queue dispatcher, once, if configured."""
-    state = fastapi_app.state
-    if getattr(state, "_dispatcher_installed", False):
-        return
-    state._dispatcher_installed = True
-
-    settings = get_job_settings()
-    if settings.dispatch != "queue":
-        return
-
-    connection = settings.connection_string or os.environ.get(CONNECTION_SETTING, "")
+    connection = _settings.connection_string or os.environ.get(CONNECTION_SETTING, "")
     if not connection.strip():
-        logger.error(
-            "Dispatch is 'queue' but %s is empty; runs will execute in this worker "
-            "and will not survive a restart.", CONNECTION_SETTING,
-        )
-        return
+        raise JobStoreError(f"{CONNECTION_SETTING} is empty")
+    return QueueDispatcher(_AzureQueueSender(connection, QUEUE_NAME))
 
-    try:
-        state.job_runner = QueueDispatcher(_AzureQueueSender(connection, QUEUE_NAME))
-        logger.info("Runs will be dispatched to the %r queue.", QUEUE_NAME)
-    except Exception as exc:
-        logger.error("Could not build the queue dispatcher: %s. Staying in-process.", exc)
+
+fastapi_app.state.job_runner_factory = _queue_runner
+
+# AsgiFunctionApp, not a hand-written HTTP function. It is the piece that runs the
+# FastAPI lifespan (``notify_startup``) before the first request — without it the job
+# and document stores are never built and every /v1 route answers 503. It is still an
+# ordinary FunctionApp, so the queue triggers below register on it as usual.
+app = func.AsgiFunctionApp(
+    app=fastapi_app,
+    http_auth_level=func.AuthLevel.FUNCTION,
+    function_name="http_app",
+)
 
 
 @app.function_name("run_analysis_job")
@@ -200,6 +184,7 @@ def run_analysis_job_poison(msg: func.QueueMessage) -> None:
                     "id to see why it kept failing."
                 ),
             ),
+            store=_document_store(),
         )
     )
 

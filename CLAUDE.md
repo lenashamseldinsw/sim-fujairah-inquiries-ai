@@ -132,7 +132,7 @@ cd noveintel-inquiries
 cp .env.example .env          # set CORE42_API_KEY
 uv sync --extra api --extra serve
 uv run uvicorn noveintel_inquiries.api.app:app --reload   # http://localhost:8000/docs
-uv run pytest                                             # 164 tests, no network needed
+uv run pytest                                             # 174 tests, no network needed
 ```
 
 ### Two departures from the porting guide, and why

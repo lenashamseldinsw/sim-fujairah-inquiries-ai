@@ -104,27 +104,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             recover()
         app.state.job_store = store
 
-        # Where the run executes. The queue dispatcher is not built here: it needs a
-        # queue client, which means the Azure SDK, which must not be imported from
-        # inside the package. ``function_app.py`` builds one and replaces this — the
-        # same injection the document store's Azure backend would use.
-        app.state.job_runner = JobRunner(
-            store,
-            max_concurrent=job_settings.max_concurrent,
-            max_runtime_sec=job_settings.max_runtime_sec,
-        )
-        if job_settings.dispatch == "queue":
+        # Where the run executes. A queue dispatcher needs a queue client, which
+        # means the Azure SDK, which must not be imported from inside the package.
+        # So the host supplies one: ``function_app.py`` puts a factory on
+        # ``app.state.job_runner_factory`` before the app starts, and it is called
+        # here with the job store. Anywhere else — uvicorn, tests, on-prem — there is
+        # no factory and runs execute in-process.
+        app.state.job_runner = None
+        factory = getattr(app.state, "job_runner_factory", None)
+        if job_settings.dispatch == "queue" and callable(factory):
+            try:
+                app.state.job_runner = factory(store)
+            except Exception as exc:
+                # Falling back keeps the service usable; the log says runs will now
+                # die with this worker instead of being redelivered.
+                logger.error(
+                    "Could not build the queue dispatcher (%s); runs will execute "
+                    "in this worker and will not survive a restart.", exc,
+                )
+        elif job_settings.dispatch == "queue":
             logger.warning(
-                "%s_JOB_DISPATCH=queue, but this process has no queue client — "
-                "runs will execute in-process until the host injects one. On Azure "
-                "that happens in function_app.py.",
+                "%s_JOB_DISPATCH=queue, but no queue client was supplied — runs will "
+                "execute in-process. On Azure function_app.py supplies one.",
                 "NOVECOMP",
             )
+        if app.state.job_runner is None:
+            app.state.job_runner = JobRunner(
+                store,
+                max_concurrent=job_settings.max_concurrent,
+                max_runtime_sec=job_settings.max_runtime_sec,
+            )
         logger.info(
-            "Job store ready — backend %s, dispatch %s, %d concurrent run(s), "
+            "Job store ready — backend %s, runs via %s, %d concurrent run(s), "
             "%.0fs ceiling.",
             job_settings.backend,
-            job_settings.dispatch,
+            type(app.state.job_runner).__name__,
             job_settings.max_concurrent,
             job_settings.max_runtime_sec,
         )

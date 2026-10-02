@@ -109,6 +109,7 @@ async def execute_job(
                     f"could not be started: {exc}"
                 ),
             ),
+            store=store,
         )
         return
 
@@ -124,12 +125,18 @@ async def execute_job(
             request, store=store, progress=reporter, run_id=job_id
         )
     except StageFailure as exc:
-        await fail_job(jobs, job_id,
-                       JobError(code="stage_failed", message=str(exc), stage=exc.stage))
+        await fail_job(
+            jobs, job_id,
+            JobError(code="stage_failed", message=str(exc), stage=exc.stage),
+            store=store,
+        )
         return
     except ValueError as exc:
-        await fail_job(jobs, job_id,
-                       JobError(code="unprocessable_records", message=str(exc)))
+        await fail_job(
+            jobs, job_id,
+            JobError(code="unprocessable_records", message=str(exc)),
+            store=store,
+        )
         return
     except Exception as exc:
         # The message is the type rather than the text: an unhandled failure can carry
@@ -141,6 +148,7 @@ async def execute_job(
                 code="internal_error",
                 message=f"The run failed with an unhandled {type(exc).__name__}.",
             ),
+            store=store,
         )
         return
 
@@ -158,12 +166,22 @@ async def execute_job(
     logger.info("[%s] Queued run complete.", job_id)
 
 
-async def fail_job(jobs: JobStore, job_id: str, error: JobError) -> None:
-    """Mark a job failed, whatever state it was in.
+async def fail_job(
+    jobs: JobStore,
+    job_id: str,
+    error: JobError,
+    store: DocumentStore | None = None,
+) -> None:
+    """Mark a job failed, whatever state it was in, and drop its stored request.
 
     Also the poison-queue handler's entry point: a message that exhausted its
     deliveries names a job someone is still polling, and leaving it at ``running``
     forever is the one outcome worse than a failure.
+
+    Pass ``store`` and the run's stored request is deleted once the failure is
+    recorded. That request is a full copy of the caller's export; a failed run has no
+    more use for it than a successful one, and nothing will ever read it again —
+    a failure recorded here is final, the queue does not redeliver it.
     """
     try:
         state = await jobs.get(job_id)
@@ -177,3 +195,7 @@ async def fail_job(jobs: JobStore, job_id: str, error: JobError) -> None:
     state.error = error
     await jobs.update(state)
     logger.error("[%s] Recorded as failed: %s", job_id, error.code)
+    # Only after the failure is safely recorded. Had the update raised, the queue
+    # would redeliver — and the retry would need this request.
+    if store is not None:
+        await delete_request(store, job_id)
