@@ -86,12 +86,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings.model, settings.model_fast or settings.model,
         )
     except Exception as exc:
-        logger.error("Starting without usable Core42 settings: %s.", exc)
+        logger.error("Starting without usable Core42 settings: %s", exc)
 
     try:
         app.state.document_store = create_document_store()
     except Exception as exc:
-        logger.error("Starting without a document store: %s.", exc)
+        logger.error("Starting without a document store: %s", exc)
 
     try:
         job_settings = get_job_settings()

@@ -41,6 +41,8 @@ azure = [
     # backend and pulls neither.
     "azure-data-tables>=12.5.0",
     "azure-storage-queue>=12.10.0",
+    # The 'blob' document store. On-prem keeps the 'local' backend and never needs it.
+    "azure-storage-blob>=12.20.0",
 ]
 
 [dependency-groups]

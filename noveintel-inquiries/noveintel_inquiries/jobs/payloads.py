@@ -74,10 +74,11 @@ async def load_request(store: DocumentStore | None, job_id: str) -> str:
 async def delete_request(store: DocumentStore | None, job_id: str) -> None:
     """Drop the stored request. Best effort — never fails a finished run.
 
-    ``DocumentStore`` has no delete: it is a two-method Protocol on purpose, and
-    widening it for this would put a delete on every backend for one caller's benefit.
-    Where the backend happens to offer one it is used; otherwise the payload is left
-    for the storage lifecycle policy to age out, which is what such policies are for.
+    Both shipped backends — ``local`` and ``blob`` — offer a ``delete``, so in
+    practice the request is removed. It is still looked up rather than called
+    directly because ``DocumentStore`` is a two-method Protocol on purpose: a
+    third-party backend without a delete leaves the payload for its storage
+    lifecycle policy to age out, rather than failing a run that has already finished.
     """
     if store is None:
         return

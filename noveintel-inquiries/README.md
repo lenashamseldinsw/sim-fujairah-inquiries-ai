@@ -115,83 +115,36 @@ ends up in a finance report.
 
 ## Deployment
 
-### On-prem / anywhere with a process manager
+**[`docs/deployment.md`](docs/deployment.md) is the full guide**: what to create on
+Azure, every app setting, the timeout that has to be raised, how to check a
+deployment worked, and how to run on an on-prem server with no Azure at all.
 
-```bash
-uv sync --extra api --extra serve
-uv run uvicorn noveintel_inquiries.api.app:app --host 0.0.0.0 --port 8000
-```
+The short version: the same code runs either way, and three settings choose where
+things live.
 
-### Azure Functions
-
-```bash
-uv sync --extra api --extra azure
-uv export --extra api --extra azure --no-dev --no-emit-project \
-    --format requirements-txt -o requirements.txt
-func start          # /health answers at the ROOT, not /api/health
-```
-
-`function_app.py` and `host.json` are the entire Azure layer. Delete them and the
-service is untouched — nothing under `noveintel_inquiries/` imports `azure.*`, and a test enforces it.
-
-`host.json` sets `routePrefix: ""`. **This is mandatory**: the default prefixes every
-route with `/api`, which FastAPI knows nothing about, so every request would 404.
-
-App settings to set: `CORE42_API_KEY` (as a Key Vault reference),
-`CORE42_REQUEST_TIMEOUT=240`, and the pricing rates. Leave `NOVEINQ_API_KEY` unset —
-`AuthLevel.FUNCTION` means the platform checks `x-functions-key` before a request
-reaches the app.
-
-### Durability: pick a job backend and a dispatcher
-
-Two independent settings, and the defaults are the development ones.
-
-| | `NOVEINQ_JOB_BACKEND` | `NOVEINQ_JOB_DISPATCH` |
+| Setting | On-prem (default) | Azure |
 |---|---|---|
-| **Development / single box** | `local` | `inprocess` |
-| **Load-balanced, runs may be lost on restart** | `table` | `inprocess` |
-| **Production** | `table` | `queue` |
+| `NOVEINQ_STORAGE_BACKEND` — report files | `local` (server disk) | `blob` (Blob Storage) |
+| `NOVEINQ_JOB_BACKEND` — job status | `local` (server memory) | `table` (Table Storage) |
+| `NOVEINQ_JOB_DISPATCH` — where a run executes | `inprocess` | `queue` (worker function) |
 
-**`backend`** says where job state lives. `local` keeps it in the worker's own memory,
-mirrored to disk: a poll only finds a job on the instance that accepted it, so two
-instances behind a load balancer 404 each other's jobs. `table` is Azure Table
-Storage — any instance can serve any poll.
+On-prem needs no Azure account and installs no Azure package — the Azure SDKs come
+only with the `azure` extra, and the code imports them only when an Azure backend is
+chosen. It runs as one instance, and a restart loses runs in progress.
 
-**`dispatch`** says where the run executes. `inprocess` runs it on the worker's event
-loop, so the run dies with the worker. `queue` enqueues it for a queue-triggered
-function; a message whose handler died is redelivered, and the run starts again.
+On Azure, the HTTP function accepts a run, stores the request in Blob Storage, records
+the job in Table Storage and queues it; a queue-triggered function runs it. Any
+instance can answer a poll, and a run whose worker dies is retried **from the start**
+— the stages are not checkpointed, and resuming one process's stage 4 in another's
+stage 5 would produce a report whose figures came from two different runs.
 
-> A redelivered run **starts over, it does not resume.** The stages are not
-> checkpointed, and stitching one process's stage 4 onto another's stage 5 would
-> produce a report whose figures came from two different runs.
+Two things are easy to get wrong, and both are explained in the guide: `host.json`'s
+`functionTimeout` must be raised above `NOVEINQ_JOB_MAX_RUNTIME_SEC`, and on Azure
+**every** route needs the `x-functions-key` header — `/health` included.
 
-With `dispatch=queue` set, `function_app.py` wires up:
-
-* a **queue trigger** (`run_analysis_job`) that runs the pipeline with no HTTP
-  connection open, so the 230-second ceiling does not apply — set `functionTimeout`
-  in `host.json` above your longest expected run;
-* a **poison-queue handler** (`run_analysis_job_poison`) that marks a job failed once
-  its message has exhausted every delivery, so nobody polls a run that will never
-  finish.
-
-The request is stored in the document store under `_pending/` when the job is
-accepted, because a queue message caps at 64 KiB and a real export is megabytes. It
-is deleted when the run reaches a terminal state.
-
-```bash
-NOVEINQ_JOB_BACKEND=table
-NOVEINQ_JOB_DISPATCH=queue
-NOVEINQ_JOB_CONNECTION_STRING=<storage connection string>
-NOVEINQ_JOB_QUEUE_NAME=analysis-runs
-```
-
-**Both functions must agree on the backend.** With `local`, the queue worker writes
-to its own process memory and the HTTP instance serving the poll never sees it — set
-`table` whenever you set `queue`.
-
-**On a Consumption plan an idle worker is recycled**, which kills an in-process run.
-With `dispatch=queue` the message is redelivered and the run resumes on another
-worker, which is the main reason to use it. Still prefer an always-on plan.
+`function_app.py` and `host.json` are the entire Azure layer. `host.json` sets
+`routePrefix: ""`, which is mandatory: the default prefixes every route with `/api`,
+which FastAPI knows nothing about, so every request would 404.
 
 ---
 
@@ -203,7 +156,7 @@ noveintel-inquiries/
 ├── host.json                 AZURE ONLY — routePrefix "", timeout, logging
 ├── .funcignore               what must never reach wwwroot
 ├── requirements.txt          GENERATED by `uv export`; Azure installs from it
-├── docs/                     api.md, schema.md
+├── docs/                     api.md, schema.md, deployment.md
 ├── scripts/                  make_fixtures.py, smoke.py — excluded from deployment
 ├── tests/                    contract, API, storage, jobs, period, parity
 └── noveintel_inquiries/
@@ -279,7 +232,7 @@ has not drifted, and that stage 1 reaches the same verdict on real input. Use
 ## Testing
 
 ```bash
-uv run pytest              # 148 tests, no gateway and no network needed
+uv run pytest              # 164 tests, no gateway and no network needed
 ```
 
 The engine, the contract, the error envelope, storage and the job layer are all real.

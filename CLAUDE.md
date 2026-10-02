@@ -14,9 +14,10 @@
 independently deployable project rather than part of this app, and the
 [porting guide](api-youssef-porting-guide.md) it follows mandates its own
 `README.md`, `docs/api.md` and `docs/schema.md` — a caller integrating the API needs
-them next to the code, not in this file. Those five files per service are the
-complete allowance; do not add a sixth. Anything else belongs in the service's
-README or here.
+them next to the code, not in this file. Each service also has a
+`docs/deployment.md`, the Azure and on-prem setup guide an operator deploys from.
+Those four Markdown files per service are the complete allowance; do not add a fifth.
+Anything else belongs in the service's README or here.
 
 **Any notes or documentation needed** should be added to one of these files, not scattered as new .md files. If you find yourself creating a new .md file, it probably belongs in CLAUDE.md, README.md, or one of the folder-specific READMEs instead.
 
@@ -131,7 +132,7 @@ cd noveintel-inquiries
 cp .env.example .env          # set CORE42_API_KEY
 uv sync --extra api --extra serve
 uv run uvicorn noveintel_inquiries.api.app:app --reload   # http://localhost:8000/docs
-uv run pytest                                             # 99 tests, no network needed
+uv run pytest                                             # 164 tests, no network needed
 ```
 
 ### Two departures from the porting guide, and why
@@ -192,6 +193,25 @@ report navy. `tests/test_theme.py` pins this.
 like the platform-locked `STATUS_COLORS`; the greys beside it carry no identity.
 Repainting those in a tenant's brand would destroy meaning. Only the accent slot is
 themed.
+
+### Deployment: Azure or on-prem
+
+Each service's `docs/deployment.md` is the operator's guide. The same code runs in
+both places; three settings choose where things live:
+
+| Setting | On-prem (default) | Azure |
+|---|---|---|
+| `<PREFIX>_STORAGE_BACKEND` — report files | `local` | `blob` |
+| `<PREFIX>_JOB_BACKEND` — job status | `local` | `table` |
+| `<PREFIX>_JOB_DISPATCH` — where a run executes | `inprocess` | `queue` |
+
+On-prem installs no Azure package: the SDKs come only with the `azure` extra, and the
+blob and table backends import them inside their methods, never at module level.
+
+**Queue, table and container names are per service by default** (`inquiries-runs`,
+`inquiriesjobs`, `inquiries-reports`, and the complaints equivalents), so the two
+services can share one storage account without reading each other's work. Do not
+reintroduce a shared default.
 
 ### Job durability
 

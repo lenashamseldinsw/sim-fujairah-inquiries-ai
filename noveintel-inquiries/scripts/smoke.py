@@ -38,13 +38,29 @@ POLL_INTERVAL_SEC = 10.0
 TERMINAL = {"succeeded", "failed", "cancelled"}
 
 
-def headers(key: str | None) -> dict[str, str]:
-    return {"X-API-Key": key} if key else {}
+def headers(key: str | None, function_key: str | None = None) -> dict[str, str]:
+    """The auth headers for whichever deployment this is.
+
+    ``--key`` is the service's own key, sent as ``X-API-Key`` — what an on-prem
+    install checks. ``--function-key`` is Azure's, sent as ``x-functions-key``; on
+    Azure the platform checks it on *every* route, including /health and /ready.
+    """
+    sent: dict[str, str] = {}
+    if key:
+        sent["X-API-Key"] = key
+    if function_key:
+        sent["x-functions-key"] = function_key
+    return sent
 
 
 def check_ready(client: httpx.Client) -> None:
     """Refuse to start a paid run against a service that is not configured."""
     response = client.get("/ready")
+    if response.status_code == 401:
+        raise SystemExit(
+            "/ready answered 401. On Azure every route needs the function key: "
+            "pass --function-key."
+        )
     if response.status_code != 200:
         raise SystemExit(
             f"/ready answered {response.status_code}: {response.text}\n"
@@ -161,7 +177,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("body", type=Path, help="A request body, from make_fixtures.py.")
     parser.add_argument("--url", default="http://localhost:8000")
-    parser.add_argument("--key", default=None, help="X-API-Key, if the service needs one.")
+    parser.add_argument("--key", default=None,
+                        help="The service's own X-API-Key, if it needs one (on-prem).")
+    parser.add_argument("--function-key", default=None,
+                        help="The Azure Functions key, sent as x-functions-key (Azure).")
     parser.add_argument(
         "--english", action="store_true",
         help="Produce the English report too. Roughly doubles cost and wall clock.",
@@ -174,7 +193,11 @@ def main() -> int:
     body = json.loads(args.body.read_text(encoding="utf-8"))
     body.setdefault("options", {})["include_english"] = args.english
 
-    with httpx.Client(base_url=args.url.rstrip("/"), timeout=60.0) as client:
+    # Sent on every request, /ready included, since Azure gates them all.
+    auth = headers(args.key, args.function_key)
+    with httpx.Client(
+        base_url=args.url.rstrip("/"), timeout=60.0, headers=auth
+    ) as client:
         print(f"Service {args.url}")
         check_ready(client)
         print("\nValidating (free)")

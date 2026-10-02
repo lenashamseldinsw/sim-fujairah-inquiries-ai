@@ -31,7 +31,8 @@ secrets file: this package is standalone by design.
     NOVEINQ_JOB_DIR=...       # optional, where job state is written
     NOVEINQ_JOB_TTL_SEC=...   # optional, how long a finished job is kept
 
-    NOVEINQ_STORAGE_BACKEND=          # optional, 'local' (the only one, for now)
+    NOVEINQ_STORAGE_BACKEND=          # optional, 'local' or 'blob'
+    NOVEINQ_STORAGE_CONNECTION_STRING=  # required by 'blob' 
     NOVEINQ_STORAGE_DIR=...           # optional, root of the filesystem store
     NOVEINQ_STORAGE_CONTAINER=...     # optional, container / bucket / top-level dir
     NOVEINQ_STORAGE_PUBLIC_BASE_URL=  # optional, unset means file: URIs
@@ -183,10 +184,15 @@ class StorageSettings(BaseSettings):
     HTTP layer's concern: a library caller using ``generate_report`` directly stores
     artefacts too, and never constructs ``ApiSettings`` at all.
 
-    There is no dedicated blob storage for this project yet, so ``local`` is the only
-    backend and the default. Adding a real one means a new backend name here and an
-    implementation in ``noveintel_inquiries.storage`` — nothing else moves, and no caller changes,
-    because the response already carries references rather than bytes.
+    Two backends, because this service has two kinds of home. ``local`` is a
+    directory on the server's own disk and needs nothing else — the right answer for
+    an on-prem install with no cloud storage. ``blob`` is Azure Blob Storage, for an
+    Azure deployment where more than one instance has to see the same files and a
+    caller has to be able to download them.
+
+    ``local`` stays the default so an on-prem install works with no Azure account and
+    no Azure package. ``blob`` is opt-in, and its SDK is only installed with the
+    ``azure`` extra.
     """
 
     model_config = SettingsConfigDict(
@@ -199,9 +205,20 @@ class StorageSettings(BaseSettings):
     backend: str = Field(
         default="local",
         description=(
-            "Which store to use. Only 'local' exists today — a directory on the "
-            "service's own disk, standing in for a blob container until one is "
-            "provisioned."
+            "Which store to use. 'local' is a directory on the service's own disk — "
+            "for on-prem, or a single always-on instance. 'blob' is Azure Blob "
+            "Storage — for Azure, where several instances must see the same files and "
+            "callers need downloadable links. 'blob' needs a connection string and "
+            "the 'azure' extra."
+        ),
+    )
+    connection_string: str = Field(
+        default="",
+        description=(
+            "Azure Storage connection string for the 'blob' backend. Include the "
+            "AccountKey if callers should get time-limited download links (SAS); "
+            "without one, references carry the plain blob URL, which only a caller "
+            "with its own access to the account can fetch. Ignored by 'local'."
         ),
     )
     dir: Path = Field(
@@ -212,7 +229,10 @@ class StorageSettings(BaseSettings):
         ),
     )
     container: str = Field(
-        default="reports",
+        # Named per service, not shared. The two services may well be pointed at
+        # one storage account, and a shared default would file both modules'
+        # reports — and their pending requests — in the same place.
+        default="inquiries-reports",
         description=(
             "Container the artefacts are filed under, reported back on every "
             "reference. A blob container or bucket for a real backend; a directory "
@@ -227,6 +247,16 @@ class StorageSettings(BaseSettings):
             "file: URIs instead, which are honest about being on the service's disk. "
             "Set it to whatever serves the storage directory and the URLs become "
             "fetchable, making the contract identical to a real blob backend's."
+        ),
+    )
+    sas_ttl_sec: int = Field(
+        default=7 * 86_400,
+        gt=0,
+        description=(
+            "How long a 'blob' download link stays valid, in seconds. A week by "
+            "default: long enough for a report to be emailed and opened, short "
+            "enough that a forwarded link stops working. Each reference carries its "
+            "own ``expires_at``. Ignored by 'local'."
         ),
     )
 
@@ -292,14 +322,22 @@ class JobSettings(BaseSettings):
         ),
     )
     table_name: str = Field(
-        default="jobs",
-        description="Table the job records are written to. Created if absent.",
+        # Per service, and letters only: Azure table names allow no hyphens. A
+        # shared default would let one service read the other's job records when
+        # both point at one storage account.
+        default="inquiriesjobs",
+        description=(
+            "Table the job records are written to. Created if absent. Letters and "
+            "digits only — Azure rejects hyphens in table names."
+        ),
     )
     queue_name: str = Field(
-        default="analysis-runs",
+        # Per service. With a shared default, two Function Apps on one storage
+        # account would each pick up the other's work.
+        default="inquiries-runs",
         description=(
             "Queue the work messages go to. The queue-triggered function in "
-            "function_app.py must bind to the same name, and its poison queue "
+            "function_app.py binds to the same name, and its poison queue "
             "('<name>-poison') is what catches a run that failed every delivery."
         ),
     )

@@ -58,7 +58,7 @@ curl -s localhost:8000/ready
   "model_fast": "gpt-5.1",
   "auth_required": false,
   "max_records": 100000,
-  "storage": { "backend": "local", "container": "reports", "available": true },
+  "storage": { "backend": "local", "container": "complaints-reports", "available": true },
   "jobs": { "available": true },
   "pricing_configured": false
 }
@@ -323,7 +323,7 @@ means unenforced, which is right behind something that already authenticates: on
 Functions the platform checks `x-functions-key` first, so `NOVECOMP_API_KEY` is
 normally left unset there.
 
-`/health` and `/ready` are never gated.
+`NOVECOMP_API_KEY` never gates `/health` or `/ready`. **On Azure the function key does**: the platform checks `x-functions-key` on every route before a request reaches the app, so probes must send it too.
 
 ---
 
@@ -334,7 +334,7 @@ does not serve file content.
 
 ```json
 "documents": {
-  "report":      { "ar": { "url": "...", "container": "reports", "key": "..." } },
+  "report":      { "ar": { "url": "...", "container": "complaints-reports", "key": "..." } },
   "workbook":    { "url": "...", "key": "..." },
   "report_data": { "ar": { "url": "...", "key": "..." } }
 }
@@ -344,8 +344,19 @@ A hosted caller fetches `url`. An on-prem caller that holds its own storage
 credentials — and has no reason to trust a URL we minted — resolves `container` +
 `key` itself. Both describe the same object.
 
-With the local backend `url` is a `file:` URI, honest about being on the service's
-disk. Set `NOVECOMP_STORAGE_PUBLIC_BASE_URL` and it becomes fetchable:
+What `url` is depends on the storage backend:
+
+| Backend | `url` | `expires_at` |
+|---|---|---|
+| `blob` (Azure) | An https link with a read-only SAS token. Anyone holding it can download the file, with no Azure access of their own | When the token expires — `NOVECOMP_STORAGE_SAS_TTL_SEC`, a week by default |
+| `blob`, connection string without `AccountKey` | The plain blob URL. Only someone with their own access to the account can open it | `null` |
+| `local` (on-prem) | A `file:` URI on the service's own disk | `null` |
+| `local` with `NOVECOMP_STORAGE_PUBLIC_BASE_URL` | `<base>/<container>/<key>`, fetchable from whatever serves the folder | `null` |
+
+Fetch before `expires_at`. A link that has expired cannot be renewed through this API;
+the object is still in storage under its `key`.
+
+For local testing, serving the folder is enough:
 
 ```bash
 python -m http.server 10000 -d storage

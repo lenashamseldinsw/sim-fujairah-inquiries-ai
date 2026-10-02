@@ -95,6 +95,18 @@ class LocalDirectoryStore:
         except OSError as exc:
             raise StorageError(f"Could not read {path}: {exc.strerror or exc}") from exc
 
+    async def delete(self, key: str) -> None:
+        """Remove an object. Not part of the ``DocumentStore`` Protocol.
+
+        Used to drop a run's stored request once the run has finished — that file is
+        a full copy of the caller's export. A missing file is not an error.
+        """
+        path = self._path(key)
+        try:
+            await asyncio.to_thread(_io_path(path).unlink, True)
+        except OSError as exc:
+            raise StorageError(f"Could not delete {path}: {exc.strerror or exc}") from exc
+
     # ── Internals ─────────────────────────────────────────────────────────────
 
     def _path(self, key: str) -> Path:

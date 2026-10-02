@@ -20,6 +20,7 @@ azure-core==1.41.0 \
     --hash=sha256:f46ff5dfcd230f25cf1c19e8a34b8dc08a337b2503e268bb600a16c00db8ad5a
     # via
     #   azure-data-tables
+    #   azure-storage-blob
     #   azure-storage-queue
 azure-data-tables==12.7.0 \
     --hash=sha256:24ed9b5690aa46c213182e32bb1b39a68dd9f526d84f447c287e3a401b437c10 \
@@ -32,6 +33,10 @@ azure-functions==1.25.0 ; python_full_version < '3.13' \
 azure-functions==2.3.0 ; python_full_version >= '3.13' \
     --hash=sha256:32136bae3285680edd2b2d1786c37d381a9ba4c23332dcd590e354190dbe6c9a \
     --hash=sha256:9eb166cd83875dd88996c5f23a46f8edbbc78c0f9c41926bfdf960be54b6c889
+    # via noveintel-complaints
+azure-storage-blob==12.31.0 \
+    --hash=sha256:0c0cb601d3462491d09ea96023cd791bb9dd4b173bf950daf3cff34ff47ba5b5 \
+    --hash=sha256:997b393cfcbdc4b186d5911790d91f80387f7edc12c4d73eab963a2d26e5b2a9
     # via noveintel-complaints
 azure-storage-queue==12.17.0 \
     --hash=sha256:6eb108a88554be371feb2eba9715fa0e3f7baca7b3f00c19ec417fc7ce5b3834 \
@@ -285,7 +290,9 @@ cryptography==50.0.1 \
     --hash=sha256:fc3ed7ebd2a8c96f5b166de0ab9b624996bef3b07bbeb19364dfb78222c22c80 \
     --hash=sha256:fd3718b960d0b5dd213cdf03f3bcb7000e69dda0de8b956061947ff6bcff5558 \
     --hash=sha256:ff838d62ec1bfce4f9ba7fa16f4a7b554cd8d0c299e6be37502161a660c84eef
-    # via azure-storage-queue
+    # via
+    #   azure-storage-blob
+    #   azure-storage-queue
 et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
@@ -323,6 +330,7 @@ isodate==0.7.2 \
     --hash=sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6
     # via
     #   azure-data-tables
+    #   azure-storage-blob
     #   azure-storage-queue
 jiter==0.17.0 \
     --hash=sha256:00d783a779c5664e16dbad5e3a3c3a75e128b07dd5f4765159658d9210a50ca5 \
@@ -1157,6 +1165,7 @@ typing-extensions==4.16.0 \
     #   anyio
     #   azure-core
     #   azure-data-tables
+    #   azure-storage-blob
     #   azure-storage-queue
     #   fastapi
     #   httpx2
