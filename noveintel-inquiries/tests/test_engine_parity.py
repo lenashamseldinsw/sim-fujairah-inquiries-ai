@@ -91,6 +91,7 @@ class TestVendoringIntegrity:
             "stage6_artifacts.py", # branding injection, include_english gate
             "stage6_json_report.py",  # stable chart keys
             "state.py",            # the branding field
+            "translate_report_en.py",  # re-key translated table rows (empty English tables)
             "build_report_ar.py",  # vendored word builder, per-run logo
             "build_report_en.py",  # vendored word builder, per-run logo
         }

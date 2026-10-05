@@ -132,7 +132,7 @@ cd noveintel-inquiries
 cp .env.example .env          # set CORE42_API_KEY
 uv sync --extra api --extra serve
 uv run uvicorn noveintel_inquiries.api.app:app --reload   # http://localhost:8000/docs
-uv run pytest                                             # 199 tests, no network needed
+uv run pytest                                             # 205 tests, no network needed
 ```
 
 ### Two departures from the porting guide, and why
@@ -165,6 +165,7 @@ Everything else is byte-identical. Each service's README lists these, and
 | `stage6_artifacts.py` | Branding injection; the `include_english` gate |
 | `stage6_json_report.py` | A stable `key` on each chart, so consumers select by key not position |
 | `state.py` | The `branding` field |
+| `translate_report_en.py` | Re-key translated table rows to the English column names (they came out empty); English title |
 | `build_report_{ar,en}.py` | Vendored Word builder; per-run logo from `EntityInfo` |
 
 **The tenant logo now travels on the request** (`EntityInfo.logo_base64`) and is

@@ -201,6 +201,7 @@ each of which is named there:
 | `stage6_artifacts.py` | Branding injection; the `include_english` gate |
 | `stage6_json_report.py` | A stable `key` on each chart |
 | `state.py` | The `branding` field |
+| `translate_report_en.py` | Re-key translated table rows to the English column names (they came out empty); English title |
 | `build_report_{ar,en}.py` | Vendored Word builder; per-run logo |
 
 ---
@@ -232,7 +233,7 @@ has not drifted, and that stage 1 reaches the same verdict on real input. Use
 ## Testing
 
 ```bash
-uv run pytest              # 199 tests, no gateway and no network needed
+uv run pytest              # 205 tests, no gateway and no network needed
 ```
 
 The engine, the contract, the error envelope, storage and the job layer are all real.

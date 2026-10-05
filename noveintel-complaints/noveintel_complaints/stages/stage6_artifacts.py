@@ -1639,6 +1639,13 @@ def run_stage6(
     else:
         print("[Stage6] Starting parallel English translation of complete report (9 sections)...")
         state.report_json_en = translate_complete_report_json_parallel(state.report_json, api_key)
+        # The title sits outside the sections the translation covers, so it would
+        # otherwise reach the English cover in Arabic. month_year is already English
+        # — it is what the Arabic title converts from.
+        if state.report_json_en:
+            state.report_json_en["document_name"] = (
+                f"Customer Complaint Analysis Report — {state.month_year}" if state.month_year else "Customer Complaint Analysis Report"
+            )
 
     if state.report_json_en:
         print(f"[Stage6] English translation of complete report JSON complete ({len(json.dumps(state.report_json_en)):,} chars)")

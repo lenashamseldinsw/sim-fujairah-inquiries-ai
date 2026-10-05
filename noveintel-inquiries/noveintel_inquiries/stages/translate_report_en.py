@@ -198,6 +198,68 @@ def _translate_single_section_json(
         return None
 
 
+def _tables_in(node: Any, found: Optional[list] = None) -> list:
+    """Every table dict in a section, in document order."""
+    if found is None:
+        found = []
+    if isinstance(node, dict):
+        for table in node.get("tables") or []:
+            if isinstance(table, dict):
+                found.append(table)
+        for key, value in node.items():
+            if key != "tables":
+                _tables_in(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            _tables_in(item, found)
+    return found
+
+
+def _rekey_translated_tables(original: Dict[str, Any], translated: Dict[str, Any]) -> int:
+    """Rename each translated table's row keys to its translated column names.
+
+    A table's column names appear twice in the report JSON: as *values* in the
+    ``columns`` list, and as the *keys* of every row. The translation prompt
+    translates values and — correctly, for everything else in the document — forbids
+    renaming keys. So the model returns English ``columns`` over rows still keyed in
+    Arabic, and the English builder, which looks each cell up by column name, prints
+    a table of empty cells. The translated values are all there, filed under the
+    wrong keys.
+
+    Fixed here, deterministically, rather than by asking the model to rename keys:
+    the original Arabic columns and the translated English ones are in the same
+    order, so pairing them gives the exact mapping with no guesswork. Returns how many
+    tables were re-keyed.
+    """
+    source_tables = _tables_in(original)
+    target_tables = _tables_in(translated)
+    if len(source_tables) != len(target_tables):
+        # The model changed the structure despite being told not to. Pairing by
+        # position would then mislabel columns, which is worse than an empty cell.
+        print(
+            f"[TranslateRekey] Table count changed in translation "
+            f"({len(source_tables)} → {len(target_tables)}); tables left as returned."
+        )
+        return 0
+
+    fixed = 0
+    for source, target in zip(source_tables, target_tables):
+        arabic = source.get("columns") or []
+        english = target.get("columns") or []
+        if len(arabic) != len(english) or not isinstance(target.get("rows"), list):
+            continue
+        mapping = {a: e for a, e in zip(arabic, english) if a != e}
+        if not mapping:
+            continue
+        target["rows"] = [
+            {mapping.get(key, key): value for key, value in row.items()}
+            if isinstance(row, dict) else row
+            for row in target["rows"]
+        ]
+        fixed += 1
+    return fixed
+
+
 def translate_complete_report_json_parallel(
     report_json: Dict[str, Any],
     api_key: str,
@@ -284,6 +346,7 @@ def translate_complete_report_json_parallel(
             section_index, translated = future.result()
 
             if translated:
+                _rekey_translated_tables(sections[section_index], translated)
                 translated_sections[section_index] = translated
                 successful_count += 1
             else:
