@@ -71,8 +71,11 @@ same thing. `""`, `"  "`, `"-"`, `"--"`, `"nan"`, `"none"`, `"null"`, `"n/a"`, `
 `"#n/a"`, `"#null!"` and a float `NaN` are all read as no value — case-insensitively,
 after collapsing whitespace.
 
-For an **optional** field that means `null`. For a **required** one it is a validation
-error naming the field, rather than the literal string `"nan"` reaching a stage.
+Any of these means `null`, and a `null` reaches the pipeline as an empty cell — exactly as the
+original app read it from Excel. That holds for the required columns too, except
+`case_number`, where a blank value is a validation error.
+
+**Required means the column, not the value.** Every record must carry these keys, but `case_details`, `resolution`, `service` may be `null` for a blank cell — the pipeline keeps such rows and routes them down its fallback path, and refusing them would sink a whole export over one blank resolution. `case_number` is the exception: it must have a value, or the case cannot be traced back to its row in the workbook. Send `null` for a blank cell rather than leaving the key out; a missing key means the column is missing.
 
 Whitespace inside a value is *collapsed*, not merely stripped: Arabic pasted out of a
 web form carries newlines and runs of spaces mid-string, and the pipeline compares

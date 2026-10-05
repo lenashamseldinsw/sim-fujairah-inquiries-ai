@@ -284,7 +284,7 @@ class JSONReportBuilder:
             token = "#" + "".join(c * 2 for c in token.lstrip("#"))
         if not token.startswith("#"):
             token = "#" + token
-        return token if re.fullmatch(r"#[0-9a-fA-F]{6}", token) else self.DESIGN_ACCENT
+        return token if _re.fullmatch(r"#[0-9a-fA-F]{6}", token) else self.DESIGN_ACCENT
 
     def __init__(self, state: PipelineState):
         self.state = state

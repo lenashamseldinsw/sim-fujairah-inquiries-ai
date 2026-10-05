@@ -30,6 +30,7 @@ Each section has:
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from collections import defaultdict, Counter
+import re as _re
 from .state import PipelineState, CaseRow, convert_month_year_to_arabic
 from .stage2_rules import ALL_COMPLAINT_SUB_CATEGORIES as _SUB_CLASSIFICATIONS
 from .generate_customer_journey_section import _build_friction_rows
@@ -306,7 +307,7 @@ class JSONReportBuilder:
             token = "#" + "".join(c * 2 for c in token.lstrip("#"))
         if not token.startswith("#"):
             token = "#" + token
-        return token if re.fullmatch(r"#[0-9a-fA-F]{6}", token) else self.DESIGN_ACCENT
+        return token if _re.fullmatch(r"#[0-9a-fA-F]{6}", token) else self.DESIGN_ACCENT
 
     def __init__(self, state: PipelineState):
         self.state = state

@@ -146,3 +146,79 @@ class TestRenderedDocument:
     def test_a_malformed_brand_still_produces_a_readable_document(self, tmp_path):
         counts = self._build(tmp_path, {"brand": {"primary": "not-a-colour"}}, "bad")
         assert counts[DESIGN_GOLD] > 0
+
+
+
+class TestChartAccent:
+    """``JSONReportBuilder.accent`` — the chart colour slot. A NameError here took
+    down Stage 6 of a live run: nothing exercised it with a brand set."""
+
+    @staticmethod
+    def _builder(branding):
+        from noveintel_inquiries.stages.stage6_json_report import JSONReportBuilder
+        from noveintel_inquiries.stages.state import PipelineState
+
+        return JSONReportBuilder(PipelineState(branding=branding))
+
+    def test_no_brand_is_the_design_accent(self):
+        assert self._builder(None).accent == "#B68A35"
+
+    def test_a_brand_colour_is_used(self):
+        assert self._builder({"brand": {"primary": "#201853"}}).accent == "#201853"
+
+    @pytest.mark.parametrize("value,expected", [("abc", "#aabbcc"), ("201853", "#201853"), ("navy", "#B68A35")])
+    def test_shorthand_missing_hash_and_garbage(self, value, expected):
+        assert self._builder({"brand": {"primary": value}}).accent.lower() == expected.lower()
+
+
+class TestBrandSurvivesTheQueue:
+    """A queued run re-reads the stored request. Storing a full dump wrote out every
+    default, so an omitted brand came back looking explicitly set — and every queued
+    report would have been repainted in the NoveAI palette."""
+
+    @staticmethod
+    def _post_and_reload(tmp_path, monkeypatch, entity):
+        import asyncio
+
+        from fastapi.testclient import TestClient
+
+        from noveintel_inquiries.api.app import create_app
+        from noveintel_inquiries.api.deps import get_document_store, get_job_runner
+        from noveintel_inquiries.jobs import load_request
+        from noveintel_inquiries.storage import LocalDirectoryStore
+
+        monkeypatch.setenv("CORE42_API_KEY", "test-key")
+        store = LocalDirectoryStore(tmp_path)
+
+        class QueueLike:
+            needs_stored_request = True
+            def submit(self, job_id, run): self.job_id = job_id
+            async def shutdown(self, timeout=10.0): pass
+
+        runner = QueueLike()
+        app = create_app()
+        app.dependency_overrides[get_document_store] = lambda: store
+        app.dependency_overrides[get_job_runner] = lambda: runner
+        body = {"records": [{"case_number": "1", "case_details": "a", "contact_type": "b", "resolution": "c", "date_opened": "2025-01-05"}], "entity": entity}
+        with TestClient(app) as client:
+            assert client.post("/v1/inquiries", json=body).status_code == 202
+        return asyncio.run(load_request(store, runner.job_id))
+
+    def test_an_omitted_brand_stays_omitted(self, tmp_path, monkeypatch):
+        from noveintel_inquiries.api.models import EntityInfo
+        from noveintel_inquiries.api import models
+
+        request_type = next(getattr(models, n) for n in dir(models) if n.startswith("Generate"))
+        stored = self._post_and_reload(tmp_path, monkeypatch, {"name_ar": "أ", "name_en": "A"})
+        assert "brand" not in request_type.model_validate_json(stored).entity.model_fields_set
+
+    def test_a_sent_brand_survives(self, tmp_path, monkeypatch):
+        from noveintel_inquiries.api import models
+
+        request_type = next(getattr(models, n) for n in dir(models) if n.startswith("Generate"))
+        stored = self._post_and_reload(
+            tmp_path, monkeypatch,
+            {"name_ar": "أ", "name_en": "A", "brand": {"primary": "#201853"}},
+        )
+        entity = request_type.model_validate_json(stored).entity
+        assert entity.brand.primary == "#201853"

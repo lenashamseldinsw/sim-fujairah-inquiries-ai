@@ -156,6 +156,8 @@ curl -s -X POST localhost:8000/v1/inquiries \
 closure date means the case is open, a missing department means the workload map has
 one fewer dimension, and neither is a reason to refuse the run.
 
+**Required means the column, not the value.** Every record must carry these keys, but `case_details`, `contact_type`, `resolution` may be `null` for a blank cell — the pipeline keeps such rows and routes them down its fallback path, and refusing them would sink a whole export over one blank resolution. `case_number` is the exception: it must have a value, or the case cannot be traced back to its row in the workbook. Send `null` for a blank cell rather than leaving the key out; a missing key means the column is missing.
+
 **`entity` is required and has no defaults.** A report must never carry another
 tenant's name, logo or colours.
 

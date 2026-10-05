@@ -185,8 +185,9 @@ def _missing_columns(errors: list[dict[str, Any]]) -> ApiError | None:
         MISSING_COLUMNS_CODE,
         f"{len(reported)} record(s) are missing the required {plural} "
         f"{', '.join(named)}. Every record must carry these keys — the pipeline's "
-        "first stage refuses a run without them. Either the snake_case name or the "
-        "normalised Arabic column name is accepted.",
+        "first stage refuses a run without them. Send null for a blank cell rather than "
+        "omitting the key. Either the snake_case name or the normalised Arabic "
+        "column name is accepted.",
         detail=detail,
     )
 

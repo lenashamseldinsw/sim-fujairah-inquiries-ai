@@ -242,7 +242,12 @@ async def create_analysis(
     # in-process path stays a plain closure and neither branch is special-cased here.
     if getattr(runner, "needs_stored_request", False):
         try:
-            await save_request(store, job_id, complaints.model_dump_json())
+            # exclude_unset, not a full dump: the worker re-parses this, and a full
+            # dump writes out every default — so a brand the caller never sent would
+            # come back looking explicitly set, and the report would be repainted in
+            # the NoveAI palette instead of its own design. What the caller sent, and
+            # only that, is what must survive the round trip.
+            await save_request(store, job_id, complaints.model_dump_json(exclude_unset=True))
         except JobStoreError as exc:
             raise ApiError(
                 status.HTTP_503_SERVICE_UNAVAILABLE,

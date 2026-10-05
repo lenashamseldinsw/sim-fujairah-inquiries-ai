@@ -22,6 +22,12 @@ them only if the report needs them, because everything sent is written into the
 workbook this run stores. The error handler never echoes a rejected record back —
 see ``api/errors.py`` — for exactly this reason.
 
+**Required means the column, not the value.** A record must carry every required
+key, but a blank cell may be sent as ``null`` — every required field except
+``case_number`` accepts it. Stage 1 keeps such rows and routes them down its
+fallback path; refusing them would refuse an export the pipeline analyses, and
+the first real export tried had 2 blank resolutions in 11 rows.
+
 Unknown keys are kept (``extra="allow"``) and passed through to the dataframe, so a
 tenant recording a column this contract has not heard of still has it counted in the
 "structured fields" figure the methodology section prints.
@@ -32,7 +38,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ._coercion import OptionalFlag, OptionalStr, RequiredStr, is_blank
+from ._coercion import (
+    OptionalFlag,
+    OptionalStr,
+    RequiredNullableStr,
+    RequiredStr,
+    is_blank,
+)
 
 __all__ = [
     "HARD_REQUIRED_COLUMNS",
@@ -40,6 +52,9 @@ __all__ = [
     "ComplaintRecord",
     "records_to_frame",
 ]
+
+# An empty cell, as pandas reads one from Excel.
+_NAN = float("nan")
 
 # The columns stage 1 refuses a run without, named by their JSON field. Used by the
 # error handler to fold a hundred thousand identical per-record failures into one.
@@ -72,7 +87,7 @@ class ComplaintRecord(BaseModel):
             "behind it. A string, not a number: leading zeros are meaningful."
         ),
     )
-    case_details: RequiredStr = Field(
+    case_details: RequiredNullableStr = Field(
         alias="تفاصيل_الطلب",
         description=(
             "What the customer complained about, in their own words. One of the two "
@@ -80,7 +95,7 @@ class ComplaintRecord(BaseModel):
             "friction and root-cause analysis."
         ),
     )
-    resolution: RequiredStr = Field(
+    resolution: RequiredNullableStr = Field(
         alias="الحل",
         description=(
             "How the complaint was answered or closed, in free text. The second "
@@ -88,7 +103,7 @@ class ComplaintRecord(BaseModel):
             "compares against the guidebook."
         ),
     )
-    service: RequiredStr = Field(
+    service: RequiredNullableStr = Field(
         alias="الخدمة",
         description=(
             "The service the complaint concerns. Required here — unlike the "
@@ -242,23 +257,31 @@ class ComplaintRecord(BaseModel):
     def to_columns(self) -> dict[str, Any]:
         """The record as the Arabic-keyed mapping stage 1 expects.
 
-        Only fields the caller actually supplied appear. That matters: stage 1 counts
-        the columns it receives and the methodology section prints that count, so
-        padding the frame with every modelled column would have the report describe
-        an export the tenant never sent.
+        Exactly the fields the caller sent appear — including ones sent as ``null``,
+        and nothing it did not send. Both halves matter. Stage 1 counts the columns it
+        receives and the methodology section prints that count, so padding the frame
+        with every modelled column would describe an export the tenant never sent;
+        and a column the tenant *did* send, blank in this row, is still a column of
+        their export.
+
+        A blank value becomes ``NaN``, which is what pandas produces for an empty
+        Excel cell and therefore what the stages were written against. ``None`` would
+        stringify as "None" where the stages expect "nan".
         """
         aliases = {
             name: field.alias or name
             for name, field in type(self).model_fields.items()
         }
-        supplied = self.model_dump(exclude_none=True)
-        row = {aliases.get(name, name): value for name, value in supplied.items()}
+        supplied = self.model_dump(exclude_unset=True)
+        row = {
+            aliases.get(name, name): (_NAN if value is None else value)
+            for name, value in supplied.items()
+        }
 
         # Unmodelled columns come through __pydantic_extra__ under whatever key the
         # caller used, which is the key the tenant records them under.
         for key, value in (self.__pydantic_extra__ or {}).items():
-            if not is_blank(value):
-                row[key] = value
+            row[key] = _NAN if is_blank(value) else value
         return row
 
 

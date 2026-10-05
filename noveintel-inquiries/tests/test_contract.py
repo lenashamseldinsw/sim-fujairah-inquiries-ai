@@ -56,6 +56,41 @@ class TestRecords:
         with pytest.raises(ValidationError):
             InquiryRecord(**row)
 
+    @pytest.mark.parametrize("column", ['case_details', 'contact_type', 'resolution'])
+    @pytest.mark.parametrize("blank", [None, "", "  ", "nan", "-"])
+    def test_a_required_column_may_be_blank_in_a_row(self, record_dicts, column, blank):
+        """The column must exist; its value need not. This is what the pipeline itself
+        accepts — stage 1 keeps rows with a blank cell and routes them down its
+        fallback path — and refusing them would sink a whole export over one blank
+        resolution. Found on a real export: 2 of 11 rows had none."""
+        row = dict(record_dicts[0])
+        row[column] = blank
+        assert getattr(InquiryRecord(**row), column) is None
+
+    def test_the_case_number_may_not_be_blank(self, record_dicts):
+        """The one exception: a case with no id cannot be traced back to its row in
+        the workbook, which is the point of the audit trail."""
+        row = dict(record_dicts[0])
+        row["case_number"] = None
+        with pytest.raises(ValidationError):
+            InquiryRecord(**row)
+
+    def test_a_blank_cell_reaches_the_frame_as_nan(self, record_dicts):
+        """NaN, as pandas reads an empty Excel cell — not None, which the stages
+        would stringify as "None" where they expect "nan"."""
+        import math
+
+        row = dict(record_dicts[0])
+        row["resolution"] = None
+        value = InquiryRecord(**row).to_columns()[InquiryRecord.model_fields["resolution"].alias]
+        assert isinstance(value, float) and math.isnan(value)
+
+    def test_a_column_never_sent_does_not_appear(self, record_dicts):
+        """Sent-as-null and not-sent differ: one is a blank cell in a column the
+        export has, the other a column it lacks — and stage 1 counts columns."""
+        row = {k: v for k, v in record_dicts[0].items() if k in HARD_REQUIRED_COLUMNS}
+        assert InquiryRecord.model_fields["date_opened"].alias not in InquiryRecord(**row).to_columns()
+
     @pytest.mark.parametrize("blank", ["", "  ", "nan", "-", "N/A"])
     def test_optional_column_blank_becomes_none(self, record_dicts, blank):
         row = dict(record_dicts[0])

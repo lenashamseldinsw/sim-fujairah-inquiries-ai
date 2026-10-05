@@ -232,7 +232,7 @@ has not drifted, and that stage 1 reaches the same verdict on real input. Use
 ## Testing
 
 ```bash
-uv run pytest              # 174 tests, no gateway and no network needed
+uv run pytest              # 199 tests, no gateway and no network needed
 ```
 
 The engine, the contract, the error envelope, storage and the job layer are all real.

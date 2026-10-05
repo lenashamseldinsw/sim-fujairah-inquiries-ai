@@ -20,6 +20,7 @@ from pydantic import BeforeValidator
 __all__ = [
     "OptionalFlag",
     "OptionalStr",
+    "RequiredNullableStr",
     "RequiredStr",
     "is_blank",
 ]
@@ -132,4 +133,14 @@ def _coerce_flag(value: Any) -> bool | None:
 
 OptionalStr = Annotated[str | None, BeforeValidator(_coerce_optional_str)]
 RequiredStr = Annotated[str, BeforeValidator(_coerce_required_str)]
+
+# The column must be present, but a cell may be empty. Declared with no default, so a
+# record missing the key is still a validation error — which is how a column absent
+# from the export is caught — while a blank value becomes None and passes through.
+#
+# This is what the pipeline itself accepts. Stage 1 refuses an export without the
+# column, but keeps rows whose cell is blank and routes them down its documented
+# fallback path; demanding a value here would refuse an export the pipeline would
+# analyse, and one blank cell in a hundred thousand rows would sink the whole run.
+RequiredNullableStr = Annotated[str | None, BeforeValidator(_coerce_optional_str)]
 OptionalFlag = Annotated[bool | None, BeforeValidator(_coerce_flag)]

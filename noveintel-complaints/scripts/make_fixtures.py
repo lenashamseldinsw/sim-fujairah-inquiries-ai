@@ -123,12 +123,17 @@ def to_records(frame: Any) -> list[dict[str, Any]]:
     for _, row in frame.iterrows():
         record: dict[str, Any] = {}
         for column, value in row.items():
-            if pd.isna(value):
-                continue
             normalised = normalise(column)
             key = ALIASES.get(normalised, normalised)
+            # An empty cell is sent as null, not left out. Leaving it out tells the
+            # API the column is missing from this record — which it is not; the
+            # export has the column and this row's cell is blank. The pipeline keeps
+            # such rows and the API accepts them, but only if they arrive as null.
+            if pd.isna(value):
+                record[key] = None
+                continue
             record[key] = value.isoformat() if hasattr(value, "isoformat") else str(value)
-        if record:
+        if any(v is not None for v in record.values()):
             records.append(record)
     return records
 
