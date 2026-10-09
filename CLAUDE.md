@@ -135,7 +135,7 @@ uv run uvicorn noveintel_inquiries.api.app:app --reload   # http://localhost:800
 uv run pytest                                             # 205 tests, no network needed
 ```
 
-### Two departures from the porting guide, and why
+### Three departures from the porting guide, and why
 
 **1. Runs are asynchronous.** `POST /v1/<flow>` answers `202` with a `job_id`; the
 caller polls `GET /v1/jobs/{job_id}`. Module 01 answers synchronously because a report
@@ -152,16 +152,25 @@ honoured in substance: `engine/` holds the genuinely pure part (period resolutio
 shared with module 01), and everything else the stages compute is surfaced as the
 bundle's `metrics`, which is the ground truth the prose is checked against.
 
+**3. The bundle differs from §6.6's skeleton**, as a consequence of 2. With no narrative
+layer there is no `XNarratives` schema, so the stage-assembled report is returned as
+`report: dict[Language, dict]` in place of `narratives`. `documents` is `RunDocuments`
+because a run files a workbook and the report's JSON besides the Word reports, which
+keep the guide's `dict[Language, DocumentRef]` shape as `documents.report`. And the
+shared `RunUsage` gained `by_stage`, with an empty default so a module 01 consumer
+reads it unchanged. Each service's README spells this out.
+
 ### What was changed in the vendored stages
 
-Everything else is byte-identical. Each service's README lists these, and
+Everything else is byte-identical, line endings aside — the parity test compares them
+normalised to LF, because `core.autocrlf` checks the copies out as CRLF on Windows. Each service's README lists these, and
 `tests/test_engine_parity.py` enforces the list:
 
 | File | Change |
 |---|---|
 | `llm.py` | Relative import in place of a `sys.path` insertion |
 | `orchestrator.py` | Vendored guidebook path; `include_english` |
-| `stage5_gap.py` | Vendored guidebook path |
+| `stage5_gap.py` | Vendored guidebook path (complaints only; the inquiries copy needed no change) |
 | `stage6_artifacts.py` | Branding injection; the `include_english` gate |
 | `stage6_json_report.py` | A stable `key` on each chart, so consumers select by key not position |
 | `state.py` | The `branding` field |
@@ -213,6 +222,24 @@ blob and table backends import them inside their methods, never at module level.
 `inquiriesjobs`, `inquiries-reports`, and the complaints equivalents), so the two
 services can share one storage account without reading each other's work. Do not
 reintroduce a shared default.
+
+### Concurrent runs share one process
+
+A worker runs up to `<PREFIX>_JOB_MAX_CONCURRENT` pipelines at once, and the vendored
+Core42 layer was written for a process that ran one. Four things keep runs apart, and
+`tests/test_runs.py` pins them:
+
+- **A token ledger per run.** `core42.tokens.run_scope()` holds the run's ledger in a
+  context variable. The stages fan out on `ThreadPoolExecutor`s, which do not carry a
+  context, so `pipeline._scope_stage_executors()` rebinds the name in each stage module
+  to `ScopedThreadPoolExecutor`. A stage that starts threads any other way fails a test.
+- **Gateway failures are counted on that ledger**, so a stage that failed because the
+  gateway did is reported `upstream_error` rather than `stage_failed`.
+- **Exception text stays out of the job record.** The orchestrator wraps it into the
+  stage's message (`"Stage 4 error: …"`); `pipeline._caller_safe` replaces those with
+  the run id and leaves the text to the log.
+- **A run past its ceiling is stopped, not just abandoned.** No thread can be killed,
+  so `ProgressReporter.abandon()` makes the next stage-boundary progress report raise.
 
 ### Job durability
 

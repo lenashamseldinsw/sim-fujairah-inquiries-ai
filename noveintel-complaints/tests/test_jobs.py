@@ -381,3 +381,111 @@ class TestTableStoreWithoutAzure:
         finally:
             get_job_settings.cache_clear()
             create_job_store.cache_clear()
+
+
+class TestRunCeilingAndCodes:
+    """The queue worker applies the same ceiling as the in-process runner, and both
+    report a gateway outage under its own code."""
+
+    @staticmethod
+    async def _queued_run(tmp_path, monkeypatch, generate_report, **kwargs):
+        from noveintel_complaints.jobs import LocalJobStore, execute_job, save_request
+        from noveintel_complaints.jobs import worker
+        from noveintel_complaints.storage import LocalDirectoryStore
+
+        class AnyRequest:
+            @classmethod
+            def model_validate_json(cls, body):
+                return cls()
+
+        monkeypatch.setattr(worker, "generate_report", generate_report)
+        jobs = LocalJobStore(tmp_path / "jobs")
+        files = LocalDirectoryStore(tmp_path / "files")
+        await jobs.create(queued())
+        await save_request(files, "job1", "{}")
+        await execute_job("job1", jobs=jobs, store=files, request_type=AnyRequest, **kwargs)
+        return await jobs.get("job1"), files
+
+    async def test_a_queued_run_past_its_ceiling_is_abandoned(self, tmp_path, monkeypatch):
+        from noveintel_complaints.jobs import JobStoreError, load_request
+
+        async def slow(*_, **__):
+            await asyncio.sleep(5)
+
+        state, files = await self._queued_run(
+            tmp_path, monkeypatch, slow, max_runtime_sec=0.05
+        )
+        assert state.status is JobStatus.FAILED
+        assert state.error.code == "runtime_exceeded"
+        with pytest.raises(JobStoreError):
+            await load_request(files, "job1")
+
+    async def test_the_ceiling_defaults_to_the_setting(self, tmp_path, monkeypatch):
+        from noveintel_complaints.config import get_job_settings
+
+        async def slow(*_, **__):
+            await asyncio.sleep(5)
+
+        monkeypatch.setenv("NOVECOMP_JOB_MAX_RUNTIME_SEC", "0.05")
+        get_job_settings.cache_clear()
+        try:
+            state, _ = await self._queued_run(tmp_path, monkeypatch, slow)
+        finally:
+            get_job_settings.cache_clear()
+        assert state.error.code == "runtime_exceeded"
+
+    async def test_a_timeout_inside_the_run_is_not_the_ceiling(self, tmp_path, monkeypatch):
+        """And is recorded, not raised: raising would have the host redeliver it."""
+        async def times_out(*_, **__):
+            raise TimeoutError("storage timed out")
+
+        state, _ = await self._queued_run(
+            tmp_path, monkeypatch, times_out, max_runtime_sec=60
+        )
+        assert state.error.code == "internal_error"
+
+    async def test_a_queued_gateway_outage_is_an_upstream_error(self, tmp_path, monkeypatch):
+        from noveintel_complaints.exceptions import UpstreamFailure
+
+        async def outage(*_, **__):
+            raise UpstreamFailure("stage3")
+
+        state, _ = await self._queued_run(tmp_path, monkeypatch, outage)
+        assert state.error.code == "upstream_error"
+        assert state.error.stage == "stage3"
+
+    async def test_an_in_process_gateway_outage_is_an_upstream_error(self, tmp_path):
+        from noveintel_complaints.exceptions import UpstreamFailure
+
+        store = LocalJobStore(tmp_path)
+        await store.create(queued())
+        runner = JobRunner(store)
+
+        async def run(progress):
+            raise UpstreamFailure("stage5")
+
+        runner.submit("job1", run)
+        await asyncio.sleep(0.1)
+        state = await store.get("job1")
+        assert state.error.code == "upstream_error"
+        assert state.error.stage == "stage5"
+
+    async def test_an_abandoned_run_stops_at_its_next_progress_report(self, tmp_path):
+        """A timed-out coroutine cannot stop the thread the stages run on; the
+        progress callback is how that thread learns nobody is waiting."""
+        from noveintel_complaints.jobs.runner import RunAbandoned
+
+        store = LocalJobStore(tmp_path)
+        await store.create(queued())
+        runner = JobRunner(store, max_runtime_sec=0.05)
+        handed = {}
+
+        async def run(progress):
+            handed["progress"] = progress
+            await asyncio.sleep(5)
+
+        runner.submit("job1", run)
+        await asyncio.sleep(0.3)
+        assert (await store.get("job1")).error.code == "runtime_exceeded"
+        with pytest.raises(RunAbandoned):
+            handed["progress"](0.7, None, "Stage 5: Gap Analysis")

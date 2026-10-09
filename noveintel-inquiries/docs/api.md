@@ -236,15 +236,26 @@ forever.
 load-balanced deployment 404s its own jobs; with `table` any instance can serve any
 poll. See the README's durability table.
 
-New job error codes when the durable path is in use:
+Every code a failed job can carry:
 
 | `code` | Meaning |
 |---|---|
+| `unprocessable_records` | The pipeline refused the data. The message says why; fix the export |
+| `stage_failed` | A stage could not complete. `stage` names it |
+| `upstream_error` | The model gateway failed during the run — an outage, rate limiting, a refused call. `stage` names where. Usually worth retrying later |
+| `internal_error` | Unhandled. The message names the exception type only |
+| `runtime_exceeded` | The run passed `NOVEINQ_JOB_MAX_RUNTIME_SEC` and was abandoned. Applies on both the in-process and the queue path |
 | `worker_restarted` | The worker died mid-run (local backend only). Abandoned, not resumed — retrying is safe |
-| `runtime_exceeded` | The run passed `NOVEINQ_JOB_MAX_RUNTIME_SEC` and was abandoned |
 | `request_unavailable` | A queued run could not read its stored request. Retry the run |
 | `delivery_failed` | The queued message exhausted every delivery attempt. Check the worker logs for this job id |
 | `cancelled` | The worker was shutting down |
+
+**A failed job's `message` never carries exception text.** Where a stage failed on an
+exception, the message says so and gives the run id; the exception itself is in the
+service log under that id. Exception text can carry a fragment of a record or of a
+model reply, and anyone who can poll the job can read the message. Messages the
+pipeline writes itself — stage 1's column checks, "Could not find guidebook JSON" —
+come through as they are.
 
 ---
 
@@ -266,9 +277,12 @@ Branch on `code`, never on `message`.
 | 422 | `missing_required_columns` | Records omit a required key. `detail` names the columns and the offending record indices |
 | 422 | `too_many_records` | The export exceeds `NOVEINQ_MAX_RECORDS` |
 | 422 | `invalid_request` | The body failed schema validation |
+| 404, 405 | `http_error` | No such route, or the wrong method for it. `message` is the framework's own — `Not Found`, `Method Not Allowed` |
 | 500 | `internal_error` | Unhandled. The message is deliberately generic — exception text can echo customer data |
-| 502 | `upstream_error` | The gateway failed or returned something unusable |
 | 503 | `not_configured` | Settings are missing, or there is no job store |
+
+No route calls the model gateway, so no route answers `502`. A gateway failure
+happens inside a run and is reported on the job, as `upstream_error`.
 
 ### `missing_required_columns`
 

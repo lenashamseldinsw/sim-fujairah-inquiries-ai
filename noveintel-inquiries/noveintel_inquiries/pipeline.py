@@ -21,9 +21,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import functools
 import json
 import logging
 import re
+import sys
 import tempfile
 import time
 import uuid
@@ -48,7 +50,7 @@ from .api.models import (
     GenerateInquiriesReportRequest,
     records_to_frame,
 )
-from .exceptions import StageFailure
+from .exceptions import StageFailure, UpstreamFailure
 from .config import get_pricing_settings
 from .engine import period_from_datetimes
 from .storage import DocumentStore, StorageError, build_key
@@ -175,8 +177,8 @@ def _materialise_branding(entity: EntityInfo, workdir: Path) -> dict[str, Any]:
 def _summarise_usage(ledger: dict[str, Any]) -> tuple[RunUsage, list[BundleWarning]]:
     """Turn the pipeline's token ledger into the contract's usage figures.
 
-    The ledger comes from ``core42.tokens``, which the pipeline resets at the start of
-    every run and appends to from every stage. Its own ``cost_usd`` is computed from
+    The ledger comes from ``core42.tokens``, scoped to this run so that overlapping
+    runs on one worker do not count each other's calls. Its own ``cost_usd`` is computed from
     the Core42 layer's built-in default rates; it is deliberately *not* used here.
     Cost on the contract is computed from the rates this deployment was configured
     with, and is null when there are none — an unpriced run and a free one are
@@ -481,6 +483,7 @@ def validate_records(request: GenerateInquiriesReportRequest) -> dict[str, Any]:
     from .stages.stage1_validator import run_stage1
     from .stages.state import PipelineState
 
+    _tolerate_arabic_output()
     frame = records_to_frame(request.records)
     state = run_stage1(PipelineState(), frame)
 
@@ -546,7 +549,7 @@ async def generate_report(
         workdir = Path(tmp)
         branding = _materialise_branding(request.entity, workdir)
 
-        state, warnings = await asyncio.to_thread(
+        state, warnings, ledger = await asyncio.to_thread(
             _run_stages, request, run_id, workdir, branding, progress
         )
 
@@ -573,7 +576,7 @@ async def generate_report(
         )
         warnings.extend(store_warnings)
 
-    usage, usage_warnings = _summarise_usage(_read_ledger())
+    usage, usage_warnings = _summarise_usage(ledger)
     warnings.extend(usage_warnings)
 
     human_review = int(getattr(state, "human_review_count", 0) or 0)
@@ -630,7 +633,7 @@ def _artefact_paths(workdir: Path, report: dict[Language, dict]) -> dict[str, Pa
 
 
 def _read_ledger() -> dict[str, Any]:
-    """This run's token ledger from the vendored Core42 layer."""
+    """The token ledger of the run in progress. Call inside its ``run_scope``."""
     from .core42 import token_summary
 
     try:
@@ -640,14 +643,80 @@ def _read_ledger() -> dict[str, Any]:
         return {}
 
 
+@functools.cache
+def _scope_stage_executors() -> None:
+    """Make the stages' thread pools carry the run's ledger into their workers.
+
+    The ledger is a context variable, and a stdlib ``ThreadPoolExecutor`` runs each
+    task in a context of its own, so the calls stage 3 and stage 6 fan out would be
+    counted against no run at all. The stages are vendored unchanged and cannot be
+    edited to use another executor, so the name each one imported is rebound here,
+    once. A stage that reaches for threads some other way is caught by a test.
+    """
+    import concurrent.futures
+    import importlib
+    import pkgutil
+
+    from . import stages
+    from .core42.tokens import ScopedThreadPoolExecutor
+
+    for info in pkgutil.iter_modules(stages.__path__):
+        module = importlib.import_module(f"{stages.__name__}.{info.name}")
+        if getattr(module, "ThreadPoolExecutor", None) is concurrent.futures.ThreadPoolExecutor:
+            module.ThreadPoolExecutor = ScopedThreadPoolExecutor
+
+
+def _tolerate_arabic_output() -> None:
+    """Make stdout and stderr able to print Arabic.
+
+    The vendored stages ``print`` progress with Arabic in it. On Windows a stream
+    redirected to a file or a pipe — which is what a service manager does with it —
+    is encoded in the ANSI code page, cp1252 on an English install, and ``print``
+    raises ``UnicodeEncodeError`` on the first Arabic character. That fails stage 1,
+    and with it every run. Switched to UTF-8 rather than told to drop characters, so
+    the log stays readable.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        encoding = (getattr(stream, "encoding", None) or "").lower()
+        if encoding.replace("-", "").replace("_", "") == "utf8":
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            # Not a TextIOWrapper: a test capture or a host's own stream. Leave it.
+            pass
+
+
 def _run_stages(
     request: GenerateInquiriesReportRequest,
     run_id: str,
     workdir: Path,
     branding: dict[str, Any],
     progress: Callable[..., None] | None,
-) -> tuple[Any, list[BundleWarning]]:
+) -> tuple[Any, list[BundleWarning], dict[str, Any]]:
     """Drive the six stages to completion. Blocking — always called on a thread.
+
+    Returns the final state, the warnings, and this run's token ledger. The ledger
+    is read here, inside the run's own scope, because outside it there is only the
+    process ledger, which no run writes to.
+    """
+    from .core42.tokens import run_scope
+
+    _tolerate_arabic_output()
+    _scope_stage_executors()
+    with run_scope():
+        state, warnings = _run_orchestrator(request, run_id, workdir, branding, progress)
+        return state, warnings, _read_ledger()
+
+
+def _run_orchestrator(
+    request: GenerateInquiriesReportRequest,
+    run_id: str,
+    workdir: Path,
+    branding: dict[str, Any],
+    progress: Callable[..., None] | None,
+) -> tuple[Any, list[BundleWarning]]:
+    """The body of ``_run_stages``, run inside the run's ledger scope.
 
     The orchestrator reports each stage as ``(success, message)`` rather than raising,
     so a failure has to be turned into one. ``StageFailure`` carries the stage name,
@@ -687,7 +756,17 @@ def _run_stages(
 
     if not results.get("success"):
         stage, message = _first_failure(results)
-        raise StageFailure(stage, message)
+        logger.error("[%s] %s failed: %s", run_id, stage, message)
+        if message.startswith(_GATEWAY_ERROR) or int(
+            _read_ledger().get("gateway_failures") or 0
+        ):
+            # The stages swallow a gateway error into "the stage failed". Two things
+            # still know it was the gateway: the orchestrator's own label for an
+            # ``APIError`` it caught, and the ledger, which counts every call that
+            # failed for good — including ones a stage caught and re-raised as
+            # something else.
+            raise UpstreamFailure(stage)
+        raise StageFailure(stage, _caller_safe(stage, message, run_id))
 
     # A stage that succeeded but produced less than it should have is reported rather
     # than hidden: the affected report sections are thinner, and a reader comparing
@@ -721,6 +800,27 @@ def _first_failure(results: dict[str, Any]) -> tuple[str, str]:
             return str(stage), str(outcome.get("message") or "The stage failed.")
     errors = results.get("errors") or ["The pipeline failed before any stage ran."]
     return "unknown", str(errors[0])
+
+
+# The orchestrator's catch-alls wrap an exception's text into the stage's message —
+# "API error: …", "Stage 4 error: …", "Validation failed: …". That text can carry a
+# fragment of a record or of a model reply, and a failed job's message is readable by
+# whoever polls it. Its own authored messages ("Could not find guidebook JSON", stage
+# 1's column checks) carry no data and stay as they are.
+_WRAPPED_EXCEPTION = re.compile(r"^(API error|Stage \d+ error|Validation failed):")
+
+# How the orchestrator labels an ``APIError`` it caught in stages 3 to 5.
+_GATEWAY_ERROR = "API error:"
+
+
+def _caller_safe(stage: str, message: str, run_id: str) -> str:
+    """The stage's message, or a stand-in when it carries an exception's text."""
+    if _WRAPPED_EXCEPTION.match(message):
+        return (
+            f"{stage} failed with an internal error. The detail is in the service log "
+            f"under run id {run_id}."
+        )
+    return message
 
 
 def _core42_key() -> str:

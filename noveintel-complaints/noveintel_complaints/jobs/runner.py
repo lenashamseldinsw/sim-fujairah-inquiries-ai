@@ -35,7 +35,7 @@ from ..api.models.enums import JobStatus
 from ..api.models.jobs import JobError, JobState
 from .base import JobNotFound, JobStore
 
-__all__ = ["JobRunner", "ProgressReporter"]
+__all__ = ["JobRunner", "ProgressReporter", "RunAbandoned", "runtime_exceeded"]
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,22 @@ logger = logging.getLogger(__name__)
 _MIN_PROGRESS_INTERVAL_SEC = 0.5
 
 
+class RunAbandoned(Exception):
+    """Raised into a run's thread when nobody is waiting for it any more."""
+
+
+def runtime_exceeded(max_runtime_sec: float) -> JobError:
+    """The error recorded for a run that passed its ceiling, on either path."""
+    return JobError(
+        code="runtime_exceeded",
+        message=(
+            f"The run exceeded its {max_runtime_sec:.0f}s ceiling and was abandoned. "
+            "Retrying is safe; a smaller export, or include_english=false, will "
+            "finish sooner."
+        ),
+    )
+
+
 class ProgressReporter:
     """The callback the pipeline calls, bridged onto the event loop.
 
@@ -54,6 +70,12 @@ class ProgressReporter:
     ``asyncio.Lock`` belonging to another loop — so each update is scheduled onto the
     loop with ``run_coroutine_threadsafe`` and not waited on. A progress update is
     advisory; blocking a pipeline stage on it would be the tail wagging the dog.
+
+    It is also how an abandoned run is stopped. Timing out or cancelling the
+    coroutine cannot stop the thread the stages run on — Python has no way to kill
+    one — so the run would carry on spending tokens on a result nobody will read.
+    Once ``abandon()`` is called, the next progress report raises ``RunAbandoned``
+    in that thread, which ends the run at the next stage boundary.
     """
 
     def __init__(
@@ -64,10 +86,17 @@ class ProgressReporter:
         self._loop = loop
         self._publish = publish
         self._last_at = 0.0
+        self._abandoned = False
+
+    def abandon(self) -> None:
+        """Stop the run at its next progress report. Safe to call more than once."""
+        self._abandoned = True
 
     def __call__(
         self, progress: float, message_ar: str | None = None, message_en: str | None = None
     ) -> None:
+        if self._abandoned:
+            raise RunAbandoned("The run was abandoned; stopping at a stage boundary.")
         now = self._loop.time() if self._loop.is_running() else 0.0
         if now and (now - self._last_at) < _MIN_PROGRESS_INTERVAL_SEC:
             return
@@ -175,14 +204,7 @@ class JobRunner:
                 await self._finish(
                     job_id,
                     JobStatus.FAILED,
-                    error=JobError(
-                        code="runtime_exceeded",
-                        message=(
-                            f"The run exceeded its {self._max_runtime_sec:.0f}s "
-                            "ceiling and was abandoned. Retrying is safe; a smaller "
-                            "export, or include_english=false, will finish sooner."
-                        ),
-                    ),
+                    error=runtime_exceeded(self._max_runtime_sec),
                 )
             except Exception as exc:
                 # The message is the exception's only where it was raised deliberately
@@ -195,6 +217,8 @@ class JobRunner:
                 )
             else:
                 await self._finish(job_id, JobStatus.SUCCEEDED, result=result)
+            finally:
+                reporter.abandon()
 
     def _publisher(self, job_id: str):
         """A coroutine that writes one progress update, bound to this job."""
@@ -271,15 +295,16 @@ def _classify(exc: Exception) -> JobError:
     """Turn a failure into the job's error record.
 
     ``ValueError`` is the pipeline's own refusal — unusable records, no resolvable
-    period — and is the caller's to fix, so it keeps its message. ``RuntimeError`` is
+    period — and is the caller's to fix, so it keeps its message. ``StageFailure`` is
     what the entry point raises when a stage reports failure, and carries the stage
-    name. Anything else is summarised by type: an unhandled exception's text can
-    contain a fragment of the caller's data.
+    name and its own code: ``upstream_error`` when the gateway was the cause,
+    ``stage_failed`` otherwise. Anything else is summarised by type: an unhandled
+    exception's text can contain a fragment of the caller's data.
     """
     from ..exceptions import StageFailure
 
     if isinstance(exc, StageFailure):
-        return JobError(code="stage_failed", message=str(exc), stage=exc.stage)
+        return JobError(code=exc.code, message=str(exc), stage=exc.stage)
     if isinstance(exc, ValueError):
         return JobError(code="unprocessable_records", message=str(exc))
     return JobError(

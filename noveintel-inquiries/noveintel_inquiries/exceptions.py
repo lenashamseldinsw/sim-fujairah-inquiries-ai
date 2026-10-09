@@ -12,7 +12,7 @@ failures from.
 """
 from __future__ import annotations
 
-__all__ = ["StageFailure"]
+__all__ = ["StageFailure", "UpstreamFailure"]
 
 
 class StageFailure(Exception):
@@ -27,6 +27,32 @@ class StageFailure(Exception):
     job's record, not as the status of the request that asked about it.
     """
 
+    #: The job record's ``error.code``. A class attribute so the job layer reads it
+    #: off whichever subclass was raised instead of testing for each one.
+    code = "stage_failed"
+
     def __init__(self, stage: str, message: str) -> None:
         super().__init__(message)
         self.stage = stage
+
+
+class UpstreamFailure(StageFailure):
+    """A stage failed because the model gateway did.
+
+    The orchestrator catches a gateway error inside the stage and reports only that
+    the stage failed. Told apart here because the caller's remedy differs: an outage
+    is worth retrying later, and a stage that rejects the data is not.
+
+    The message is fixed rather than the gateway's own. An error body can echo part
+    of the prompt, and for the complaints module the prompt is personal data.
+    """
+
+    code = "upstream_error"
+
+    def __init__(self, stage: str) -> None:
+        super().__init__(
+            stage,
+            f"The model gateway failed during {stage}, so the run could not finish. "
+            "This is usually an outage or rate limiting at the gateway rather than a "
+            "problem with the records; retrying later is safe.",
+        )

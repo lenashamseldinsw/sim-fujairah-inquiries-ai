@@ -83,6 +83,10 @@ class TestVendoringIntegrity:
         Only the files this port deliberately changed are exempt, and each exemption
         is named — an unexplained difference in any other stage means the port
         silently altered the analysis.
+
+        Line endings are not a difference. With ``core.autocrlf=true`` a Windows
+        checkout writes CRLF, and whether the two copies match then depends on how
+        each was checked out, not on what they say.
         """
         changed = {
             "llm.py",              # relative import in place of a sys.path insertion
@@ -107,6 +111,11 @@ class TestVendoringIntegrity:
             original = legacy_dir / ported.name
             if not original.is_file():
                 drifted.append(f"{ported.name}: not in the legacy flow")
-            elif ported.read_bytes() != original.read_bytes():
+            elif _lf(ported.read_bytes()) != _lf(original.read_bytes()):
                 drifted.append(f"{ported.name}: differs from the legacy flow")
         assert not drifted, drifted
+
+
+def _lf(data: bytes) -> bytes:
+    """A file's bytes with CRLF line endings normalised to LF."""
+    return data.replace(b"\r\n", b"\n")

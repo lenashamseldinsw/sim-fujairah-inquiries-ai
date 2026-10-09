@@ -34,7 +34,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from openai import BadRequestError
+from openai import APIError, BadRequestError
 
 from . import tokens as token_tracker
 from .client import create_chat_completion, unpack_response
@@ -255,7 +255,9 @@ def _emulate_tool_call(
         label=f"core42:{stage}:json-tool",
     )
     unpacked = unpack_response(resp, max_tokens)
-    token_tracker.track(model, unpacked["input_tokens"], unpacked["output_tokens"], stage)
+    token_tracker.track(
+        unpacked.get("model") or model, unpacked["input_tokens"], unpacked["output_tokens"], stage
+    )
 
     parsed = loads_repaired(unpacked.get("text") or "")
     message = _build_message(unpacked, model)
@@ -297,7 +299,37 @@ class _Messages:
         stage: Optional[str] = None,
         **ignored: Any,
     ) -> Core42Message:
-        """Create one message. Signature-compatible with ``messages.create``."""
+        """Create one message. Signature-compatible with ``messages.create``.
+
+        A gateway failure that escapes is counted on the run's ledger before it is
+        re-raised. The stages catch it and report only a failed stage, so the count
+        is how the service can tell a caller "the gateway failed" rather than
+        "a stage failed".
+        """
+        # Resolved here, not in ``_create``: the label names the caller by frame
+        # depth, and one more frame would name this method instead.
+        label = stage or _caller_label()
+        try:
+            return self._create(
+                model=model, messages=messages, max_tokens=max_tokens, system=system,
+                tools=tools, tool_choice=tool_choice, label=label, **ignored,
+            )
+        except (APIError, TimeoutError, ConnectionError):
+            token_tracker.track_failure()
+            raise
+
+    def _create(
+        self,
+        *,
+        model: Optional[str],
+        messages: Optional[List[Dict[str, Any]]],
+        max_tokens: Optional[int],
+        system: Optional[str],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Optional[Any],
+        label: str,
+        **ignored: Any,
+    ) -> Core42Message:
         global _tools_unsupported
 
         if ignored:
@@ -306,7 +338,6 @@ class _Messages:
 
         settings = get_settings()
         resolved_model = settings.resolve_model(model or self._client.model)
-        label = stage or _caller_label()
 
         if tools and (_tools_unsupported or _TOOL_MODE == "json"):
             return _emulate_tool_call(
@@ -346,7 +377,10 @@ class _Messages:
             )
 
         unpacked = unpack_response(resp, max_tokens)
-        token_tracker.track(resolved_model, unpacked["input_tokens"], unpacked["output_tokens"], label)
+        token_tracker.track(
+            unpacked.get("model") or resolved_model,
+            unpacked["input_tokens"], unpacked["output_tokens"], label,
+        )
         message = _build_message(unpacked, resolved_model)
 
         # A forced tool call that came back as prose means the gateway accepted the

@@ -139,7 +139,7 @@ instance can answer a poll, and a run whose worker dies is retried **from the st
 stage 5 would produce a report whose figures came from two different runs.
 
 Two things are easy to get wrong, and both are explained in the guide: `host.json`'s
-`functionTimeout` must be raised above `NOVECOMP_JOB_MAX_RUNTIME_SEC`, and on Azure
+`functionTimeout` must stay above `NOVECOMP_JOB_MAX_RUNTIME_SEC`, and on Azure
 **every** route needs the `x-functions-key` header — `/health` included.
 
 `function_app.py` and `host.json` are the entire Azure layer. `host.json` sets
@@ -162,7 +162,7 @@ noveintel-complaints/
 └── noveintel_complaints/
     ├── config.py             five pydantic-settings groups
     ├── pipeline.py           the entry points: validate_records, generate_report
-    ├── exceptions.py         StageFailure — defined where the core can see it
+    ├── exceptions.py         StageFailure, UpstreamFailure — where the core can see them
     ├── api/                  app, routes, deps, errors + models/ (the contract)
     ├── engine/               the deterministic part: period resolution
     ├── jobs/                 the async job layer: store, runner
@@ -186,6 +186,22 @@ that genuinely is pure and is shared with module 01 — resolving the reporting 
 and everything else the stages compute is surfaced as the bundle's **`metrics`**, which
 is the ground truth a reader checks the prose against. `docs/schema.md` says which
 figures are computed and which are written.
+
+### Where the bundle departs from the guide's §6.6 skeleton
+
+Three fields differ from the shape the porting guide gives every module's bundle, and
+all three follow from the departures above rather than from preference:
+
+- **`report` in place of `narratives`.** With no narrative layer there is no
+  `XNarratives` schema to type. The model's prose is written inside the report the
+  stages assemble, so that report — keyed by language, as `narratives` would be — is
+  what is returned. `metrics` stays the ground truth to check it against.
+- **`documents` is `RunDocuments`, not `dict[Language, DocumentRef]`.** A run files a
+  per-case workbook and the report's JSON as well as the Word reports. The Word
+  reports keep the guide's shape, as `documents.report`; the other two sit beside it.
+- **`RunUsage.by_stage`.** Added, with an empty default, so a consumer written for
+  module 01's `RunUsage` reads this one unchanged. A run makes dozens of calls across
+  six stages, and the per-stage figures say which prompt to cut.
 
 ### What was changed in the vendored stages
 

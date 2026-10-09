@@ -59,13 +59,14 @@ There are two timeouts, and **they must agree**:
 
 | Where | Setting | Default |
 |---|---|---|
-| `host.json` | `functionTimeout` — how long Azure lets a function run | `00:10:00` (10 min) |
+| `host.json` | `functionTimeout` — how long Azure lets a function run | `01:15:00` (75 min) |
 | App setting | `NOVEINQ_JOB_MAX_RUNTIME_SEC` — how long the code lets a run go | `3600` (1 hour) |
 
-On a Premium or Dedicated plan, **raise `functionTimeout` above the code's limit**
-— for example `"functionTimeout": "01:15:00"` — before deploying. If Azure's
-timeout is shorter, a long run is killed, retried, killed again, and finally
-marked `delivery_failed`.
+The shipped values agree: Azure's limit sits above the code's, so a run that is too
+long is stopped by the code, recorded `runtime_exceeded`, and not retried. **If you
+raise `NOVEINQ_JOB_MAX_RUNTIME_SEC`, raise `functionTimeout` with it.** If Azure's
+timeout is the shorter one, a long run is killed, retried from the start, killed
+again, and finally marked `delivery_failed` — paying for the run several times over.
 
 The Consumption plan cannot go past 10 minutes, which is too short for a real
 export, and it shuts down idle workers. That is why it is not supported.
@@ -102,6 +103,9 @@ immediately and the work runs in the queue worker.
 | `NOVEINQ_MAX_RECORDS` | `100000` | Larger exports are refused up front |
 | `LLM_MAX_CONCURRENCY` | `4` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
 | `NOVEINQ_LOG_LEVEL` | `INFO` | |
+
+A setting declared but left blank means its default, as if it were not there — a
+copied template with empty values is safe.
 
 **Leave unset:** `NOVEINQ_API_KEY`. Azure already checks the function key
 before a request reaches the app; setting both makes callers send two keys.

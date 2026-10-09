@@ -166,4 +166,7 @@ def unpack_response(resp: Any, max_output_tokens: Optional[int] = None) -> Dict[
         "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
         "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
         "finish_reason": finish_reason,
+        # What the gateway says answered, which can differ from what was asked
+        # for when it aliases or version-pins a deployment.
+        "model": getattr(resp, "model", None) or None,
     }

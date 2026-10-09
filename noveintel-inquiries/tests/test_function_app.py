@@ -130,3 +130,22 @@ class TestFunctionApp:
         assert wrapper.QUEUE_NAME == "inquiries-runs"
         assert wrapper.POISON_QUEUE == "inquiries-runs-poison"
         assert wrapper.CONNECTION_SETTING == "NOVEINQ_JOB_CONNECTION_STRING"
+
+
+class TestHostTimeout:
+    """Azure kills a function at ``functionTimeout`` and redelivers its message. If
+    that came before the job's own ceiling, a long run would be killed and restarted
+    from the beginning on every delivery, then poison-queued — spending its tokens
+    several times over to report ``delivery_failed`` instead of ``runtime_exceeded``."""
+
+    def test_the_host_outlasts_the_default_job_ceiling(self):
+        import json
+        from pathlib import Path
+
+        from noveintel_inquiries.config import JobSettings
+
+        host = json.loads((Path(__file__).parents[1] / "host.json").read_text())
+        hours, minutes, seconds = (int(p) for p in host["functionTimeout"].split(":"))
+        timeout = hours * 3600 + minutes * 60 + seconds
+        assert timeout > JobSettings.model_fields["max_runtime_sec"].default
+

@@ -17,12 +17,13 @@ from datetime import datetime, timezone
 
 from ..api.models.enums import JobStatus
 from ..api.models.jobs import JobError, JobState
+from ..config import get_job_settings
 from ..exceptions import StageFailure
 from ..pipeline import generate_report
 from ..storage import DocumentStore
 from .base import JobNotFound, JobStore, JobStoreError
 from .payloads import delete_request, load_request
-from .runner import ProgressReporter
+from .runner import ProgressReporter, _classify, runtime_exceeded
 
 __all__ = ["execute_job", "fail_job"]
 
@@ -61,12 +62,18 @@ async def execute_job(
     jobs: JobStore,
     store: DocumentStore | None,
     request_type: type,
+    max_runtime_sec: float | None = None,
 ) -> None:
     """Run one queued job to completion and record the outcome.
 
     ``request_type`` is passed in rather than imported so this module stays the same
     in both services — the only thing that differs between them is which request model
     the stored JSON parses as.
+
+    ``max_runtime_sec`` defaults to the ``JOB_MAX_RUNTIME_SEC`` setting, the same
+    ceiling the in-process runner applies. A run past it is recorded as
+    ``runtime_exceeded`` and returns normally: it would take as long on every
+    redelivery.
 
     **Raises on failure to record the outcome, and only then.** The Functions host
     treats an exception as a failed delivery and redelivers the message, which is
@@ -120,37 +127,31 @@ async def execute_job(
         asyncio.get_running_loop(), _publisher(jobs, job_id)
     )
 
+    if max_runtime_sec is None:
+        max_runtime_sec = get_job_settings().max_runtime_sec
+
+    # ``asyncio.timeout`` rather than ``wait_for``, so that a TimeoutError raised
+    # inside the run is told apart from the ceiling by ``expired()``.
+    deadline = asyncio.timeout(max_runtime_sec)
     try:
-        bundle = await generate_report(
-            request, store=store, progress=reporter, run_id=job_id
-        )
-    except StageFailure as exc:
-        await fail_job(
-            jobs, job_id,
-            JobError(code="stage_failed", message=str(exc), stage=exc.stage),
-            store=store,
-        )
-        return
-    except ValueError as exc:
-        await fail_job(
-            jobs, job_id,
-            JobError(code="unprocessable_records", message=str(exc)),
-            store=store,
-        )
-        return
+        async with deadline:
+            bundle = await generate_report(
+                request, store=store, progress=reporter, run_id=job_id
+            )
     except Exception as exc:
-        # The message is the type rather than the text: an unhandled failure can carry
-        # a fragment of the caller's data, and this reaches them through a poll.
-        logger.exception("[%s] Run failed: %s", job_id, type(exc).__name__)
-        await fail_job(
-            jobs, job_id,
-            JobError(
-                code="internal_error",
-                message=f"The run failed with an unhandled {type(exc).__name__}.",
-            ),
-            store=store,
-        )
+        if isinstance(exc, TimeoutError) and deadline.expired():
+            logger.error("[%s] Abandoned after %.0fs.", job_id, max_runtime_sec)
+            error = runtime_exceeded(max_runtime_sec)
+        else:
+            if not isinstance(exc, (StageFailure, ValueError)):
+                # The traceback goes to the log; the job record gets the type only,
+                # because an unhandled failure's text can carry the caller's data.
+                logger.exception("[%s] Run failed: %s", job_id, type(exc).__name__)
+            error = _classify(exc)
+        await fail_job(jobs, job_id, error, store=store)
         return
+    finally:
+        reporter.abandon()
 
     state = await jobs.get(job_id)
     state.status = JobStatus.SUCCEEDED

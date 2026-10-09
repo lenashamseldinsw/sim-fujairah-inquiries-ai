@@ -294,8 +294,9 @@ it), `result`, `error`.
 ### `JobError`
 
 `code` — one of `unprocessable_records`, `upstream_error`, `stage_failed`,
-`runtime_exceeded`, `worker_restarted`, `cancelled`, `internal_error` — plus `message`
-and `stage`.
+`runtime_exceeded`, `worker_restarted`, `request_unavailable`, `delivery_failed`,
+`cancelled`, `internal_error` — plus `message` and `stage`. [`api.md`](api.md) says
+what each means.
 
 `worker_restarted` means the worker died mid-run. The job was **abandoned rather than
 resumed**: resuming half a pipeline would stitch one process's stage 4 onto another's

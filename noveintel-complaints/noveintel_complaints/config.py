@@ -49,7 +49,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__ = [
@@ -66,21 +66,33 @@ __all__ = [
 ]
 
 
-def _blank_is_none(value: object) -> object:
-    """Treat a declared-but-empty variable as absent rather than as a bad value.
+class _EnvSettings(BaseSettings):
+    """The base of every settings group: a blank variable means its default.
 
     Declaring a variable and leaving it blank is how an operator says "not this one"
     — it is what a copied ``local.settings.json`` template looks like, and what an
-    empty deployment-slot setting looks like. Without this, that reads as an
-    unparseable number and takes the whole settings object down with it, which means
-    a failed startup and a 503 rather than the default the operator was asking for.
+    empty deployment-slot setting looks like. Read as a value, a blank number is
+    unparseable and takes the whole group down with it: a 503 on every run, and on
+    Azure a host that will not load, since ``function_app.py`` reads the job settings
+    at import. So every field, not just the ones that have bitten, takes its default
+    instead. A required field, having no default, is still refused.
     """
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _blank_means_default(cls, value: object, info: ValidationInfo) -> object:
+        if isinstance(value, str) and not value.strip():
+            # Returned rather than signalled with ``PydanticUseDefault``: settings
+            # validate their defaults too, so a blank default would bounce between
+            # the two until the interpreter crashed.
+            field = cls.model_fields[info.field_name]
+            if field.is_required():
+                raise ValueError("is set but blank, and has no default to fall back on")
+            return field.get_default(call_default_factory=True)
+        return value
 
 
-class Settings(BaseSettings):
+class Settings(_EnvSettings):
     """Core42 connection settings, read from the environment.
 
     These mirror what ``noveintel_complaints.core42.settings`` reads, and deliberately so: the
@@ -127,7 +139,7 @@ class Settings(BaseSettings):
     )
 
 
-class PricingSettings(BaseSettings):
+class PricingSettings(_EnvSettings):
     """What the model's tokens cost, read from the environment.
 
     Its own group rather than fields on ``Settings`` because that one is the
@@ -166,18 +178,13 @@ class PricingSettings(BaseSettings):
         ),
     )
 
-    @field_validator("input_cost_per_1m", "output_cost_per_1m", mode="before")
-    @classmethod
-    def _blank_means_unset(cls, value: object) -> object:
-        return _blank_is_none(value)
-
     @property
     def configured(self) -> bool:
         """Whether a run can be costed. Both rates are needed, or neither is usable."""
         return self.input_cost_per_1m is not None and self.output_cost_per_1m is not None
 
 
-class StorageSettings(BaseSettings):
+class StorageSettings(_EnvSettings):
     """Where finished artefacts are put, read from the environment.
 
     Its own group rather than fields on ``ApiSettings`` because storage is not the
@@ -261,7 +268,7 @@ class StorageSettings(BaseSettings):
     )
 
 
-class JobSettings(BaseSettings):
+class JobSettings(_EnvSettings):
     """The async job store, read from the environment.
 
     Its own group because the job layer is what makes this module differ from module
@@ -380,7 +387,7 @@ class JobSettings(BaseSettings):
     )
 
 
-class ApiSettings(BaseSettings):
+class ApiSettings(_EnvSettings):
     """HTTP service settings, read from the environment.
 
     Separate from ``Settings`` because they answer to different owners: those are the
@@ -424,14 +431,6 @@ class ApiSettings(BaseSettings):
             "worker has the memory: the whole export is held in a dataframe."
         ),
     )
-
-    @field_validator("log_level", mode="before")
-    @classmethod
-    def _blank_level_means_default(cls, value: object) -> object:
-        """A declared-but-empty variable means "leave it alone", not "log nothing"."""
-        if isinstance(value, str) and not value.strip():
-            return "INFO"
-        return value
 
 
 @lru_cache(maxsize=1)

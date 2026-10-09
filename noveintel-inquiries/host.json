@@ -5,7 +5,7 @@
       "routePrefix": ""
     }
   },
-  "functionTimeout": "00:10:00",
+  "functionTimeout": "01:15:00",
   "logging": {
     "applicationInsights": {
       "samplingSettings": {
