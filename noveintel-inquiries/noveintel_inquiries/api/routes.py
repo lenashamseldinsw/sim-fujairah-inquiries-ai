@@ -26,7 +26,8 @@ from fastapi import APIRouter, Depends, status
 from ..api.models.enums import JobStatus
 from ..config import get_pricing_settings, get_settings, get_storage_settings
 from ..jobs import JobNotFound, JobStoreError, save_request
-from ..pipeline import generate_report, new_run_id, validate_records
+from ..exceptions import MissingInputs
+from ..pipeline import check_inputs, generate_report, new_run_id, resolve_period, validate_records
 from .deps import (
     ApiSettingsDep,
     DocumentStoreDep,
@@ -34,7 +35,7 @@ from .deps import (
     JobStoreDep,
     require_api_key,
 )
-from .errors import ApiError, ErrorResponse
+from .errors import ApiError, ErrorResponse, missing_inputs_error
 from .models import JobAccepted, JobState, GenerateInquiriesReportRequest
 
 __all__ = ["router"]
@@ -46,8 +47,7 @@ router = APIRouter()
 # Roughly how long a run takes per record, from observed runs. Used only to give a
 # caller something to pace its polling by — it is stated as an estimate and labelled
 # as one on the model, because contention at the gateway moves it by a lot.
-_SECONDS_PER_RECORD = 0.35
-_BASE_SECONDS = 90
+_BASE_SECONDS = 150
 
 
 @router.get(
@@ -143,27 +143,25 @@ async def ready(
     },
 )
 async def validate(inquiries: GenerateInquiriesReportRequest, settings: ApiSettingsDep) -> dict:
-    """Run the schema validator alone and report what it found.
+    """Parse the payload alone and report what a run would see.
 
-    Milliseconds, no model call and no cost. It exists because the work route is
-    asynchronous: without this the only way to discover a missing column is to start a
-    run and poll until it fails, which is a slow way to find a typo.
+    Milliseconds, no model call and no cost. A 200 means the run will be *accepted*:
+    every required input arrived and the period resolves. The response carries the
+    parse log — artefact rows, duplicates, the case-type scope, mapped and unmapped
+    columns, present-but-empty columns — so a caller sees exactly which cases the
+    report will count before it pays for the run.
 
-    A 200 here means the analysis will be *accepted* — the columns are present and the
-    period resolves. It is not a promise that the run will succeed: stages 3 to 6
-    depend on the model gateway, and no amount of validation anticipates that.
-
-    ``period`` is null with ``period_error`` set when no record carried a readable
-    date. The run is still accepted in that case; the report simply carries a weaker
-    period label.
+    Refusals are the same a run would hit: ``422 missing_required_columns`` naming
+    every missing column, setting or reference list, and ``400 unprocessable_records``
+    when no opening date is readable.
     """
     _reject_oversized(inquiries, settings)
     try:
         return validate_records(inquiries)
+    except MissingInputs as exc:
+        raise missing_inputs_error(exc) from exc
     except ValueError as exc:
-        raise ApiError(
-            status.HTTP_400_BAD_REQUEST, "unprocessable_records", str(exc)
-        ) from exc
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "unprocessable_records", str(exc)) from exc
 
 
 @router.post(
@@ -198,16 +196,17 @@ async def create_analysis(
 
     **This does not return a report.** It returns a ``job_id``; poll
     ``GET /v1/jobs/{job_id}`` and read ``result`` once ``status`` is ``succeeded``.
-    Expect minutes rather than seconds: the pipeline classifies every case, analyses
-    patterns and gaps, then writes nine report sections and — unless you turn it off —
-    translates all of them.
+    Expect minutes rather than seconds: the run classifies every case (the rule chain,
+    then the model for what the rules cannot settle, and with root-cause extraction a
+    root cause per case and the umbrella step), analyses frictions, FAQs and guidebook
+    gaps, computes every figure, and writes the narrative in each language.
 
     ``estimated_seconds`` on the response is a rough figure for pacing a poll loop.
     Polling every 10 to 15 seconds is sensible; polling every second only adds load.
 
-    **``options.include_english=false`` roughly halves the run.** The English
-    translation is a full pass over all nine sections and is the single largest block
-    of tokens in a run. Turn it off unless an English document is actually wanted.
+    **``options.include_english=false``** skips the English narrative and document.
+    The English report is written natively, not translated, so it costs two model
+    calls and a short label translation rather than a second full pass.
 
     The artefacts are uploaded to storage, not returned here — fetch them from each
     reference's ``url``, or resolve its ``container`` and ``key`` against your own
@@ -223,6 +222,15 @@ async def create_analysis(
     it fails soft, and the cover page simply renders without a logo.
     """
     _reject_oversized(inquiries, settings)
+    # Refused now, not as a failed job minutes later: a missing required input and an
+    # export with no readable opening date are the caller's to fix before any run.
+    try:
+        check_inputs(inquiries)
+        resolve_period(inquiries)
+    except MissingInputs as exc:
+        raise missing_inputs_error(exc) from exc
+    except ValueError as exc:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "unprocessable_records", str(exc)) from exc
 
     job_id = new_run_id()
     state = JobState(
@@ -348,12 +356,17 @@ def _reject_oversized(request: GenerateInquiriesReportRequest, settings: ApiSett
 
 
 def _estimate(request: GenerateInquiriesReportRequest) -> int | None:
-    """A rough runtime, for pacing a poll loop. Never a promise."""
+    """A rough runtime, for pacing a poll loop. Never a promise.
+
+    Classification dominates: roughly four cases in five go to the model in batches
+    of 20, five at a time; root-cause extraction sends every case and adds the
+    umbrella step.
+    """
     count = len(request.records)
     if not count:
         return None
-    seconds = _BASE_SECONDS + count * _SECONDS_PER_RECORD
+    per_case = 0.45 if request.settings.root_cause_extraction else 0.25
+    seconds = _BASE_SECONDS + count * per_case
     if not request.options.include_english:
-        # The translation pass is roughly a third of a run's wall clock.
-        seconds *= 0.65
+        seconds -= 30
     return int(seconds)

@@ -1,0 +1,282 @@
+[
+{
+"main_service": "تحديث بيانات الإشتراكات التقاعدية الشهرية",
+"sub_service": "تحديث بيانات الاشتراكات التقاعدية الشهرية",
+"total_requests": 14955.0,
+"completed_requests": 11276.0,
+"rejected_requests": 3679.0
+},
+{
+"main_service": "تسجيل المؤمن عليهم",
+"sub_service": "تسجيل المؤمن عليه",
+"total_requests": 9258.0,
+"completed_requests": 9248.0,
+"rejected_requests": 10.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "إنهاء اشتراك المؤمن عليهم",
+"total_requests": 5865.0,
+"completed_requests": 5779.0,
+"rejected_requests": 86.0
+},
+{
+"main_service": "الإقرار السنوي",
+"sub_service": "تجديد بيانات الإقرار السنوي للمتقاعد العسكري",
+"total_requests": 5791.0,
+"completed_requests": 5723.0,
+"rejected_requests": 68.0
+},
+{
+"main_service": "شهادة لمن يهمه الأمر",
+"sub_service": "إصدار شهادة غير مسجل في الصندوق",
+"total_requests": 5601.0,
+"completed_requests": 5601.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+"sub_service": "الاشتراك في أنشطة وفعاليات المتقاعدين",
+"total_requests": 2957.0,
+"completed_requests": 2957.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "الإقرار السنوي",
+"sub_service": "تجديد الإقرار السنوي للمستحقين",
+"total_requests": 2615.0,
+"completed_requests": 2273.0,
+"rejected_requests": 342.0
+},
+{
+"main_service": "تحديث بيانات المؤمن عليه",
+"sub_service": "تحديث البيانات الوظيفية والتواصل",
+"total_requests": 1941.0,
+"completed_requests": 1941.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المؤمن عليه",
+"total_requests": 1445.0,
+"completed_requests": 1445.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "صرف مكافأة نهاية الخدمة",
+"total_requests": 939.0,
+"completed_requests": 858.0,
+"rejected_requests": 81.0
+},
+{
+"main_service": "توزيع المعاش على المستحقين",
+"sub_service": "تعديل بيانات استحقاق المعاش المدني",
+"total_requests": 554.0,
+"completed_requests": 554.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المؤمن عليه السابق",
+"total_requests": 461.0,
+"completed_requests": 461.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات الحساب المصرفي",
+"sub_service": "تعديل بيانات الحساب المصرفي لمتقاعد عسكري",
+"total_requests": 356.0,
+"completed_requests": 281.0,
+"rejected_requests": 75.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المتقاعد المدني",
+"total_requests": 340.0,
+"completed_requests": 340.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تسجيل جهات العمل",
+"sub_service": "تسجيل جهة العمل",
+"total_requests": 241.0,
+"completed_requests": 241.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "صرف المعاشات التقاعدية",
+"total_requests": 231.0,
+"completed_requests": 229.0,
+"rejected_requests": 2.0
+},
+{
+"main_service": "إدارة بيانات جهات العمل",
+"sub_service": "تغيير المستخدم الرئيسي لجهة عمل",
+"total_requests": 229.0,
+"completed_requests": 113.0,
+"rejected_requests": 116.0
+},
+{
+"main_service": "نقل المؤمن عليه",
+"sub_service": "نقل المؤمن عليه لجهات خاضعة للصندوق",
+"total_requests": 210.0,
+"completed_requests": 208.0,
+"rejected_requests": 2.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المستحق المدني",
+"total_requests": 181.0,
+"completed_requests": 181.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+"sub_service": "إصدار بطاقة إسعاد",
+"total_requests": 177.0,
+"completed_requests": 177.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "ضم الخدمة السابقة",
+"sub_service": "ضم مدة خدمة سابقة",
+"total_requests": 142.0,
+"completed_requests": 142.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات الحساب المصرفي",
+"sub_service": "تعديل بيانات الحساب المصرفي لمتقاعد مدني",
+"total_requests": 124.0,
+"completed_requests": 124.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "ضم الخدمة السابقة",
+"sub_service": "تعديل ضم مدة الخدمة السابقة",
+"total_requests": 111.0,
+"completed_requests": 109.0,
+"rejected_requests": 2.0
+},
+{
+"main_service": "توزيع المعاش على المستحقين",
+"sub_service": "توزيع المعاش على المستحقين من الورثة المدني",
+"total_requests": 95.0,
+"completed_requests": 95.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "توزيع المعاش على المستحقين",
+"sub_service": "تعديل بيانات استحقاق المعاش العسكري",
+"total_requests": 89.0,
+"completed_requests": 83.0,
+"rejected_requests": 6.0
+},
+{
+"main_service": "تعديل بيانات الحساب المصرفي",
+"sub_service": "تعديل بيانات الحساب المصرفي لمستحق عن متقاعد مدني",
+"total_requests": 80.0,
+"completed_requests": 80.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات الحساب المصرفي",
+"sub_service": "تعديل بيانات الحساب المصرفي لمستحق عن متقاعد عسكري",
+"total_requests": 72.0,
+"completed_requests": 62.0,
+"rejected_requests": 10.0
+},
+{
+"main_service": "تسجيل جهات العمل",
+"sub_service": "تحديث بيانات جهة العمل",
+"total_requests": 69.0,
+"completed_requests": 69.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "شراء زيادة على المعاش التقاعدي",
+"total_requests": 61.0,
+"completed_requests": 61.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تحديث بيانات المؤمن عليه",
+"sub_service": "تحديث بيانات تاريخ مباشرة العمل",
+"total_requests": 56.0,
+"completed_requests": 55.0,
+"rejected_requests": 1.0
+},
+{
+"main_service": "تحديث بيانات الإشتراكات التقاعدية الشهرية",
+"sub_service": "التسجيل في قناة الخصم المباشر",
+"total_requests": 52.0,
+"completed_requests": 52.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "تعديل على إنهاء خدمة المؤمن عليه",
+"total_requests": 43.0,
+"completed_requests": 6.0,
+"rejected_requests": 37.0
+},
+{
+"main_service": "تسجيل المؤمن عليهم",
+"sub_service": "تسجيل مؤمن عليه في فئة الاشتراك الاختياري",
+"total_requests": 39.0,
+"completed_requests": 37.0,
+"rejected_requests": 2.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "شراء استحقاق المعاش التقاعدي",
+"total_requests": 36.0,
+"completed_requests": 36.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "ضم الخدمة السابقة",
+"sub_service": "إلغاء ضم الخدمة",
+"total_requests": 30.0,
+"completed_requests": 30.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إدارة بيانات جهات العمل",
+"sub_service": "إغلاق جهات العمل في الصندوق",
+"total_requests": 17.0,
+"completed_requests": 17.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المستحق العسكري",
+"total_requests": 11.0,
+"completed_requests": 11.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "تعديل بيانات المتعامل",
+"sub_service": "تعديل بيانات المتقاعد العسكري",
+"total_requests": 10.0,
+"completed_requests": 10.0,
+"rejected_requests": 0.0
+},
+{
+"main_service": "إنهاء خدمة المؤمن عليه",
+"sub_service": "نقل مؤمن عليه خارج مظلة الصندوق",
+"total_requests": 4.0,
+"completed_requests": 3.0,
+"rejected_requests": 1.0
+},
+{
+"main_service": "نقل المؤمن عليه",
+"sub_service": "تعديل النقل لجهات خاضعة للصندوق",
+"total_requests": 4.0,
+"completed_requests": 3.0,
+"rejected_requests": 1.0
+}
+]

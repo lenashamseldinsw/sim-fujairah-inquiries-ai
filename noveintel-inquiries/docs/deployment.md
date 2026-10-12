@@ -71,6 +71,30 @@ again, and finally marked `delivery_failed` — paying for the run several times
 The Consumption plan cannot go past 10 minutes, which is too short for a real
 export, and it shuts down idle workers. That is why it is not supported.
 
+#### Sizing the ceiling for a tenant's volume
+
+Classification dominates a large run: about four cases in five go to the model, in
+batches of 20, `LLM_MAX_CONCURRENCY` (default 5) at a time; the uncertain ones get a
+deep review in batches of 5 with reasoning switched on. Three steps overlap: umbrella
+discovery runs beside the analysis; the Arabic narrative runs beside the label
+translation; and each narrative part's English translation starts as soon as that part
+is written, while the other part and the Arabic documents are still in progress.
+Measured against Core42 (`gpt-5.1`), a 40-case run with root causes on:
+
+| Step | Cost |
+|---|---|
+| Classification | ≈ 50 s per 120 cases routed to the model; the deep review adds ≈ 20–30 s per 25 cases it re-reads (five batches of 5 at once, medium reasoning) |
+| Analysis (journey, FAQs, gaps) ‖ umbrella discovery (X8) | 40–75 s for both; umbrellas ≈ 1 min per 350 distinct root causes, sequential |
+| Arabic narrative ‖ label translation | 2.5–4 min, independent of volume |
+| English translation still running after the Arabic is done | ≈ 1.5 min, independent of volume |
+
+A 40-case run took 5 minutes (9 before the part-by-part translation; the writing time
+itself varies by a minute or two between runs). So a 1,000-case export finishes well
+inside the default hour, but a quarter like ADPF Q2 2026 (10,630 cases, root-cause extraction on, ≈ 5,800 distinct causes) needs about
+two hours: set `NOVEINQ_JOB_MAX_RUNTIME_SEC=9000` and `functionTimeout` to `02:45:00` on
+a Premium or Dedicated plan. Frozen labels from an earlier pass skip classification
+entirely.
+
 The 230-second limit on HTTP responses does not apply here: the API answers
 immediately and the work runs in the queue worker.
 
@@ -84,6 +108,7 @@ immediately and the work runs in the queue worker.
 | `CORE42_BASE_URL` | `https://api.core42.ai/v1` |
 | `CORE42_MODEL` | e.g. `gpt-5.1` |
 | `CORE42_MODEL_FAST` | e.g. `gpt-5.1` (may equal `CORE42_MODEL`) |
+| `CORE42_MODEL_DEEP` | Optional. The deep review's model; defaults to `CORE42_MODEL` |
 | `NOVEINQ_STORAGE_BACKEND` | `blob` |
 | `NOVEINQ_STORAGE_CONNECTION_STRING` | The storage account's connection string, **including `AccountKey`** — without it callers get links they cannot open (see below) |
 | `NOVEINQ_JOB_BACKEND` | `table` |
@@ -101,7 +126,8 @@ immediately and the work runs in the queue worker.
 | `NOVEINQ_JOB_TTL_SEC` | `86400` | How long a finished job can still be polled. Report files outlive this |
 | `NOVEINQ_JOB_MAX_CONCURRENT` | `2` | Runs at once per worker. Each holds its whole export in memory |
 | `NOVEINQ_MAX_RECORDS` | `100000` | Larger exports are refused up front |
-| `LLM_MAX_CONCURRENCY` | `4` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
+| `LLM_DEEP_REASONING_EFFORT` | `medium` | How hard the deep review reasons (`none` · `minimal` · `low` · `medium` · `high` · `xhigh`). gpt-5.1 does not reason without it |
+| `LLM_MAX_CONCURRENCY` | `5` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
 | `NOVEINQ_LOG_LEVEL` | `INFO` | |
 
 A setting declared but left blank means its default, as if it were not there — a

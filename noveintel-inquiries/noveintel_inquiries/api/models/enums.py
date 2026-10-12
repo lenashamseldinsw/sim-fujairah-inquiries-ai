@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-__all__ = ["JobStatus", "Language", "PeriodGranularity", "ReportSection"]
+__all__ = ["JobStatus", "Language", "PeriodGranularity", "ReportSection", "SECTION_IDS"]
 
 
 class Language(StrEnum):
@@ -38,23 +38,31 @@ class PeriodGranularity(StrEnum):
 
 
 class ReportSection(StrEnum):
-    """A section of the generated report, matching the document's own structure.
+    """A section of the generated report — the Definition Sheet's S0–S11.
 
-    Nine sections, produced by stage 6. Match on these values rather than on
-    position — the same contract ``ChartKey`` carries, and for the same reason: a
-    tenant whose data yields no friction points gets a report with one section fewer,
-    and a consumer indexing by position would then read the wrong one.
+    S0–S9 are the nine Fujairah sections with the cover; S10 and S11 are the optional
+    ADPF sections, present only when root-cause extraction (X8) is on. Match on these
+    values, never on position: a section whose optional input is absent is omitted
+    (with a data note), so positions shift between runs.
     """
 
-    EXECUTIVE_SUMMARY = "executive_summary"
-    METHODOLOGY = "methodology"
-    WORKLOAD_MAP = "workload_map"
-    CUSTOMER_JOURNEY = "customer_journey"
-    DIGITAL_GAPS = "digital_gaps"
-    DIGITAL_TRANSFORMATION = "digital_transformation"
-    AI_USE_CASES = "ai_use_cases"
-    IMPROVEMENT_ROADMAP = "improvement_roadmap"
-    CONCLUSION = "conclusion"
+    COVER = "cover"                                # S0
+    EXECUTIVE_SUMMARY = "executive_summary"        # S1
+    METHODOLOGY = "methodology"                    # S2
+    CLASSIFICATION_MAP = "classification_map"      # S3
+    CUSTOMER_JOURNEY = "customer_journey"          # S4
+    DIGITAL_GAPS = "digital_gaps"                  # S5
+    DIGITAL_TRANSFORMATION = "digital_transformation"  # S6
+    AI_USE_CASES = "ai_use_cases"                  # S7
+    IMPROVEMENT_ROADMAP = "improvement_roadmap"    # S8
+    CONCLUSION = "conclusion"                      # S9
+    ROOT_CAUSES = "root_causes"                    # S10 (X8)
+    SERVICE_FOCUS = "service_focus"                # S11 (X8)
+
+
+SECTION_IDS: dict[ReportSection, str] = {
+    section: f"S{index}" for index, section in enumerate(ReportSection)
+}
 
 
 class JobStatus(StrEnum):

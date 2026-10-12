@@ -28,7 +28,7 @@ from openai import APIError, AuthenticationError, BadRequestError, RateLimitErro
 from .client import generate_json, get_core42_client, reset_client
 from .json_repair import clean_llm_json, close_truncated_json, loads_repaired
 from .messages import Core42Client, Core42Message, TextBlock, ToolUseBlock
-from .settings import CHAT_MODEL, FAST_MODEL, Core42Settings, get_settings, reload_settings
+from .settings import CHAT_MODEL, DEEP_MODEL, FAST_MODEL, Core42Settings, get_settings, reload_settings
 from .tokens import summary as token_summary
 from .tokens import reset as reset_token_tracking
 
@@ -38,6 +38,7 @@ __all__ = [
     "BadRequestError",
     "RateLimitError",
     "CHAT_MODEL",
+    "DEEP_MODEL",
     "FAST_MODEL",
     "Core42Client",
     "Core42Message",

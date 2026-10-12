@@ -81,6 +81,7 @@ def create_chat_completion(
     response_format: Optional[Dict[str, Any]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: Optional[Any] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Any:
     """Make one chat-completions request. No retries, no parsing — just the call.
 
@@ -104,6 +105,8 @@ def create_chat_completion(
         kwargs["tools"] = tools
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
 
     with llm_slot("chat.completions"):
         return client.chat.completions.create(**kwargs)

@@ -83,9 +83,11 @@ def validate(client: httpx.Client, body: dict[str, Any], key: str | None) -> Non
         raise SystemExit(f"Validation rejected the payload:\n{_pretty(response)}")
     result = response.json()
     period = result.get("period")
-    print(f"  records          {result['total_cases']}")
-    print(f"  columns          {len(result['columns'])}")
-    print(f"  period           {period['label_en'] if period else result['period_error']}")
+    log = result["parse_log"]
+    print(f"  records          {log['records_received']} received, {result['total_cases']} in scope")
+    print(f"  columns          {len(log['columns_mapped'])} mapped, {len(log['columns_unmapped'])} unmapped")
+    print(f"  period           {period['label_en']}")
+    print(f"  taxonomy         {result['taxonomy']}  (root causes: {result['root_cause_extraction']})")
 
 
 def submit(client: httpx.Client, body: dict[str, Any], key: str | None) -> str:
@@ -141,13 +143,16 @@ def report(state: dict) -> int:
     print(f"  cases            {bundle['total_cases']}")
     print(f"  charts           {[c['key'] for c in bundle['charts']]}")
     print(f"  report data      {sorted(bundle['report'])}")
+    quality = bundle["classification"]
+    print(f"  classification   {quality['provenance']}  review queue {quality['review_queue']['size']}")
 
     print("  artefacts")
     for language, ref in sorted(documents.get("report", {}).items()):
         print(f"    report {language}       {ref['size_bytes'] / 1024:>8.1f} KiB  {ref['url']}")
-    if documents.get("workbook"):
-        ref = documents["workbook"]
-        print(f"    workbook        {ref['size_bytes'] / 1024:>8.1f} KiB  {ref['url']}")
+    for slot in ("workbook", "labels"):
+        if documents.get(slot):
+            ref = documents[slot]
+            print(f"    {slot:<15} {ref['size_bytes'] / 1024:>8.1f} KiB  {ref['url']}")
     for language, ref in sorted(documents.get("report_data", {}).items()):
         print(f"    data {language}         {ref['size_bytes'] / 1024:>8.1f} KiB  {ref['url']}")
 

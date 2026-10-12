@@ -272,6 +272,15 @@ def _emulate_tool_call(
     return message
 
 
+# Models that rejected ``reasoning_effort`` this process: asked again without it.
+_effort_unsupported: set = set()
+
+
+def _looks_like_effort_rejection(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "reasoning_effort" in text or "reasoning effort" in text
+
+
 def _looks_like_tool_rejection(exc: BaseException) -> bool:
     text = str(exc).lower()
     return any(
@@ -297,6 +306,7 @@ class _Messages:
         tool_choice: Optional[Any] = None,
         temperature: Optional[float] = None,  # accepted, never sent
         stage: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
         **ignored: Any,
     ) -> Core42Message:
         """Create one message. Signature-compatible with ``messages.create``.
@@ -312,7 +322,8 @@ class _Messages:
         try:
             return self._create(
                 model=model, messages=messages, max_tokens=max_tokens, system=system,
-                tools=tools, tool_choice=tool_choice, label=label, **ignored,
+                tools=tools, tool_choice=tool_choice, label=label,
+                reasoning_effort=reasoning_effort, **ignored,
             )
         except (APIError, TimeoutError, ConnectionError):
             token_tracker.track_failure()
@@ -328,6 +339,7 @@ class _Messages:
         tools: Optional[List[Dict[str, Any]]],
         tool_choice: Optional[Any],
         label: str,
+        reasoning_effort: Optional[str] = None,
         **ignored: Any,
     ) -> Core42Message:
         global _tools_unsupported
@@ -349,6 +361,8 @@ class _Messages:
         openai_tools = _to_openai_tools(tools) if tools else None
         choice = _to_openai_tool_choice(tool_choice, tools or []) if tools else None
 
+        effort = {"value": reasoning_effort if resolved_model not in _effort_unsupported else None}
+
         def _call():
             return create_chat_completion(
                 model=resolved_model,
@@ -356,10 +370,22 @@ class _Messages:
                 max_output_tokens=max_tokens,
                 tools=openai_tools,
                 tool_choice=choice,
+                reasoning_effort=effort["value"],
             )
 
         try:
-            resp = call_with_retry(_call, label=f"core42:{label}")
+            try:
+                resp = call_with_retry(_call, label=f"core42:{label}")
+            except BadRequestError as exc:
+                # A model without reasoning support: ask again without the effort, and
+                # stop sending it to that model for the rest of the process.
+                if not effort["value"] or not _looks_like_effort_rejection(exc):
+                    raise
+                logger.warning("[%s] %s rejected reasoning_effort; continuing without it: %s",
+                               label, resolved_model, exc)
+                _effort_unsupported.add(resolved_model)
+                effort["value"] = None
+                resp = call_with_retry(_call, label=f"core42:{label}")
         except BadRequestError as exc:
             # A schema or tool-support rejection must not take the stage down: fall
             # back to JSON mode. ERROR, because a persistent fallback means every

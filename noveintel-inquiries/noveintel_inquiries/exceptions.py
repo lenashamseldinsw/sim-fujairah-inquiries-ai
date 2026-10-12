@@ -12,7 +12,7 @@ failures from.
 """
 from __future__ import annotations
 
-__all__ = ["StageFailure", "UpstreamFailure"]
+__all__ = ["MissingInputs", "StageFailure", "UpstreamFailure"]
 
 
 class StageFailure(Exception):
@@ -56,3 +56,20 @@ class UpstreamFailure(StageFailure):
             "This is usually an outage or rate limiting at the gateway rather than a "
             "problem with the records; retrying later is safe.",
         )
+
+
+class MissingInputs(ValueError):
+    """Required inputs did not arrive — columns, settings or the taxonomy.
+
+    Raised before any work starts. The HTTP layer renders it as ``422
+    missing_required_columns`` with the message "The following input field(s) were
+    missing or unmapped: …", and ``detail.fields`` naming each one.
+    """
+
+    code = "missing_required_columns"
+
+    def __init__(self, missing: list) -> None:
+        from .api.models.requests import missing_fields_message
+
+        super().__init__(missing_fields_message(missing))
+        self.missing = missing

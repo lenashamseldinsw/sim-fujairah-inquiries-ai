@@ -34,25 +34,58 @@ class ChartKind(StrEnum):
     DOUGHNUT = "doughnut"
     LINE = "line"
     STACKED_BAR = "stacked_bar"
+    HEATMAP = "heatmap"
 
 
 class ChartKey(StrEnum):
-    """Stable identifiers for the charts an inquiries run can produce.
+    """Stable identifiers for the charts a run can produce.
 
-    A key names what the chart *is about*, not where it appears, so re-ordering the
-    report does not change it. A key absent from ``charts`` means the data did not
-    support that chart — a tenant that records no severity gets no severity chart —
-    and that is not an error.
-
-    These are assigned by the chart builders in ``stages/stage6_json_report.py``. A
-    new chart there needs a new member here, and adding one is not a breaking change:
-    a consumer selecting by key ignores what it does not recognise.
+    The ADPF identities are Data Mapping §6's, verbatim; the Fujairah-native ones keep
+    the names this API already published, except ``sla_compliance``, which is now
+    Data Mapping's ``timeliness_donut`` (O10). A key absent from ``charts`` means the
+    data did not support that chart, which is not an error. Select by key, never by
+    position.
     """
 
-    CLASSIFICATION_MIX = "classification_mix"
-    SERVICE_DISTRIBUTION = "service_distribution"
-    SLA_COMPLIANCE = "sla_compliance"
-    SEVERITY_MIX = "severity_mix"
+    # Fujairah-native (S3)
+    CLASSIFICATION_MIX = "classification_mix"          # O7 recorded vs actual type
+    ACTUAL_TYPE_MIX = "actual_type_mix"                # O8
+    SERVICE_DISTRIBUTION = "service_distribution"      # O9 recorded service tag
+    SEVERITY_MIX = "severity_mix"                      # O11
+    SUB_CLASS_BY_TYPE = "sub_class_by_type"            # O13
+    DEPARTMENT_DISTRIBUTION = "department_distribution"  # O14
+    CLASSIFICATION_QUALITY = "classification_quality"  # O21
+    PERIOD_COMPARISON = "period_comparison"            # O20
+    # Data Mapping §6
+    MONTHLY_BAR = "monthly_bar"                        # O19
+    MAIN_SERVICE_BAR = "main_service_bar"
+    SUB_SERVICE_BAR = "sub_service_bar"
+    CHANNEL_DONUT = "channel_donut"                    # O12
+    CHANNEL_COMPARISON_BAR = "channel_comparison_bar"
+    TIMELINESS_DONUT = "timeliness_donut"              # O10 (locked status colours)
+    RECORDED_VS_TRUE_STACKED = "recorded_vs_true_stacked"
+    INQ_PER_100_BAR = "inq_per_100_bar"                # O26
+    BUNDLE_BAR = "bundle_bar"                          # O22
+    BUNDLE_SERVICE_HEATMAP = "bundle_service_heatmap"  # O23
+    NEAR_OVER_BY_BUNDLE_BAR = "near_over_by_bundle_bar"  # O25
+    TOP_ROOT_CAUSES_BAR = "top_root_causes_bar"        # O24
+    HOWTO_BY_SERVICE_BAR = "howto_by_service_bar"
+    FAQ_COVERAGE_BAR = "faq_coverage_bar"
+    FOCUS_1_MONTHLY_BAR = "focus_1_monthly_bar"
+    FOCUS_1_SUBCLASS_DONUT = "focus_1_subclass_donut"
+    FOCUS_1_BUNDLE_BAR = "focus_1_bundle_bar"
+    FOCUS_2_MONTHLY_BAR = "focus_2_monthly_bar"
+    FOCUS_2_SUBCLASS_DONUT = "focus_2_subclass_donut"
+    FOCUS_2_BUNDLE_BAR = "focus_2_bundle_bar"
+    FOCUS_3_MONTHLY_BAR = "focus_3_monthly_bar"
+    FOCUS_3_SUBCLASS_DONUT = "focus_3_subclass_donut"
+    FOCUS_3_BUNDLE_BAR = "focus_3_bundle_bar"
+    FOCUS_4_MONTHLY_BAR = "focus_4_monthly_bar"
+    FOCUS_4_SUBCLASS_DONUT = "focus_4_subclass_donut"
+    FOCUS_4_BUNDLE_BAR = "focus_4_bundle_bar"
+    FOCUS_5_MONTHLY_BAR = "focus_5_monthly_bar"
+    FOCUS_5_SUBCLASS_DONUT = "focus_5_subclass_donut"
+    FOCUS_5_BUNDLE_BAR = "focus_5_bundle_bar"
 
 
 class ChartSeries(BaseModel):
@@ -82,6 +115,11 @@ class ChartSpec(BaseModel):
         )
     )
     kind: ChartKind = Field(description="How the chart is meant to be drawn.")
+    output_id: str | None = Field(
+        default=None,
+        description="The Domain Definition Sheet output this chart renders (O1–O26), "
+        "for binding to a Builder output.",
+    )
     title_ar: str = Field(description="Chart title in Arabic.")
     title_en: str = Field(description="Chart title in English.")
     categories_ar: list[str] = Field(

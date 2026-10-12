@@ -19,6 +19,7 @@ from pydantic import BeforeValidator
 
 __all__ = [
     "OptionalFlag",
+    "OptionalNumber",
     "OptionalStr",
     "RequiredNullableStr",
     "RequiredStr",
@@ -144,3 +145,30 @@ RequiredStr = Annotated[str, BeforeValidator(_coerce_required_str)]
 # analyse, and one blank cell in a hundred thousand rows would sink the whole run.
 RequiredNullableStr = Annotated[str | None, BeforeValidator(_coerce_optional_str)]
 OptionalFlag = Annotated[bool | None, BeforeValidator(_coerce_flag)]
+
+
+def _coerce_number(value: Any) -> float | None:
+    """Read a numeric cell — ``0.96``, ``"96%"``, ``"٠٫٩٦"`` — or ``None`` when blank.
+
+    A percentage written with a sign is read as a fraction when it exceeds 1, so a
+    confidence column exported as ``96%`` lands as 0.96. Unreadable text is ``None``:
+    a confidence that cannot be read is not a confidence of zero.
+    """
+    if is_blank(value):
+        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    token = str(value).strip().translate(
+        str.maketrans("٠١٢٣٤٥٦٧٨٩٫", "0123456789.")
+    ).replace(",", "")
+    percent = token.endswith("%")
+    try:
+        number = float(token.rstrip("%"))
+    except ValueError:
+        return None
+    return number / 100 if percent else number
+
+
+OptionalNumber = Annotated[float | None, BeforeValidator(_coerce_number)]

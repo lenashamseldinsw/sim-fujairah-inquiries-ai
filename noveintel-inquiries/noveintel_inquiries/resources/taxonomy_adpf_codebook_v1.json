@@ -1,0 +1,1341 @@
+{
+ "id": "adpf_codebook_v1",
+ "version": "v1",
+ "source": "ADPF Inquiries — Manual Classification Codebook v1, learned from 11,799 labelled Q1 2026 cases. English names are NoveAI's renderings for the English export.",
+ "other_service": "أخرى",
+ "edge_cases": [
+  "Resolution outweighs description: when the description and the resolution disagree, follow what the agent actually handled.",
+  "Gratuity vs pension: مكافأة نهاية الخدمة is a one-time end-of-service payout; المعاش is a recurring monthly pension. Both sit under إنهاء خدمة المؤمن عليه; decide by one-time payout vs recurring salary.",
+  "Employer or entity cases almost always go to دعم جهات العمل / متابعة خدمات جهات العمل (routed to 024140131).",
+  "An English employer e-mail on the member channel answered with 'this channel is for insured members only' goes to أخرى.",
+  "The January 2026 double pension payment is a distinct topical cluster with a near-standard resolution (إيداع متكرر … خطأ فني … استرجاع المبلغ); treat it as its own cause even when phrased as a complaint.",
+  "Manual labels are pragmatic: match the dominant pattern rather than over-engineer a debatable case.",
+  "An out-of-remit question (another entity's benefit, a military record the fund cannot change) keeps the main service of the topic it concerns; the out-of-remit reason goes in the root cause (R6) — reviewers file it under that topic, not under أخرى."
+ ],
+ "main_services": [
+  {
+   "name_ar": "إنهاء خدمة المؤمن عليه",
+   "name_en": "Insured member end of service",
+   "guidance": "Pension eligibility, entitlement, years of service, pension value or percentage, retirement conditions, monthly pension deposit, end-of-service gratuity, buying service years, cancelling insurance.",
+   "signals": [
+    "استحقاق المعاش",
+    "استحقاق التقاعد",
+    "سنوات الخدمة",
+    "نسبة المعاش",
+    "قيمة المعاش",
+    "شروط التقاعد",
+    "مكافأة نهاية الخدمة",
+    "صرف المكافأة",
+    "شراء سنوات",
+    "التقاعد المبكر",
+    "صرف المعاش",
+    "موعد صرف",
+    "إنهاء الخدمة",
+    "انهاء الخدمة",
+    "الاستقالة",
+    "pension",
+    "gratuity",
+    "retirement"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "صرف المعاشات التقاعدية",
+     "name_en": "Pension disbursement",
+     "signals": [
+      "صرف المعاش",
+      "المعاش الشهري",
+      "راتب التقاعد",
+      "ايداع المعاش",
+      "إيداع المعاش",
+      "المعاش التقاعدي",
+      "pension"
+     ]
+    },
+    {
+     "name_ar": "صرف مكافأة نهاية الخدمة",
+     "name_en": "End-of-service gratuity disbursement",
+     "signals": [
+      "مكافأة نهاية الخدمة",
+      "المكافأة",
+      "مكافاة",
+      "gratuity"
+     ]
+    },
+    {
+     "name_ar": "إنهاء اشتراك مؤمن عليه",
+     "name_en": "Termination of an insured member's subscription",
+     "signals": [
+      "إنهاء الاشتراك",
+      "انهاء الاشتراك",
+      "إنهاء خدمة",
+      "استقالة",
+      "إلغاء التأمين"
+     ]
+    },
+    {
+     "name_ar": "شراء استحقاق المعاش التقاعدي",
+     "name_en": "Purchase of pension entitlement",
+     "signals": [
+      "شراء استحقاق",
+      "شراء سنوات",
+      "شراء مدة"
+     ]
+    },
+    {
+     "name_ar": "شراء زيادة على المعاش",
+     "name_en": "Purchase of a pension increase",
+     "signals": [
+      "شراء زيادة",
+      "زيادة المعاش",
+      "زيادة على المعاش"
+     ]
+    },
+    {
+     "name_ar": "نقل مؤمن عليه خارج مظلة الصندوق",
+     "name_en": "Transfer of an insured member outside the fund",
+     "signals": [
+      "خارج مظلة",
+      "نقل خارج",
+      "نقل المؤمن"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "لوحة المتعامل والشهادات",
+   "name_en": "Customer dashboard & certificates",
+   "guidance": "The customer dashboard and certificates: how to see one's data, contributions, service periods, salary details, registration status or subscription number; certificates; pension and gratuity calculators; voluntary-contribution enrolment questions answered with the dashboard or a link.",
+   "signals": [
+    "لوحة المتعامل",
+    "لوحة البيانات",
+    "لوحه",
+    "شهادة لمن يهمه الأمر",
+    "لمن يهمه الامر",
+    "اصدار شهادة",
+    "إصدار شهادة",
+    "شهادة راتب",
+    "شهادة بالمعاش",
+    "حاسبة",
+    "الاطلاع على بياناتي",
+    "فترات الخدمة",
+    "تفاصيل الاشتراكات",
+    "dashboard",
+    "certificate",
+    "calculator"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "لوحة البيانات والشهادات",
+     "name_en": "Data dashboard & certificates",
+     "signals": [
+      "لوحة",
+      "شهادة",
+      "حاسبة",
+      "الاطلاع"
+     ]
+    },
+    {
+     "name_ar": "شهادة غير مسجل",
+     "name_en": "Certificate of non-registration",
+     "signals": [
+      "غير مسجل",
+      "شهادة عدم تسجيل"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "name_en": "Retiree & beneficiary benefits",
+   "guidance": "Esaad, Mazaya or Fazaa cards, retiree offers and benefits, the retiree-interests tool.",
+   "signals": [
+    "اسعاد",
+    "إسعاد",
+    "مزايا",
+    "فزعة",
+    "خصومات",
+    "عروض المتقاعدين",
+    "esaad",
+    "mazaya",
+    "fazaa"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+     "name_en": "Benefits and the Esaad and other cards",
+     "signals": [
+      "اسعاد",
+      "إسعاد",
+      "مزايا",
+      "فزعة",
+      "بطاقة"
+     ]
+    },
+    {
+     "name_ar": "خدمات المتقاعدين",
+     "name_en": "Retiree services",
+     "signals": [
+      "اهتمامات المتقاعدين",
+      "أنشطة",
+      "فعاليات"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "ضم الخدمة السابقة",
+   "name_en": "Previous service merge",
+   "guidance": "Adding a previous service period, its calculation, amending or cancelling it.",
+   "signals": [
+    "ضم مدة",
+    "ضم الخدمة",
+    "مدة خدمة سابقة",
+    "الخدمة السابقة",
+    "ضم مده"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "ضم مدة خدمة سابقة",
+     "name_en": "Adding a previous service period",
+     "signals": [
+      "ضم مدة",
+      "ضم الخدمة",
+      "مقابل الضم"
+     ]
+    },
+    {
+     "name_ar": "تعديل ضم مدة الخدمة السابقة",
+     "name_en": "Amending a previous service merge",
+     "signals": [
+      "تعديل ضم",
+      "تعديل الضم"
+     ]
+    },
+    {
+     "name_ar": "إلغاء ضم الخدمة",
+     "name_en": "Cancelling a service merge",
+     "signals": [
+      "إلغاء ضم",
+      "الغاء ضم",
+      "إلغاء الضم"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "الإقرار السنوي",
+   "name_en": "Annual declaration",
+   "guidance": "The annual declaration: renewal, a pension held for non-renewal, its attachments.",
+   "signals": [
+    "الإقرار السنوي",
+    "الاقرار السنوي",
+    "تجديد الإقرار",
+    "الإقرار"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "الإقرار السنوي",
+     "name_en": "Annual declaration",
+     "signals": [
+      "الإقرار",
+      "الاقرار"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "دعم جهات العمل",
+   "name_en": "Employer support",
+   "guidance": "An employer or entity asking — registering employees, salaries, contact. Often routed to 024140131.",
+   "signals": [
+    "جهة العمل",
+    "جهات العمل",
+    "تسجيل موظف",
+    "موظفينا",
+    "024140131",
+    "24140131",
+    "employer"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "متابعة خدمات جهات العمل",
+     "name_en": "Employer services follow-up",
+     "signals": [
+      "24140131",
+      "جهات العمل"
+     ]
+    },
+    {
+     "name_ar": "خدمات جهات العمل",
+     "name_en": "Employer services",
+     "signals": [
+      "خدمات جهات العمل"
+     ]
+    },
+    {
+     "name_ar": "تسجيل جهة العمل",
+     "name_en": "Employer registration",
+     "signals": [
+      "تسجيل جهة",
+      "تسجيل الجهة"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "تسجيل المؤمن عليه",
+   "name_en": "Insured member registration",
+   "guidance": "Registering an insured member, updating or cancelling the registration, 'am I registered?'.",
+   "signals": [
+    "تسجيل المؤمن",
+    "تسجيل مؤمن",
+    "هل أنا مسجل",
+    "هل انا مسجل",
+    "تسجيلي في الصندوق"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "تسجيل المؤمن عليه",
+     "name_en": "Insured member registration",
+     "signals": [
+      "تسجيل"
+     ]
+    },
+    {
+     "name_ar": "تحديث بيانات المؤمن عليه",
+     "name_en": "Updating an insured member's data",
+     "signals": [
+      "تحديث بيانات"
+     ]
+    },
+    {
+     "name_ar": "إلغاء تسجيل مؤمن عليه",
+     "name_en": "Cancelling an insured member's registration",
+     "signals": [
+      "إلغاء تسجيل",
+      "الغاء تسجيل"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "توزيع المعاش على المستحقين",
+   "name_en": "Pension distribution to beneficiaries",
+   "guidance": "Beneficiaries' pension distribution, civil or military, and editing a beneficiary's entitlement.",
+   "signals": [
+    "المستحقين",
+    "الورثة",
+    "توزيع المعاش",
+    "مستحق",
+    "beneficiar"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "توزيع المعاش على المستحقين المدنيين",
+     "name_en": "Pension distribution to civil beneficiaries",
+     "signals": [
+      "مدني",
+      "المدنيين"
+     ]
+    },
+    {
+     "name_ar": "توزيع المعاش على المستحقين العسكريين",
+     "name_en": "Pension distribution to military beneficiaries",
+     "signals": [
+      "عسكري",
+      "العسكريين"
+     ]
+    },
+    {
+     "name_ar": "تعديل بيانات استحقاق المعاش العسكري",
+     "name_en": "Amending military pension entitlement data",
+     "signals": [
+      "تعديل",
+      "عسكري"
+     ]
+    },
+    {
+     "name_ar": "تعديل بيانات استحقاق المعاش المدني",
+     "name_en": "Amending civil pension entitlement data",
+     "signals": [
+      "تعديل",
+      "مدني"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "name_en": "ADPF locations & contact channels",
+   "guidance": "Branch locations, contact channels, working hours.",
+   "signals": [
+    "أين يقع",
+    "اين يقع",
+    "عنوان الصندوق",
+    "فروع الصندوق",
+    "مواقع الصندوق",
+    "موقع الصندوق",
+    "مقر الصندوق",
+    "أوقات العمل",
+    "اوقات العمل",
+    "ساعات العمل",
+    "أوقات الدوام",
+    "مراكز سعادة المتعاملين",
+    "location",
+    "branch",
+    "working hours"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+     "name_en": "ADPF locations & contact channels",
+     "signals": [
+      "أين يقع",
+      "عنوان",
+      "فروع",
+      "أوقات العمل"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "تعديل بيانات الحساب المصرفي",
+   "name_en": "Bank account details amendment",
+   "guidance": "Changing the bank account a pension is deposited to.",
+   "signals": [
+    "الحساب المصرفي",
+    "الحساب البنكي",
+    "تغيير البنك",
+    "ايبان",
+    "آيبان",
+    "iban",
+    "bank account"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "تعديل بيانات الحساب المصرفي لمتقاعد",
+     "name_en": "Bank details amendment for a pensioner",
+     "signals": [
+      "متقاعد"
+     ]
+    },
+    {
+     "name_ar": "تعديل بيانات الحساب المصرفي لمستحق",
+     "name_en": "Bank details amendment for a beneficiary",
+     "signals": [
+      "مستحق"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "تحديث بيانات الاشتراكات التقاعدية الشهرية",
+   "name_en": "Monthly pension contribution data update",
+   "guidance": "Only the employer's monthly contribution-data update transaction itself. An individual asking about their own salary, contribution figures or deductions belongs to لوحة المتعامل والشهادات (viewing their data) or to the service the question concerns.",
+   "signals": [
+    "تحديث بيانات الاشتراكات",
+    "الاشتراكات الشهرية",
+    "الاشتراك الشهري",
+    "التعديلات الشهرية",
+    "monthly contributions"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "تحديث بيانات الاشتراكات التقاعدية الشهرية",
+     "name_en": "Monthly pension contribution data update",
+     "signals": [
+      "الاشتراكات"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "تعديل بيانات المتعامل",
+   "name_en": "Customer data amendment",
+   "guidance": "Personal-data edits (name, demographics) not tied to any service above.",
+   "signals": [
+    "تعديل الاسم",
+    "تعديل البيانات الشخصية",
+    "تعديل بياناتي"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "تعديل بيانات المؤمن عليه",
+     "name_en": "Amending an insured member's data",
+     "signals": [
+      "مؤمن عليه"
+     ]
+    },
+    {
+     "name_ar": "تعديل بيانات المتقاعد",
+     "name_en": "Amending a pensioner's data",
+     "signals": [
+      "متقاعد"
+     ]
+    },
+    {
+     "name_ar": "تعديل بيانات المؤمن عليه السابق",
+     "name_en": "Amending a former insured member's data",
+     "signals": [
+      "السابق"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "أخرى",
+   "name_en": "Other",
+   "guidance": "Only a message with no identifiable service topic at all (empty, greeting, wrong channel). Reviewers used it for 10 of 10,628 Q2 cases: an out-of-remit question keeps the main service of the topic it concerns.",
+   "signals": [],
+   "sub_classifications": [
+    {
+     "name_ar": "أخرى",
+     "name_en": "Other",
+     "signals": []
+    }
+   ]
+  }
+ ],
+ "crm_service_map": {
+  "Add Previous Service Period-ضم مدة خدمة سابقة": "ضم الخدمة السابقة",
+  "Amending the addition of the previous service period - تعديل ضم مدة الخدمة السابقة": "ضم الخدمة السابقة",
+  "Amounts paid Unjustly - مبالغ صرفت بدون وجه حق": "إنهاء خدمة المؤمن عليه",
+  "BanK's Returned amounts - مبالغ مرتجعة من البنك": "دعم جهات العمل",
+  "Calculate Previous Service Amount-حساب مقابل ضم الخدمة": "ضم الخدمة السابقة",
+  "Cancel Service Addition - إلغاء ضم الخدمة": "ضم الخدمة السابقة",
+  "Change Banking Details - تعديل بيانات الحساب المصرفي": "تعديل بيانات الحساب المصرفي",
+  "Civilian Pension Transaction - معاملات تقاعد مدني": "إنهاء خدمة المؤمن عليه",
+  "Combine two Pension Salaries - حالات الجمع بين معاشين": "إنهاء خدمة المؤمن عليه",
+  "Disburse End of Service Benefits - صرف مكافأة نهاية الخدمة": "إنهاء خدمة المؤمن عليه",
+  "Disbursement of Retirement Benefits - صرف المنافع التقاعدية": "لوحة المتعامل والشهادات",
+  "Display Pensioner or Beneficiary Card - عرض بطاقة متقاعد أو مستحق": "لوحة المتعامل والشهادات",
+  "Distribute Pension to Beneficiaries - توزيع المعاش على المستحقين": "توزيع المعاش على المستحقين",
+  "Distribute the Pension of the Deceased Military Pensioner on the Beneficiaries-توزيع المعاش على المستحقين من الورثة العسكري": "توزيع المعاش على المستحقين",
+  "Distribute the Pension on Civil Beneficiaries-توزيع المعاش على المستحقين من الورثة المدني": "توزيع المعاش على المستحقين",
+  "Gratuity Calculation - آلية إحتساب مكافأة نهاية الخدمة": "إنهاء خدمة المؤمن عليه",
+  "Gratuity payment - صرف المكافآت": "إنهاء خدمة المؤمن عليه",
+  "Issue Esaad Card - إصدار بطاقة إسعاد": "الاستفادة من مزايا المتقاعدين والمستحقين",
+  "Issue a Certificate of Unregistered in the Fund-إصدار شهادة غير مسجل في الصندوق": "لوحة المتعامل والشهادات",
+  "Member Dashboard and Certificates-لوحة بيانات المتعامل والشهادات": "لوحة المتعامل والشهادات",
+  "Member Registration Transaction - معاملة تسجيل مؤمن عليه": "تسجيل المؤمن عليه",
+  "Military Pension Transaction - معاملات تقاعد عسكري": "إنهاء خدمة المؤمن عليه",
+  "Modify Active Member Information-تعديل بيانات المؤمن عليه": "إنهاء خدمة المؤمن عليه",
+  "Modify Bank Details for Civil Pensioner Beneficiaries-تعديل بيانات الحساب المصرفي لمستحق عن متقاعد مدني": "تعديل بيانات الحساب المصرفي",
+  "Modify Bank Details for Civil Pensioners-تعديل بيانات الحساب المصرفي لمتقاعد مدني": "تعديل بيانات الحساب المصرفي",
+  "Modify Bank Details for Military Beneficiaries-تعديل بيانات الحساب المصرفي لمستحق عن متقاعد عسكري": "تعديل بيانات الحساب المصرفي",
+  "Modify Bank Details for Military Pensioner-تعديل بيانات الحساب المصرفي لمتقاعد عسكري": "تعديل بيانات الحساب المصرفي",
+  "Modify Civil Beneficiary Information-تعديل بيانات المستحق المدني": "إنهاء خدمة المؤمن عليه",
+  "Modify Military Pensioner Information-تعديل بيانات المتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Modify Previous Member Information-تعديل بيانات المؤمن عليه السابق": "لوحة المتعامل والشهادات",
+  "Participate in Pensioners Activities and Events - الاشتراك في أنشطة وفعاليات المتقاعدين": "لوحة المتعامل والشهادات",
+  "Pay monthly pension contributions - سداد الاشتراكات التقاعدية": "لوحة المتعامل والشهادات",
+  "Pension Calculation - آلية إحتساب المعاش": "إنهاء خدمة المؤمن عليه",
+  "Pension Calculator-حاسبة التقاعد": "لوحة المتعامل والشهادات",
+  "Pension Disbursement - صرف المعاشات التقاعدية": "إنهاء خدمة المؤمن عليه",
+  "Pension Increase Calculator-حاسبة زيادة المعاش التقاعدي": "لوحة المتعامل والشهادات",
+  "Pension Increase Purchase Request - شراء زيادة على المعاش التقاعدي": "إنهاء خدمة المؤمن عليه",
+  "Pension Law-قانون التقاعد": "أخرى",
+  "Pensioner Interests Registration-تسجيل اهتمامات المتقاعدين": "الاستفادة من مزايا المتقاعدين والمستحقين",
+  "Promotions' of Mazaya Program - خصومات برنامج مزايا": "الاستفادة من مزايا المتقاعدين والمستحقين",
+  "Registration of an Active Member in Voluntary Contributions - تسجيل مؤمن عليه في فئة الاشتراك الاختياري": "لوحة المتعامل والشهادات",
+  "Renew Annual Declaration Data for Military Pensioner-تجديد بيانات الإقرار السنوي للمتقاعد العسكري": "الإقرار السنوي",
+  "Renew Beneficiary Annual Declaration-تجديد الإقرار السنوي للمستحقين": "الإقرار السنوي",
+  "Request 'To Whom It May Concern' Certificate - \"طلب شهادة \"لمن يهمه الأمر": "لوحة المتعامل والشهادات",
+  "Request for \"To Whom It May Concern\" Certificate for Military Pensioners - طلب شهادة \"لمن يهمه الأمر\" للمتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Request for \"To Whom It May Concern\" Certificate for Military Pensioners Heirs - طلب شهادة \"لمن يهمه الأمر\" لورثة المتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Request for Salary Certificate Details for Military Pensioner - طلب شهادة بتفاصيل المعاش للمتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Request for Salary Certificate for Heirs for Military Pensioner - طلب شهادة بتفاصيل معاش المستحقين عن المتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Request for Salary Certificate for the Beneficiaries of the Military Pensioner with Bank Details - طلب شهادة بمعاش المستحقين عن المتقاعد العسكري مع بيانات البنك": "لوحة المتعامل والشهادات",
+  "Request for Salary Certificate with Bank Details Request for Military Pensioner - طلب شهادة بالمعاش مع بيانات البنك للمتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Request for Salary Certificate with Deductions for Military Pensioner - طلب شهادة بتفاصيل المعاش والخصومات للمتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Salary Certificate Request (To Whom It May Concern) for Military Pensioner - طلب شهادة معاش لمن يهمه الأمر للمتقاعد العسكري": "لوحة المتعامل والشهادات",
+  "Staff efficiency - كفاءة موظف": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+  "Stop/Suspend pension salary - إيقاف/حجز المعاش التقاعدي": "إنهاء خدمة المؤمن عليه",
+  "Transfer Transaction - معاملات نقل مؤمن عليه": "إنهاء خدمة المؤمن عليه",
+  "Update Employment/Contribution Data - تحديث البيانات الوظيفية/الاشتراكات التقاعدية": "لوحة المتعامل والشهادات",
+  "Update Entity data - تحديث بيانات جهة العمل": "دعم جهات العمل",
+  "Update Military Pensioner Data - تحديث بيانات العسكري المتقاعد": "لوحة المتعامل والشهادات",
+  "Updating Civil Pension Entitlement Information-تعديل بيانات استحقاق المعاش المدني": "توزيع المعاش على المستحقين"
+ },
+ "crm_service_map_note": "Learned from the labelled ADPF Q2 2026 master as each recorded Service Name's most frequent labelled main service. It reproduces a 79.3% recorded-vs-true match on that master, not the delivered report's 71.7%: the report's crosswalk basis is open item 4.",
+ "examples": [
+  {
+   "description": "أرغب في متابعة حالة طلب صرف مكافأة نهاية الخدمة رقم [رقم التتبع]، المقدم بتاريخ [تاريخ]، والمتعلق بجهة عملي السابقة (مصرف الهلال)، وأطلب إبلاغي بأي مستجدات.",
+   "resolution": "للعلم تم تقديم طلب انهاء الخدمة لغايات الضم برقم التتبع [رقم التتبع] من قبل جهة عملك [جهة العمل] تم انجاز المعاملة وضم الخدمة بتاريخ 23 ابريل",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن نوع معاملة إنهاء الخدمة المقدمة من جهة العمل"
+  },
+  {
+   "description": "ارغب بالاستفسار لدى صندوق ابوظبي للتقاعد حيث اني كنت اعمل في شركة [جهة العمل] الى جهة عمل اخرى شركة [جهة العمل] التقاعد ينخصم من جهة عملي السابقة ارجو منكم التحديث .",
+   "resolution": "يرجى العلم أنه تم انجاز معاملة نهاية الخدمة الخاصه بك من قبل جهة العمل [جهة العمل] بتاريخ [تاريخ].وقد تم اغلاق المده ( عدم الصرف لغايات ضم الخدمة ) . كما أنه لم يتم استلام معاملة التسجيل من قبل جهة العمل الجديدة حتى تاريخه، فيرجى مراجعة جهة العمل [جهة العمل] من تقديم المعاملة .",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة معاملة إنهاء الخدمة وتحديث البيانات"
+  },
+  {
+   "description": "اود الاستفسار من صندوق ابوظبي للتقاعد من انني قدمت على استقالة وضم الخدمة وارغب الاستعجال وذلك لتمكن جهة العمل الجديدة من تسجيلي , فهل تم انهاء خدماتي من الجهة السابقة ام ليس بعد ؟ رقم المعاملة : [رقم التتبع]",
+   "resolution": "تم استلام معاملة انهاء خدمتك لغايات الضم برقم التتبع المذكور اعلاه بتاريخ [تاريخ] ومازالت المعاملة قيد الاجراء. علماً أن الطلب يتم انجازه خلال 20 يوم عمل.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن استعجال إنجاز معاملة إنهاء الخدمة"
+  },
+  {
+   "description": "ارغب في رفع استفسار الى صندوق ابوظبي للتقاعد ما هي اخر المستجدات في ما يتعلق بالطلب المقدم ؟ بيانات الطلب : رقم الطلب : [رقم التتبع] نوع الطلب : إنهاء خدمة المؤمن عليه",
+   "resolution": "تم انجاز معاملة انهاء خدمتك لغايات الضم برقم التتبع المذكور اعلاه بتاريخ [تاريخ]، كما تم تحديث وعكس بياناتك من خلال لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة معاملة إنهاء الخدمة وتحديث البيانات"
+  },
+  {
+   "description": "أرجو من السادة صندوق ابوظبي للتقاعد التواصل معي وفقًا للتفاصيل التالية: سبب التواصل: بسبب الاستعلام عن الطلب المقدمة وهو عبارة عن الاحالة الى التقاعد مضى على الموضوع فوق 3 شهور جهة العمل السابقة : ASPIRE",
+   "resolution": "للعلم ان مدة خدمتك 3 سنوات و3 أشهر وعليه انت غير مستوفي لشروط التقاعد لذا قدمت جهة عملك السابقة اسبير للمقاولات العامة برقم التتبع [رقم التتبع] معاملة انهاء الخدمة لغايات الضم بتاريخ [تاريخ] وتم انجاز المعاملة وضم الخدمة بتاريخ [تاريخ]",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن عدم استيفاء شروط التقاعد وفق مدة الخدمة"
+  },
+  {
+   "description": "اريد تحديث بياناتي بانني لست موظفه الظاهر لي في صندوق التقاعد انني موظفة ولكني لست كذلك اريد تحديثها حتى اتمكن من التسجيل في الشواغر الوظيفية",
+   "resolution": "للعلم انه برقم التتبع [رقم التتبع] تم تقديم طلب انهاء الخدمة لغايات الضم من قبل جهة عملك [جهة العمل] تم انجاز المعاملة وضم الخدمة بتاريخ [تاريخ] ويمكنك الاطلاع على بياناتك من خلال منصة تم",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة معاملة إنهاء الخدمة وتحديث البيانات"
+  },
+  {
+   "description": "أود التنويه بأنه قد مضى أكثر من 7 أيام على طلبي لإلغاء تسجيل مؤمن عليه، ولم يتم التواصل معي حتى الآن. لذا أرجو معرفة سبب هذا التأخير والإفادة بالإجراءات المتبعة. رقم الحالة السابقة: [رقم التتبع]",
+   "resolution": "للعلم تم تقديم طلب انهاء الخدمة لغايات الضم من قبل جهة عملك برقم التتبع [رقم التتبع] بتاريخ [تاريخ] وما زالت المعاملة قيد الاجراء حيث سيتم انجازها خلال 20 يوم عمل وفقا للسياسة المتبعة",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن نوع معاملة إنهاء الخدمة المقدمة من جهة العمل"
+  },
+  {
+   "description": "استفسر من صندوق ابوظبي للتقاعد بخصوص انني قدمت على انهاء خدمة وعدم الصرف واريد متابعة الطلب رقم الطلب [رقم التتبع] شركه [جهة العمل]",
+   "resolution": "تم استلام معاملة انهاء خدمتك برقم التتبع المذكور اعلاه بتاريخ [تاريخ] ومازالت المعاملة قيد الاجراء. علماً أن الطلب يتم انجازه خلال 20 يوم عمل.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "إنهاء اشتراك مؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة معاملة إنهاء الخدمة"
+  },
+  {
+   "description": "استفسر عن حالة طلبي : تم تقديم طلب تجديد بيانات الإقرار السنوي للمتقاعد العسكري بنجاح بتاريخ [تاريخ]. الطلب قيد المراجعة ويمكن متابعة حالته عبر منصة 'منصتي'.",
+   "resolution": "للعلم تم تجديد الاقرار السنوي الخاص بك وانجاز المعاملة وسينتهي الاقرار الجديد بتاريخ [تاريخ] علما انه تم صرف المعاش التقاعدي لك عن شهر مايو 2026",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن إنجاز طلب تجديد الإقرار السنوي وتحديث البيانات"
+  },
+  {
+   "description": "أرجو من السادة (صندوق ابوظبي لتتقاعد ) التواصل معي وفقًا للتفاصيل التالية: , سبب التواصل: تم الاتصال بي بتاريخ [تاريخ] و لكن لم اجب على المكالمة و ارغب بمعرفة سبب التواصل",
+   "resolution": "يرجى التكرم بالعلم أنه تم محاولة التواصل الهاتفي معك لإعلامك بأن الاقرار السنوي الخاص بك سينتهي بتاريخ [تاريخ]، وعليه يتوجب تقديم طلب ( تجديد بيانات الاقرار السنوي للمتقاعد العسكري ) من خلال منصة تم الحكومية لتفادي ايقاف المعاش التقاعدي للشهر القادم.",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تجديد الإقرار السنوي"
+  },
+  {
+   "description": "أرجو من السادة صندوق ابوظبي للتقاعد إطلاعي على حالة طلبي الذي يحمل التفاصيل التالية: نوع الطلب: تجديد بيانات الإقرار السنوي للمتقاعد العسكري رقم الطلب: [رقم التتبع]Z تاريخ التقديم على الطلب: [تاريخ]",
+   "resolution": "تم استلام طلب تجديد الإقرار السنوي الخاص بك برقم التتبع المذكور اعلاه وتم تجديده حتى تاريخ [تاريخ]، وعليه لا يتطلب منك القيام بأي اجراء حالياً.",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "متابعة حالة سابقة بخصوص تجديد الإقرار السنوي"
+  },
+  {
+   "description": "أرغب في الاستعلام من صندوق أبوظبي للتقاعد بخصوص طلب تجديد الإقرار السنوي للمستحقين رقم [رقم التتبع]C، المقدم بتاريخ [تاريخ]، والاستفسار عن حالة الطلب والإجراءات المتبقية.",
+   "resolution": "تم استلام طلب تجديد الإقرار السنوي المقدم من قبلك بتاريخ [تاريخ]، والطلب ما يزال قيد الإجراء. ونود التنويه إلى أنه موضح في منصة TAMM الحكومية عند التقديم على الطلب أن مدة إنجاز المعاملة هي 20 يوم عمل، وبالتالي سيتم إنجاز المعاملة في أقرب فرصة ممكنة خلال هذه المدة من تاريخ تقديم الطلب.",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تجديد الإقرار السنوي"
+  },
+  {
+   "description": "أرغب بالاستفسار لدى صندوق أبوظبي للتقاعد عن سبب الاتصال بي، علمًا أنني متقاعد عسكري من القوات المسلحة، الرقم العسكري: [رقم التتبع].",
+   "resolution": "يرجى العلم أن لا يتضح لدينا سبب التواصل، مع العلم أنه تم تجديد الاقرار السنوي الخاص بك. تاريخ استحقاق تجديد الاقرار السنوي القادم هو [تاريخ]",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن سبب التواصل من الصندوق بخصوص تجديد الإقرار السنوي"
+  },
+  {
+   "description": "أرغب بتقديم استفسار بخصوص رسالة نصية وردتني بعد تجديد الإقرار السنوي للمستحقين، والتي تفيد بضرورة التوجه إلى أحد مكاتب الدائرة لموافاتهم بالثبوتيات اللازمة. رقم الهوية [الهوية الإماراتية] الاسم : عزيزه عبدالرحمن علي",
+   "resolution": "تم استلام طلب تجديد الإقرار السنوي الخاص بالمستحقة المذكورة اعلاه وبالمستحقين من ورثة محمد محمد عبدالله الشرقي وتم تجديده حتى تاريخ [تاريخ]، وعليه لا يتطلب منك القيام بأي اجراء حالياً. علماً بان الإقرار فعال حتى التاريخ المذكور اعلاه وعليه يرجى تجاهل الرسالة التذكيرية.",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن المتطلبات المطلوبة بعد تجديد الإقرار السنوي"
+  },
+  {
+   "description": "كيف يمكنني تجديد الاقرار السنوي للمستحقين ؟",
+   "resolution": "يمكنك تجديد الاقرار السنوي للمستحقين من خلال الرابط ادناه : https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/beneficiaries/RequesttoRenewAnnualAcknowledgmentforBeneficiary",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن كيفية تجديد الإقرار السنوي للمستحقين"
+  },
+  {
+   "description": "استفسر من صندوق ابوظبي للتقاعد بخصوص تجديد الاقرار للمتقاعدين العسكرين ويتم رفض المعاملة لاسباب شهاده من جهه العمل [جهة العمل] بعد الاقرار السنوي الذي قمت ارساله سابقا لا يوجد خانه لارفاق هذه المستندات جهه العمل التقاعد القياده العامه شرطه ابوظبي",
+   "resolution": "تم انجاز طلب تجديد الاقرار السنوي الخاص بك رقم [رقم التتبع]V، علماً ان موعد تجديد الاقرار السنوي القادم هو تاريخ [تاريخ].",
+   "main_service": "الإقرار السنوي",
+   "sub_classification": "الإقرار السنوي",
+   "root_cause": "الاستفسار عن سبب رفض معاملة تجديد الإقرار السنوي"
+  },
+  {
+   "description": "ارغب بالاستفسار عن الاشتراك في نافس ؟",
+   "resolution": "المتعامل لا يجيب",
+   "main_service": "تحديث بيانات الاشتراكات التقاعدية الشهرية",
+   "sub_classification": "تحديث بيانات الاشتراكات التقاعدية الشهرية",
+   "root_cause": "الاستفسار عن دعم نافس (خارج اختصاص الصندوق)"
+  },
+  {
+   "description": "تحديث بيانات في صندوق ابوظبي؟",
+   "resolution": "يمكنك تحديث بياناتك في صندوق ابوظبي للتقاعد عن طريق منصة تم . https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/ModifyActiveMemberInformation",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تحديث بيانات المؤمن عليه",
+   "root_cause": "الاستفسار عن تحديث البيانات المسجلة لدى الصندوق"
+  },
+  {
+   "description": "أرغب برفع استفسار بخصوص عدم تحديث بيانات الراتب في تطبيق «تم»، حيث تم تعديل الراتب، ولكن لا تزال البيانات السابقة تظهر في التطبيق، مما يمنعني من استكمال الإجراءات اللازمة. جهة العمل الحالية: ADCB مدة الخدمة: شهرين",
+   "resolution": "يستوجب عليك مراجعة جهة العمل الحالية لتقديم معاملة \" تحديث بيانات المؤمن عليه \" من خلال البوابة الالكترونية للصندوق وتعديل اللازم بخصوص تفاصيل الراتب. علما ان جميع البيانات يتم موافاتنا بها من قبل جهة العمل [جهة العمل] عن صحة هذه البيانات ولديهم الصلاحية بتعديل البيانات.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تحديث بيانات المؤمن عليه",
+   "root_cause": "الاستفسار عن تحديث بيانات الراتب الخاضع للاستقطاع المسجلة لدى الصندوق"
+  },
+  {
+   "description": "أود معرفة هل تم صرف لأختي في صندوق المعاشات ام لا ؟",
+   "resolution": "يمكن لأختك التواصل معنا لارفع لاستفسار لها واخذ البيانات الازمه",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تحديث بيانات المؤمن عليه",
+   "root_cause": "الاستفسار عن الاستفسار بالنيابة عن صاحب العلاقة"
+  },
+  {
+   "description": "كيف يمكنني تحديث البيانات في صندوق التقاعد ؟",
+   "resolution": "عن طريق الرابط التالي تستطيعين التقديم على الطلب : https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/ModifyActiveMemberInformation",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تحديث بيانات المؤمن عليه",
+   "root_cause": "الاستفسار عن كيفية تحديث بيانات المؤمن عليه"
+  },
+  {
+   "description": "بغيت استفسر عن معلوماتي المسجله عندكم في صندوق ابوظبي للتقاعد؟",
+   "resolution": "تعديل بيانات المؤمن عليه: من خلال هذه الخدمة، يمكن للمؤمن عليه من القيام بتَحديث بيانات التواصل، والمؤهلات الدراسية مباشرةً في سجلات صندوق أبوظبي للتقاعد. https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/ModifyActiveMemberInformation",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تحديث بيانات المؤمن عليه",
+   "root_cause": "الاستفسار عن إجراءات تعديل بيانات المؤمن عليه"
+  },
+  {
+   "description": "أود متابعة طلب تسجيل مؤمن عليه حيث تم رفع الطلب من جهة عملي بتاريخ [تاريخ] رقم الطلب [رقم التتبع] جهة العمل [جهة العمل] في العين",
+   "resolution": "يرجى التكرم بالعلم انه تم استلام معاملة التسجيل الخاصة بك من قبل جهة العمل [جهة العمل] وتم انجازها بتاريخ [تاريخ] وتم تحديث كافة البيانات في النظام. ويمكنك التحقق من البيانات من خلال الدخول على خدمة لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تسجيل مؤمن عليه"
+  },
+  {
+   "description": "ارغب في طلب استعجال في تسجيلي كمؤمن عليه في الجهة الجديدة حيث انه اذا لم يتم ذلك في اقرب وقت سأقوم بتضييع تسجيلي في نافس لذا الشهر ارجو منكم حل الطلب في اقرب وقت اسم جهة العمل الجديدة: نون فولفيلمنت ميجا اي دي ذ م م",
+   "resolution": "تم استلام معاملة تسجيلك كمؤمن عليه بالصندوق لدى جهة العمل المذكورة اعلاه بتاريخ [تاريخ] حيث أنه تم تقديمها من خلال جهة عملك الحالية وتم إنجازها بتاريخ [تاريخ]. كما يمكنك الاطلاع على بياناتك المسجلة لدينا بالصندوق من خلال الاستعانة بلوحة بياناتك المتوفرة في منصة تم الحكومية",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن استعجال إنجاز معاملة تسجيل مؤمن عليه"
+  },
+  {
+   "description": "لقد تم التقديم على خدمه تسجيل مؤمن عليه من قبل جهه العمل, فيرجى منكم الاستعجال في الطلب رقم الطلب: [رقم التتبع] اسم جهه العمل: [جهة العمل] و الهندسه",
+   "resolution": "تم استلام معاملة تسجيلك من قبل جهة العمل [جهة العمل] للهندسة و المقاولات ) وتم انجاز المعاملة وتم تحديث كافة البيانات في النظام. ويمكنك التحقق من بياناتك من خلال الدخول على خدمة ( لوحة بيانات المتعامل والشهادات ) المتوفرة في منصة تم الحكومية.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تسجيل مؤمن عليه"
+  },
+  {
+   "description": "أرجو من السادة (صندوق ابوظبى للتقاعد) التواصل معي وفقًا للتفاصيل التالية: سبب التواصل: استفسار بخصوص تسجيلي في صندوق ابوظبى للتقاعد حيث اني باشرت العمل في تاريخ [تاريخ] في شركة [جهة العمل]",
+   "resolution": "يرجى العلم أنه لم يتم استلام معاملة تسجيلك من قبل جهة العمل حتى تاريخه، يرجى مراجعة جهة العمل [جهة العمل] لدى أي جهة تقاعدية تم تسجيلك في الدولة. ملاحظة/ في حال افادة جهة العمل [جهة العمل] في الصندوق فيرجى فتح حالة جديدة مع توضيح رقم التتبع للمعاملة المقدمة من قبلهم.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن عدم تقديم جهة العمل لمعاملة تسجيل المؤمن عليه"
+  },
+  {
+   "description": "أرغب برفع استفسار لدى صندوق أبوظبي للتقاعد بخصوص طلب تسجيل مؤمن عليه، حيث إن حالة الطلب لا تزال قيد الإجراء منذ فترة. وأرغب ب تحديث بياناتي رقم الطلب: [رقم التتبع] جهة العمل: [جهة العمل]",
+   "resolution": "يرجى العلم طلب التسجيل الخاص بك برقم التتبع [رقم التتبع] منجز وجميع البيانات محدثة لدينا .",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "متابعة حالة سابقة بخصوص تسجيل المؤمن عليه"
+  },
+  {
+   "description": "أود متابعة طلب تسجيل المؤمن عليه لدى صندوق أبوظبي للتقاعد، حيث تم توقيع عقد العمل بتاريخ [تاريخ] وتم تسجيلي من قبل جهة العمل بتاريخ [تاريخ]. أرجو تزويدي بحالة الطلب والتأكد من استكمال إجراءات التسجيل. رقم الطلب [رقم التتبع] جهة العمل [جهة العمل]",
+   "resolution": "يرجى التكرم بالعلم أنه تم استلام معاملة التسجيل الخاصة بك من قبل جهة العمل [جهة العمل] م م) وتم انجازها بتاريخ [تاريخ] وتم تحديث كافة البيانات في النظام. ويمكنك التحقق من البيانات من خلال الدخول على خدمة لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تسجيل مؤمن عليه"
+  },
+  {
+   "description": "أرجو من السادة ( صندوق ابوظبي للتقاعد )، إطلاعي على حالة طلبي الذي يحمل التفاصيل التالية: مكان التقديم : موقع صندوق ابوظبي نوع الطلب: تسجيل مؤمن عليه رقم الطلب: [رقم التتبع] تاريخ التقديم على الطلب:[تاريخ]",
+   "resolution": "يرجى التكرم بالعلم أنه تم استلام معاملة التسجيل الخاصة بك من قبل جهة العمل [جهة العمل] م ) وتم انجازها بتاريخ [تاريخ] وتم تحديث كافة البيانات في النظام. ويمكنك التحقق من البيانات من خلال الدخول على خدمة لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "متابعة حالة سابقة بخصوص تسجيل المؤمن عليه"
+  },
+  {
+   "description": "ارغب برفع استفسار الى صندوق ابوظبي للتقاعد بخصوص معاملة تسجيل مؤمن عليه حيث تم التقديم على المعامله من قبل جهة العمل [جهة العمل] حتى اتمكن من استكمال الاجراءات لدى نافس جهة العمل [جهة العمل]",
+   "resolution": "يرجى التكرم بالعلم أنه لم يتم استلام معاملة تسجيلك من قبل جهة العمل حتى تاريخه، يرجى مراجعة جهة العمل [جهة العمل] لدى أي جهة تقاعدية تم تسجيلك في الدولة. ملاحظة/ في حال افادة جهة العمل [جهة العمل] في الصندوق فيرجى فتح حالة جديدة مع توضيح رقم التتبع للمعاملة المقدمة من قبلهم.",
+   "main_service": "تسجيل المؤمن عليه",
+   "sub_classification": "تسجيل المؤمن عليه",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تسجيل مؤمن عليه"
+  },
+  {
+   "description": "ارغب في رفع استفسار لدى صندوق ابوظبي للتقاعد بخصوص متابعة طلب",
+   "resolution": "طلب اغلاق الحالة",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "تعديل بيانات استحقاق المعاش العسكري",
+   "root_cause": "الاستفسار عن متابعة الطلب المقدم"
+  },
+  {
+   "description": "كيف يمكنني القديم على توزيع المعاش على المستحقين من الورثة العسكري؟ش",
+   "resolution": "يمكنك التقديم على توزيع المعاش على المستحقين من الورثة العسكري من خلال الرابط التالي: https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/beneficiaries/DistributethePensionoftheDeceasedMilitaryPensionerontheBeneficiaries",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "تعديل بيانات استحقاق المعاش العسكري",
+   "root_cause": "الاستفسار عن كيفية التقديم على توزيع المعاش على المستحقين من الورثة العسكري"
+  },
+  {
+   "description": "أرغب بالاستفسار لدى صندوق أبوظبي للتقاعد بخصوص حالة طلب توزيع المعاش على المستحقين من الورثة العسكري واذا مكتمل الطلب متى سيتم الصرف الراتب. رقم الطلب: [رقم التتبع]",
+   "resolution": "تم استلام معاملة توزيع المعاش على المستحقين بتاريخ [تاريخ] والمعاملة مازالت قيد الاجراء ، علما أنه يتم انجاز المعاملة خلال 11 يوم عمل كما هو موضح بالخدمة عند التقديم على الطلب عبر منصة تم الحكومية.",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "تعديل بيانات استحقاق المعاش العسكري",
+   "root_cause": "الاستفسار عن متابعة حالة طلب توزيع المعاش على المستحقين"
+  },
+  {
+   "description": "صندوق أبوظبي للتقاعد ، إطلاعي على حالة طلبي الذي يحمل التفاصيل التالية: مكان التقديم : تم نوع الطلب: توزيع المعاش على المستحقين من الورثة العسكري رقم الطلب: 2026o11041u",
+   "resolution": "يرجى العلم أنه تم استلام معاملة توزيع المعاش على المستحقين برقم التتبع المشار إليه وتم انجاز الطلب بتاريخ [تاريخ]. كما تم صرف أنصبة المستحقين من الصندوق بتاريخ [تاريخ].",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "تعديل بيانات استحقاق المعاش العسكري",
+   "root_cause": "الاستفسار عن متابعة طلب توزيع المعاش على المستحقين"
+  },
+  {
+   "description": "كيف يمكنني تعديل بيانات الحساب المصرفي لمستحق عن متقاعد عسكري؟",
+   "resolution": "يمكنك التقديم على خدمة تعديل بيانات الحساب المصرفي لمستحق عن متقاعد عسكري على منصة تم عبر الرابط التالي: https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/beneficiaries/ModifyBankDetailsforMilitaryBeneficiaries",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن كيفية تعديل بيانات الحساب المصرفي لمستحق عن متقاعد عسكري"
+  },
+  {
+   "description": "أرغب برفع متابعة إلى صندوق أبوظبي للتقاعد بخصوص طلب تعديل بيانات الحساب المصرفي لمتقاعد عسكري، حيث تم تقديم الطلب بتاريخ 2/6 عبر منصة \"تم\". أرجو التكرم بإفادتي بحالة الطلب والإجراء المتخذ.",
+   "resolution": "معاملة تعديل بيانات الحساب المصرفي الخاصة بك منجزة، وتم تغيير الحساب البنكي إلى بنك أبوظبي التجاري برقم الحساب الجديد [رقم التتبع]. كما يمكنك طباعة شهادة راتب بتفاصيل الحساب البنكي من خلال لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية للاطلاع على التفاصيل.",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن إنجاز معاملة تعديل الحساب المصرفي وتحديث البيانات"
+  },
+  {
+   "description": "استفسر من صندوق ابوظبي للتقاعد بخصوص تم التقديم على تعديل بيانات الحساب المصرفي للمتقاعد مدني واريد متابعة الطلب الرقم المرجعي [رقم التتبع] متقاعد من شركه [جهة العمل] تاريخ التقديم [تاريخ]",
+   "resolution": "يرجى التكرم بالعلم أنه تم انجاز معاملة تغيير الحساب البنكي وتم تحديث كافة البيانات في النظام ، ويمكنك التحقق من البيانات واصدار شهادة بقيمة المعاش مع تفاصيل الحساب البنكي الجديد من خلال خدمة ( لوحة بيانات المتعامل والشهادات ) المتوفرة في منصة تم الحكومية.",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن إنجاز معاملة تعديل الحساب المصرفي وتحديث البيانات"
+  },
+  {
+   "description": "أود الاستفسار من صندوق أبوظبي للتقاعد بخصوص تعديل بيانات الحساب المصرفي لمتقاعد عسكري حيث أنني قدمت على الخدمة لتغيير حسابي البنكي القديم من بنك الماريا للبنك الجديد بنك أبوظبي الاول, يرجى تأكيد البيانات لي لنزول الراتب في الحساب الجديد.",
+   "resolution": "للعلم انه برقم التتبع [رقم التتبع] تم تقديم معاملة تغيير الحساب البنكي بتاريخ 13 مايو وتم انجاز المعاملة بتاريخ 15 مايو حيث سيتم صرف المعاش التقاعدي لك عن شهر مايو الحالي في الحساب البنكي الجديد(بنك ابوظبي الاول)",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن متابعة حالة طلب تعديل بيانات الحساب المصرفي"
+  },
+  {
+   "description": "أرجو من السادة (صندوق ابوظبي للتقاعد)، إطلاعي على حالة طلبي الذي يحمل التفاصيل التالية: مكان التقديم : تم نوع الطلب: تعديل بيانات الحساب المصرفي للمتقاعد العسكري رقم الطلب: [رقم التتبع] تاريخ التقديم على الطلب: [تاريخ] ملاحظة: لإجراءاتكم",
+   "resolution": "يرجى العلم أنه تم انجاز معاملة تعديل الحساب المصرفي وتم تحديث كافة البيانات في النظام، ويمكنك التحقق من البيانات واصدار شهادة بقيمة المعاش مع تفاصيل الحساب البنكي الجديد من خلال خدمة ( لوحة بيانات المتعامل والشهادات ) المتوفرة في منصة تم الحكومية.",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن إنجاز معاملة تعديل الحساب المصرفي وتحديث البيانات"
+  },
+  {
+   "description": "ارغب بالاستفسار من صندوق ابوظبي للتقاعد بخصوص حالة طلبي المقدم تعديل بيانات الحساب المصرفي لمتقاعد عسكري يرجى الافادة بحالة الطلب وتأكيد تحديث البيانات الرقم المرجعي : [رقم التتبع]b",
+   "resolution": "يرجى العلم أنه تم انجاز معاملة تعديل الحساب المصرفي وتم تحديث كافة البيانات في النظام، ويمكنك التحقق من البيانات واصدار شهادة بقيمة المعاش بتفاصيل الحساب البنكي الجديد من خلال الدخول على خدمة ( لوحة بيانات المتعامل والشهادات ) المتوفرة في منصة تم الحكومية.",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن إنجاز معاملة تعديل الحساب المصرفي وتحديث البيانات"
+  },
+  {
+   "description": "أرغب في الاستعلام عن حالة طلب تعديل بيانات الحساب المصرفي الخاص بي كمتقاعد عسكري من القوات المسلحة، والمقدم برقم طلب ([رقم التتبع] ) والرقم العسكري ([رقم التتبع]).",
+   "resolution": "معاملة تعديل بيانات الحساب المصرفي الخاصة بك برقم التتبع المذكور اعلاه منجزة، وتم تغيير الحساب البنكي إلى بنك دبي الاسلامي برقم الحساب الجديد [رقم التتبع] كما يمكنك طباعة شهادة راتب بتفاصيل الحساب البنكي للاطلاع على التفاصيل وذلك من خلال لوحة بيانات المتعامل والشهادات المتوفرة في منصة تم الحكومية.",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن إنجاز معاملة تعديل الحساب المصرفي وتحديث البيانات"
+  },
+  {
+   "description": "كيف يمكنني التقديم على تعديل بيانات الحساب المصرفي لمتقاعد عسكري؟",
+   "resolution": "يمكنك التقديم على خدمة (( تعديل بيانات الحساب المصرفي لمتقاعد عسكري)) عبر الرابط التالي على منصة تم أو تطبيق تم: https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/pensioners/ModifyBankDetailsforMilitaryPensioner",
+   "main_service": "تعديل بيانات الحساب المصرفي",
+   "sub_classification": "تعديل بيانات الحساب المصرفي لمتقاعد",
+   "root_cause": "الاستفسار عن كيفية التقديم على تعديل بيانات الحساب المصرفي لمتقاعد عسكري"
+  },
+  {
+   "description": "كيفق يمكنني التقديم على طلب تعديل ضم مدة الخدمة السابقة؟",
+   "resolution": "يمكنك التقديم على طلب تعديل ضم مدة الخدمة السابقة عن طريق الرابط التالي : https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/RequesttoAmendonPreviousServiceAddition",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "تعديل ضم مدة الخدمة السابقة",
+   "root_cause": "الاستفسار عن إجراءات تعديل ضم مدة الخدمة السابقة"
+  },
+  {
+   "description": "في حال خروج أحد الأبناء المستحقين عن المتقاعد العسكري المتوفي، هل يتم توزيع النصيب على باقي الأبناء؟",
+   "resolution": "​​نعم. يتم توزيع النصيب على باقي المستحقين (الأبناء)​",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين العسكريين",
+   "root_cause": "الاستفسار عن إعادة توزيع المعاش عند خروج أحد المستحقين"
+  },
+  {
+   "description": "كيف يمكنني التقديم على توزيع المعاش على المستحقين من الورثة المدني؟",
+   "resolution": "يمكنك التقديم على توزيع المعاش على المستحقين من الورثة المدني من خلال الرابط التالي: https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/beneficiaries/DistributethePensiononCivilBeneficiaries",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن كيفية التقديم على توزيع المعاش على المستحقين من الورثة المدني"
+  },
+  {
+   "description": "لم استلم راتب التقاعد ؟",
+   "resolution": "المتعاملة لا ترد",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن عدم استلام المعاش التقاعدي"
+  },
+  {
+   "description": "أرغب بمتابعة الطلب بخصوص توزيع المعاش على الورثة من المستحق المدني، حيث أرغب في معرفة آخر التحديثات على الطلب، ومن هم الورثة الذين سيستلمون المعاش. رقم الهوية: [الهوية الإماراتية] رقم الطلب: [رقم التتبع]",
+   "resolution": "يرجى التكرم بالعلم أنه تم تقديم طلب توزيع المعاش على المستحقين بتاريخ [تاريخ] وولا زال قيد الاجراء، علماً بانه يتم انجاز الطلب خلال 20 يوم عمل.",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن متابعة طلب توزيع المعاش على المستحقين"
+  },
+  {
+   "description": "أطلب التواصل معي من قبل موظف مختص من صندوق أبوظبي للتقاعد بخصوص التقديم على توزيع المعاش على الورثة المدنيين ومعرفة المستحقين من المعاش. اسم المتوفي : [الاسم] رقم الهوية : [الهوية الإماراتية] متقاعد مدني جهة العمل : [جهة العمل]",
+   "resolution": "تم التواصل معك هاتفياً بتاريخ [تاريخ] من قبل الفريق المعني بالصندوق وتم الرد على استفساراتك بخصوص معاملة توزيع المعاش على المستحقين.",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن إجراءات التقديم على توزيع المعاش على المستحقين"
+  },
+  {
+   "description": "السلام عليكم اود الاستفسار لدى صندوق ابوظبي للتقاعد بخصوص موضوع صرف مكافأة المعاش التقاعدي المدني",
+   "resolution": "الخدمة تاخذ 20 يوم عمل اخوي حمد",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن المدة المستغرقة لإنجاز المعاملة"
+  },
+  {
+   "description": "أرغب في الاستفسار بخصوص التقديم على خدمة توزيع المعاش على المستحقين من الورثة المدني، حيث إن زوجي متوفى منذ أكثر من سنة وكان يظهر سابقًا أنني غير مستحقة، أما الآن فتظهر رسالة بأن زوجي غير مسجل في الصندوق. بيانات المتوفى: محمد علي مال الله المرزوقي رقم الهوية: [الهوية الإماراتية] متقاعد مدني جهة العم",
+   "resolution": "تم التواصل الهاتفي معك بتاريخ 03 يونيو وتوضيح طريقة تقديم معاملة توزيع المعاش على المستحقين في منصة تم الحكومية",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن إجراءات التقديم على توزيع المعاش على المستحقين"
+  },
+  {
+   "description": "أرغب بمتابعة طلبي توزيع المعاش على المستحقين من الورثة المدني, رقم الطلب: [رقم التتبع] , يرجى اعلامي بالخطوات التالية بعد استلام الموافقة كيف سيتم توزيع المعاش والتفاصيل بشكل عام",
+   "resolution": "تم التواصل بتاريخ 4 مايو والرد على كافة الاستفسارات بخصوص معاملات التوريث",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "متابعة طلب توزيع المعاش على المستحقين والاستفسار عن الخطوات التالية"
+  },
+  {
+   "description": "أرغب برفع إستفسار لدى ( صندوق ابوظبي للتقاعد) بخصوص المعاش التقاعدي للمستحقة (والدتي) حيث كانت تستلم معاش تقاعدي عن والدها المتوفي ووالدتي توفت سنة 2022 فما هو الاجراء في مبلغ المعاش التقاعدي الذي كانت تستلمه الوالدة وقدره [مبلغ] اسم والدتي : خزينة الغبشي محمد المحرمي رقم الهوية :[الهوية الإماراتية]",
+   "resolution": "يرجى العلم أنه تم ايقاف صرف نصيب المستحقة المذكورة اعلاه مسبقاً منذ سنة 2022 بسبب الوفاة وتم إعادة توزيع المعاش على باقي المستحقين وذلك بناء على قانون المادة 35 و جدول توزيع الانصبة على المستحقين.",
+   "main_service": "توزيع المعاش على المستحقين",
+   "sub_classification": "توزيع المعاش على المستحقين المدنيين",
+   "root_cause": "الاستفسار عن إيقاف صرف نصيب المستحقة من المعاش"
+  },
+  {
+   "description": "تسجيل اهتمامات المتقاعدين",
+   "resolution": "تسجيل اهتمامات المتقاعدين https://www.tamm.abudhabi/wb/adpf/register-your-interest/form عسكري",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "خدمات المتقاعدين",
+   "root_cause": "الاستفسار عن تسجيل اهتمامات المتقاعدين"
+  },
+  {
+   "description": "هل يمكن شراء مدة اعتبارية لمن هم اقل من 50 سنة؟ وماهي طريقة شراء السنتين هل هي على شكل اقساط ام يجب علي رفع المبلغ كاملا قبل الشراء؟",
+   "resolution": "من شروط شراء المدة الاعتبارية ان تكون اكبر من 50 سنة وطريقة الشراء:أن يتم سداد تكلفة الشراء المطالب بها لشراء المدة الاعتبارية دفعه واحده",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "شراء استحقاق المعاش التقاعدي",
+   "root_cause": "الاستفسار عن شرط السن لشراء المدة الاعتبارية"
+  },
+  {
+   "description": "لدي استفسار عن شراء 3 سنوات الخدمه للأمهات العاملات كما اني مستوفيه لشروط التقاعد ولكن أرغب بشراء سنوات اضافية الجهه : [جهة العمل] تاريخ المباشره : 20 سنة مدة الخدمة عدد الابناء : 3",
+   "resolution": "من شروط شراء المدة الاعتبارية هي أن لا يكون المؤمن عليه مستحقاً لمعاش تقاعدي لأي من حالات التقاعد المقررة بالقانون، وبناء على بياناتك ومدة خدمتك الحالية والمسجلة بالصندوق فانه لا يمكنك شراء المدة الاعتبارية لسنوات إضافية.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "شراء استحقاق المعاش التقاعدي",
+   "root_cause": "الاستفسار عن عدم استيفاء شروط شراء المدة الاعتبارية"
+  },
+  {
+   "description": "متى سيتم صرف المعاشات التقاعدية للمتقاعدين والمستحقين لشهر يونيو لعام 2026 ؟ معاش شهر يونيو، سيتم الصرف بتاريخ [تاريخ]",
+   "resolution": "معاش شهر يونيو، سيتم الصرف بتاريخ [تاريخ]",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن موعد صرف المعاش التقاعدي"
+  },
+  {
+   "description": "اود الاستفسار من صندوق أبوظبي للتقاعد عن سبب نقص المعاش المستحق لابني من قبل والده ورثة : عايض هادي حسين الاحبابي جهة العمل : [جهة العمل] كان ابني يستلم 3354 و الان [مبلغ] ابني قاصر ولدي وصاية الاسم : زايد عايض الاحبابي رقم الهوية : [الهوية الإماراتية]",
+   "resolution": "يرجى التكرم بالعلم بأنه تم صرف المعاش التقاعدي للابن لشهر يناير 2026 مرتين بالخطأ. وقد تم محاولة استرجاع المبلغ عن طريق البنك، إلا أنه تعذر ذلك لعدم توفر الرصيد الكافي في الحساب. وعليه، فقد ترتب على ذلك صرف مبلغ بدون وجه حق وسيتم استرداد المبلغ من خلال خصم [مبلغ] شهرياً وذلك لمدة 11 شهراً حتى سداد ك",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن استرداد المعاش المصروف مرتين بالخطأ لشهر يناير 2026"
+  },
+  {
+   "description": "أرغب بالاستفسار لدى صندوق أبوظبي للتقاعد بخصوص معرفة اذا لدي اي مستحقات لدى الصندوق واذا سأستلمها على حسابي البنمي ام شيك. الرجاء التواصل معي هاتفيا جهة العمل السابقة: بلدية أبوظبي تاريخ التقاعد: [تاريخ]",
+   "resolution": "يرجى التكرم بالعلم إن مدة خدمتك 20 سنه وسيتم صرف المعاش التقاعدي فقط ولا توجد مكافأة. علماً بأنه يتم صرف المكافأة في حال وجود مدة فوق (25) سنه قبل العمل بأحكام القانون المعدل.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن وجود مستحقات إضافية بعد التقاعد وآلية صرفها"
+  },
+  {
+   "description": "أرغب بالاستفسار عن سبب خصم مبلغ [مبلغ] من المعاش التقاعدي خلال أشهر مارس وأبريل ومايو، مع توضيح سبب الخصم وآلية احتسابه. جهة العمل السابقة: القيادة العامة لشرطة ابوظبي الرقم العسكري: 17606",
+   "resolution": "يرجى العلم أنه يتم خصم نسبه 9% من معاشك التقاعدي بمبلغ [مبلغ] شهرياً اعتباراً من معاش شهر مارس 2026، وذلك بسبب صرف المعاش التقاعدي المتكرر والذي تم صرفه لك مسبقاً بالزيادة من الصندوق في شهر يناير 2026. علماً أن اجمالي مبلغ الخصومات هو [مبلغ] وسيتم الخصم حتى سداد المبلغ بالكامل.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن سبب استقطاع مبلغ شهري نتيجة صرف معاش يناير مرتين بالخطأ"
+  },
+  {
+   "description": "متى سيتم صرف رواتب المتقاعدي لشهر ابريل؟",
+   "resolution": "معاش شهر ابريل، سيتم الصرف بتاريخ [تاريخ].",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن موعد صرف المعاش التقاعدي"
+  },
+  {
+   "description": "أرجو من السادة صندوق ابوظبي للتقاعد التواصل معي هاتفيا في اسرع وقت للضرورة القصوى للاستفسار بخصوص صرف المهاش التقاعدي الخاص بي.",
+   "resolution": "تم صرف المعاش التقاعدي من قبل الصندوق بتاريخ [تاريخ]. وعليه في حال عدم استلام المعاش التقاعدي من تاريخ الصرف فيرجى موافاتنا بكشف حساب معتمد من قبل البنك لنتمكن من مخاطبة البنك.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن عدم استلام المعاش التقاعدي رغم صرفه من الصندوق"
+  },
+  {
+   "description": "أرغب برفع استسفار الى صندوق ابوظبي للتقاعد , بخصوص ارغب بمعرفة سبب تاخير صرف الراتب التقاعد",
+   "resolution": "تم صرف المعاش التقاعدي الخاص بك على حسابك البنكي بتاريخ [تاريخ]، وعليه يرجى التحقق من الحساب البنكي وفي حال عدم استلام المعاش فيرجى موافاتنا بكشف حساب معتمد من قبل البنك لنتمكن من مخاطبة البنك.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن سبب تأخر صرف المعاش التقاعدي"
+  },
+  {
+   "description": "اود الاستفسار لدى صندوق ابوظبي للتقاعد بخصوص هل سيتم خصم مبلغ من راتبي التقاعد لهذا الشهر وماهو مبلغ الاستقطاع ؟ ارجو التواصل معي هاتفيا لايضاح الامر متقاعد عسكري متاقعد من شهر 9\\2026 الرقم العسكري: 19667",
+   "resolution": "تم الاتصال بك هاتفياً بتاريخ [تاريخ] ولم يتم الرد. علماً أنه لن يتم خصم اي مبلغ من معاشك التقاعدي من الصندوق لشهر مايو 2026 حيث أنه سيتم صرف المعاش بمبلغ [مبلغ] وذلك نظراً لإنتهاء مبلغ الخصومات وسداده بالكامل من قبلك في شهر ابريل 2026.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف المعاشات التقاعدية",
+   "root_cause": "الاستفسار عن الخصومات من المعاش التقاعدي"
+  },
+  {
+   "description": "أرغب بمتابعة الطلب الذي تم تقديمه من قبل جهة العمل [جهة العمل] ، وأود معرفة التاريخ المتوقع لإنجاز المعاملة. رقم الطلب: [رقم التتبع] اسم جهة العمل السابقة: الإمارات العالمية للألمنيوم أرجو التكرم بتزويدي بآخر المستجدات بشأن الطلب والمدة المتوقعة لاستكمال الإجراءات.",
+   "resolution": "للعلم تم تقديم طلب إنهاء الخدمة وصرف مكافأة نهاية الخدمة من قبل جهة عملك برقم التتبع [رقم التتبع] بتاريخ 4 يونيو وما زالت المعاملة قيد الاجراء حيث سيتم انجازها خلال 20 يوم عمل وفقا للسياسة المتبعة",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن متابعة حالة طلب صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "متى سيتم صرف مكافأة نهاية الخدمة؟",
+   "resolution": "المتعاملة لاترد",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن موعد صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "أرغب بالاستفسار لدى صندوق أبوظبي للتقاعد بخصوص صرف مكافئة نهاية الخدمة, هل ينزل المبلغ بعد الصرف على الحساب البنكي ام لدى المحكمه اذا لدي التزامات ماليه لديهم. الرجاء التواصل معي هاتفيا.",
+   "resolution": "يرجى التكرم بالعلم أنه في حال رغبتك بصرف مكافاة نهاية الخدمة فإنه حسب الاجراءات المتبعة لدى الصندوق فإنه يتم صرف المكافاة على الحساب البنكي المدون في معاملة نهاية الخدمة. علما أنه في حال تم استلام كتاب رسمي من المحكمة بتحويل قيمة المكافاة على حساب المحكمة فإنه سيتم اتخاذ الاجراء بناء على خطاب المحكم",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن آلية صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "أرغب في الاستفسار عن حالة طلب صرف مكافأة نهاية الخدمة، حيث تم إشعاري بأنه تم صرف المكافأة، ولكن لم يتم استلام المبلغ حتى الآن.",
+   "resolution": "يرجى التكرم بالعلم انه تم صرف مكافأة نهاية الخدمة بتاريخ [تاريخ]، وعليه يرجى مراجعة البنك للتأكد من استلام المبلغ. مرفق شهادة بقيمة مكافأة نهاية الخدمة",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "أرغب بالاستفسار بخصوص موظف إماراتي نرغب بإنهاء خدمته وإغلاق ملفه في صندوق التقاعد، حيث نريد صرف مستحقات نهاية الخدمة. أود معرفة ما إذا كان يتطلب توقيع لإتمام الإجراءات.",
+   "resolution": "نعم يجب عليها التوقيع في إقرار بصرف مكافأة نهاية الخدمة",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن توقيع إقرار صرف المكافأة عند إنهاء خدمة الموظف (جهة عمل)"
+  },
+  {
+   "description": "كيف يتم صرف مكافأة نهاية الخدمة ؟",
+   "resolution": "يتم تقديم صرف نهايه الخدمه من قبل جهه العمل حيث يمكن للمؤمن عليه طلب صرف مكافأة نهاية الخدمة عند انتهاء مدة خدمته في حال عدم استحقاقه معاشاً تقاعدياً.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن آلية صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "ارغب في رفع استفسار لدى صندوق ابوظبي للتقاعد نوع الطلب: صرف مكافأة نهاية الخدمة جهة العمل السابقة : ان ام سي رويال - الشهامة جهة العمل الحالية - تتبع هيئة المعاشات بي كي قولف",
+   "resolution": "يرجى العلم أنه تم انجاز المعاملة وتم صرف مكافاة نهاية الخدمة على حسابك البنكي بتاريخ [تاريخ]، وعليه يرجى مراجعة البنك وفي حال عدم استلام المبالغ فيرجى توفير كشف حساب معتمد من قبل البنك لنتمكن من مخاطبة البنك.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن إنجاز معاملة صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "اود الاستفسار لدى صندوق ابوظبي للتقاعد بخصوص حالة طلب صرف الخدمة وارجو الاستعجال بانجاز المعاملة . رقم الطلب : [رقم التتبع]",
+   "resolution": "يرجى العلم أنه تم انجاز معاملة نهاية الخدمة وتم صرف المكافاة على حسابك البنكي لدى مصرف أبوظبي الاسلامي برقم [رقم التتبع] بتاريخ [تاريخ]. وعليه يرجى مراجعة البنك وفي حال عدم استلامك للمبالغ فيرجى فتح حالة جديدة وموافاتنا بكشف حساب معتمد من قبل البنك لنتمكن من مخاطبة البنك.",
+   "main_service": "إنهاء خدمة المؤمن عليه",
+   "sub_classification": "صرف مكافأة نهاية الخدمة",
+   "root_cause": "الاستفسار عن إنجاز معاملة صرف مكافأة نهاية الخدمة"
+  },
+  {
+   "description": "[رقم التتبع] استنادا للطلب السابق حيث انني حاولت دخول الى منصة تم لضم الخدمة ولكن ظهرت لي رساله انه لا يمكنني تقديم طلب الضم الى حين اكمال سنه مع صندوق ابوظبي مع العلم ان سنوات الخدمة التي ارغب بضمها هي سنتين",
+   "resolution": "يرجى التكرم بالعلم بأنه، ووفقًا للقانون، لا يمكن للمؤمن عليه المسجل في القطاع الخاص تقديم طلب ضم مدة الخدمة إلا بعد إتمام سنة كاملة لدى جهة عمله في القطاع الخاص.",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن تعذر تقديم طلب ضم الخدمة للمؤمن عليه"
+  },
+  {
+   "description": "كيف يمكنني ضم مدة خدمة سابقة ؟",
+   "resolution": "يمكنك ضم مدة خدمة سابقة من خلال الرابط التالي : https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/requestfortheadditionofpreviousservice",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن كيفية التقديم على خدمة ضم مدة الخدمة السابقة"
+  },
+  {
+   "description": "أرغب بمتابعة حالة طلب ضم الخدمة السابقة المقدم بتاريخ [تاريخ]، ولم أتلق أي تحديث حتى الآن. اسم جهة العمل السابقة: قراند الامارات للتسوق",
+   "resolution": "يرجى العلم أنه تم انجاز معاملة نهاية الخدمة الخاصه بك من قبل جهة العمل [جهة العمل] م م) بتاريخ [تاريخ].وقد تم اغلاق المده ( عدم الصرف لغايات ضم الخدمة ) ، بناء على نوع الطلب المقدم من قبل جهة العمل.",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن إنجاز معاملة إنهاء الخدمة"
+  },
+  {
+   "description": "أرغب بالحصول على شهاده مكافاة ضم نهاية خدمه من صندوق ابوظبي للتقاعد إلى هيئه المعاشات .",
+   "resolution": "الخدمة المتواجد من خلال منصة تم ضم مدة خدمة سابقة لصندوق ابوظبي للتقاعد https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/requestfortheadditionofpreviousservice",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "طلب شهادة بقيمة المكافأة لغايات الضم لدى هيئة المعاشات"
+  },
+  {
+   "description": "أرغب بمتابعة الطلب لدى \"صندوق أبوظبي للتقاعد\" السبب: حيث تم التقديم على طلب ضم مدة خدمة سابقة عبر تطبيق \"تم\"، وأرغب بإلغاء الطلب. رقم الطلب: [رقم التتبع]",
+   "resolution": "يرجى العلم يتم التقديم على طلب اللغاء عن طريق منصة تم , رابط الخدمة https://www.tamm.abudhabi/ar-AE/life-events/individual/WorkEducation/active-members/RequesttoCancelServiceAddition",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن إجراءات إلغاء طلب ضم الخدمة"
+  },
+  {
+   "description": "بخصوص لماذا تم ايقاف خصم المبلغ ضم الخدمه السابقه وعدم ظهور بيانات الخصم وذلك لعدم وجود طلب مني بايقاف الخصم يرجى توضيح الموضوع لي ويرجى عدم إيقاف الخصم وإتمام طلب الضم الخدمه السابقه على حسب الاتفاق المتفق عليه جهة العمل السابق التي تم الاتفاق على ضم خدمتها القياده العامه لشرطة ابوظبي",
+   "resolution": "تم التواصل الهاتفي معك من قبل فريق ضم الخدمة لتقديم على طلب تعديل على ضم الخدمة لاستكمال اجراءات ضم الخدمة.",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن إيقاف خصم أقساط ضم الخدمة"
+  },
+  {
+   "description": "ارجو من الساده صندوق ابوظبي للقاعد التواصل معي وافادتي بالتالي هل أستطيع ان أقوم بدفع مبلغ معين مثلا [رقم التتبع] وانا مستمر في الاستقطاع لضم الخدمه ارجو الرد والافاده للضروره القصوى",
+   "resolution": "تم التواصل معك هاتفياً بتاريخ [تاريخ] وتم إعلامك بإجراءات تعديل ضم الخدمة السابقة في حال رغبتك بسداد جزء من المبلغ المتبقي لضم الخدمة السابقة.",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن سداد جزء من تكلفة ضم الخدمة"
+  },
+  {
+   "description": "أرغب من صندوق أبوظبي للتقاعد تحديث تاريخ خصم مبلغ ضم الخدمة السابقة، حيث يتم حالياً خصم المبلغ بتاريخ 2 من كل شهر بقيمة [مبلغ] ، وأرغب بتعديل موعد الخصم ليكون بتاريخ 27 من كل شهر. وتتعلق الخدمة بفترات العمل السابقة لدى مواصلات الإمارات، جهة العمل الحالية فهي أدكوب.",
+   "resolution": "للعلم يرجى التكرم بالتقدم بطلب تعديل ضم خدمة من خلال منصة \"تم\" لتعديل تاريخ الخصم من قبلك ، وسيتم استلام طلبك واتخاذ الاجراء اللازم خلال 15 يوم عمل",
+   "main_service": "ضم الخدمة السابقة",
+   "sub_classification": "ضم مدة خدمة سابقة",
+   "root_cause": "الاستفسار عن تعديل تاريخ خصم قسط ضم الخدمة"
+  },
+  {
+   "description": "أرغب بالاستفسار لدى صندوق أبوظبي للتقاعد بخصوص إصدار شهادة لمن يهمه الأمر. تفاصيل الاستفسار: أرغب في الحصول على شهادة تفيد بجميع جهات العمل التي التحقت بها مع تاريخ الالتحاق وتاريخ نهاية الخدمة (مرفق صورة توضيحية) جهة العمل الحالية: كي بي ام جي لورا جلف ليمتد",
+   "resolution": "يرجى العلم لا تستخرج الشهادة من قبلنا وعليه يرجى مراجعة جهات العمل للاستخراج شهادة الخبرة , ويمكن الاطلاع على تفاصيل البيانات الوظيفية من خلال لوحة بيانات المتعامل عبر منصة تم الالكترونية.",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "طلب شهادة لمن يهمه الأمر (خارج اختصاص الصندوق)"
+  },
+  {
+   "description": "استفسر عن كيفية استخراج شهادة تفصيلية للراتب كوني متقاعدًا من الجيش ويتبع صندوق أبوظبي للتقاعد.",
+   "resolution": "https://www.tamm.abudhabi/ar-AE/abu-dhabi-government-entities/abu-dhabi-pension-fund",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن كيفية استخراج شهادة راتب تفصيلية للمتقاعد العسكري"
+  },
+  {
+   "description": "how can i check my Member Dashboard and Certificates?",
+   "resolution": "you can check your Member Dashboard and Certificates through the following link https://www.tamm.abudhabi/wb/adpf/member-dashboard/login?redirectUrl=https://www.tamm.abudhabi/wb/adpf/member-dashboard/member-dashboard?lang=en",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن كيفية الاطلاع على لوحة بيانات المتعامل والشهادات"
+  },
+  {
+   "description": "كيف يمكنني اصدار شهادة راتب لمتقاعد ؟",
+   "resolution": "لوحة بيانات المتعامل والشهادات https://www.tamm.abudhabi/wb/adpf/member-dashboard/login?redirectUrl=https://www.tamm.abudhabi/wb/adpf/member-dashboard/member-dashboard?lang=ar",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن كيفية إصدار شهادة الراتب للمتقاعد"
+  },
+  {
+   "description": "كيف يمكنني التاكد من تسجيلي في جهة العمل الجديدة ؟",
+   "resolution": "لوحة بيانات المتعامل والشهادات https://www.tamm.abudhabi/wb/adpf/member-dashboard/login?redirectUrl=https://www.tamm.abudhabi/wb/adpf/member-dashboard/member-dashboard?lang=ar",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن كيفية التحقق من التسجيل لدى جهة العمل الجديدة"
+  },
+  {
+   "description": "أرغب في تقديم طلب خدمة لدى صندوق أبوظبي للتقاعد للحصول على شهادة \"لا يعمل\" لوالدتي المتوفاة منذ عام 2014، حيث تم التقديم عبر الواتساب على الرقم [بيانات اتصال]، ولم تصدر الشهادة حتى الآن، وأطلب الاستعجال وإرسالها لي عبر الواتساب أو البريد الإلكتروني. اسم الوالدة [الاسم] رقم الهوية [الهوية الإماراتية]",
+   "resolution": "يرجى التكرم بالعلم انه لا يمكن استخراج شهادة للمتوفي وذبك بناء على الاجراءات المتبعة في الصندوق",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن إصدار شهادة لمتوفى"
+  },
+  {
+   "description": "اود الاستفسار من صندوق أبوظبي للتقاعد عن اجراءات الحصول على شهاده خدمة مع قيمة المكافأه لضم الخدمة لهيئة المعاشات دبي جهة العمل : [جهة العمل] مده الخدمة : 6 سنوات و 6 أشهر",
+   "resolution": "مرفق لكم شهادة بقيمة مكافأة نهاية الخدمة",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "طلب إصدار شهادة بمدة الخدمة وقيمة المكافأة لغايات الضم لدى هيئة معاشات دبي"
+  },
+  {
+   "description": "كيف يمكنني تنزيل شهادة راتب للمتقاعد؟",
+   "resolution": "يمكنك تنزيل شهادة راتب للمتقاعد من خلال الرابط التالي: https://www.tamm.abudhabi/login?redirectUrl=https://www.tamm.abudhabi/ar-AE/mylocker",
+   "main_service": "لوحة المتعامل والشهادات",
+   "sub_classification": "لوحة البيانات والشهادات",
+   "root_cause": "الاستفسار عن كيفية تنزيل شهادة الراتب للمتقاعد"
+  },
+  {
+   "description": "How I can contact the Abu Dhabi Pension Fund as an employer ?",
+   "resolution": "Kindly contact the Abu Dhabi Pension Fund through the Entity contact Center at [بيانات اتصال] .",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن كيفية الحصول على خدمات جهات العمل في الصندوق (جهة عمل)"
+  },
+  {
+   "description": "We have submitted an application to terminate the member registration for one of our employee who is an Emirati National in Abu Dhabi Pension FundBut the application has been rejected We would like to know the reason for rejection and how to proceed further",
+   "resolution": "Please contact the Abu Dhabi Pension Fund through the Employers Relations Contact Center at the phone number [بيانات اتصال].",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن سبب رفض طلب إنهاء تسجيل الموظف (جهة عمل)"
+  },
+  {
+   "description": "How can I contact Abu Dhabi Pension fund as an employer?",
+   "resolution": "You can contact Abu Dhabi Pension fund as an employer through the following number: [بيانات اتصال]",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن كيفية التواصل مع الصندوق للحصول على خدمات جهات العمل (جهة عمل)"
+  },
+  {
+   "description": "How can I get technical support from the Abu Dhabi Retirement Fund to update company data?",
+   "resolution": "you can contact the Abu Dhabi Pension Fund through the Entity contact Center at [بيانات اتصال].",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن الدعم الفني المطلوب لتحديث بيانات جهة العمل (جهة عمل)"
+  },
+  {
+   "description": "How I can change the type of deduction to the fund contribution ?",
+   "resolution": "Abu Dhabi Pension Fund through the Entity contact Center at [بيانات اتصال]",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن تغيير آلية استقطاع الاشتراكات التقاعدية (جهة عمل)"
+  },
+  {
+   "description": "عزيزي المتعامل يمكنك التقديم على تسجيل جهة العمل من خلال التواصل مع صندوق ابوظبي للتقاعد عبر الرقم التالي:",
+   "resolution": "عزيزي المتعامل يمكنك التقديم على تسجيل جهة العمل من خلال التواصل مع صندوق ابوظبي للتقاعد عبر الرقم التالي: [بيانات اتصال] https://www.pension.gov.ae/ar-ae/Pages/ServiceGuides.aspx",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن كيفية تسجيل جهة العمل في الصندوق (جهة عمل)"
+  },
+  {
+   "description": "كيف يمكنني التواصل مع صندوق ابوظبي لتقاعد ؟",
+   "resolution": "في حال وجود أي ملاحظة الرجاء التواصل مع صندوق أبوظبي للتقاعد من خلال مركز علاقات جهات العمل على هاتف رقم [بيانات اتصال]|",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن كيفية الحصول على خدمات جهات العمل في الصندوق (جهة عمل)"
+  },
+  {
+   "description": "في حال وجود أي ملاحظة أو استفسار، كيف يمكنني التواصل مع صندوق أبوظبي للتقاعد؟",
+   "resolution": "يمكنك التواصل مع صندوق أبوظبي للتقاعد من خلال مركز علاقات جهات العمل على الرقم: [بيانات اتصال].",
+   "main_service": "دعم جهات العمل",
+   "sub_classification": "متابعة خدمات جهات العمل",
+   "root_cause": "الاستفسار عن كيفية التواصل مع الصندوق للحصول على خدمات جهات العمل (جهة عمل)"
+  },
+  {
+   "description": "ارغب برفع استفسار الى \"صندوق أبوظبي للتقاعد\" أود الاستفسار عن كيفية تجديد بطاقة \"إسعاد\" المقدمة للمتقاعدين، حيث إنني أملك البطاقة ولكنها منتهية الصلاحية، ولم أتمكن من تجديدها عبر تطبيق/منصة \"تم\". أرجو إفادتي بالإجراءات المطلوبة أو الحل المناسب لإتمام التجديد.",
+   "resolution": "يرجى التكرم بالعلم أنه يمكنك تجديد بطاقة اسعاد من خلال تقديم طلب جديد، وعليه يرجى التقديم من خلال منصة تم باتباع الخطوات التالية: - الدخول على منصة تم بالهوية الرقمية - الدخول على خدمات صندوق أبوظبي للتقاعد - اختيار خدمة (إصدار بطاقة اسعاد) ملاحظة: يتم الرد على طلب الحصول على بطاقة اسعاد خلال 30 يوم",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن إجراءات تجديد بطاقة إسعاد"
+  },
+  {
+   "description": "كيف يمكنني التقديم على مزايا صندوق أبوظبي للتقاعد؟",
+   "resolution": "يمكنك من خلال الرابط التالي التقديم على مزايا صندوق أبوظبي للتقاعد: https://www.pension.gov.ae/ar-ae/Pages/Mazaya.aspx",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن كيفية التقديم على مزايا الصندوق للمتقاعدين"
+  },
+  {
+   "description": "أرغب بالاستفسار عن حالة طلبي للتقديم على بطاقة إسعاد كمتقاعدة، حيث تم إرسال رابط لي لإرفاق الهوية، لكنني لم أتمكن من ذلك من خلال الرابط أو من خلال \"تم\". لذا أرجو النظر في طلبي ومساعدتي في التقديم.",
+   "resolution": "في حال كان لديك أي استفسارات حول الخصومات أو العروض المقدّمة، أو واجهت أي مشكلة تقنية في التطبيق أو أثناء التسجيل، يمكنك التواصل مع فريق دعم المتعاملين في إسعاد عبر إحدى القنوات التالية: • الدخول إلى قسم \"اتصل بنا\" داخل التطبيق. • إرسال بريد إلكتروني إلى: [بيانات اتصال] • الاتصال على الرقم: 04901",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن متابعة حالة طلب بطاقة إسعاد"
+  },
+  {
+   "description": "أرغب في الاستفسار عن حالة طلب بطاقة إسعاد، حيث قمت بتقديم “تسجيل الاهتمام ببطاقة إسعاد للمتقاعدين” منذ شهرين ولم يتم تحديث حالة الطلب حتى الآن.",
+   "resolution": "للعلم وكما هو موضح في النظام أنك قمت بالتقديم على طلب بطاقة اسعاد بتاريخ 26 مارس وعليه ما زالت المعاملة قيد الاجراء حيث سيتم الرد على اهتمامكم خلال مدة لا تتجاوز 30 يوم عمل بالتفعيل أو الرفض وفي حال لم يتم الرد عليكم بعد 30 يوم بإمكانكم التواصل مع صندوق أبوظبي للتقاعد من خلال الرقم [رقم التتبع]",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن متابعة حالة طلب بطاقة إسعاد"
+  },
+  {
+   "description": "ارغب برفع طلب الى صندوق ابوظبي للتقاعد بخصوص بطاقة مزايا حيث انني قدمت على البطاقة و لكن الى الان لم يصلني اي تحديث بشان البطاقة لذا يرجى التوضيح كيف يمكنني متابعة اصدار البطاقة",
+   "resolution": "تم التواصل الهاتفي معك بتاريخ [تاريخ] وتمت الافادة من قبلك بأنه تم تفعيل البطاقة",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن متابعة حالة طلب بطاقة مزايا"
+  },
+  {
+   "description": "رقم بطاقة أصحاب الهمة: 34167 أرغب في معرفة طريقة الحصول على عضوية بطاقة إسعاد، حيث تم التواصل مع إسعاد وإفادتي بضرورة رفع الطلب من قبل هيئة زايد. أرجو توضيح الإجراءات المطلوبة بشكل مباشر وكيفية تقديم الطلب للحصول على العضوية.",
+   "resolution": "من اجراءات تسجيل الحصول على عضوية بطاقة إسعاد: عن طريق منصة تم - الدخول على منصة تم بالهوية الرقمية - الدخول على خدمات صندوق أبوظبي للتقاعد - اختيار خدمة (إصدار بطاقة اسعاد)سئلة الشائعة: https://www.tamm.abudhabi/ar-AE/abu-dhabi-government-entities/abu-dhabi-pension-fund",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن إجراءات إصدار بطاقة إسعاد"
+  },
+  {
+   "description": "أرغب بالاستفسار عن حالة طلب بطاقة مزايا، حيث تم التقديم منذ أكثر من شهر ولم يتم استلام أي بريد إلكتروني لتأكيد التسجيل أو إنشاء كلمة المرور.",
+   "resolution": "يرجى العلم بأنه تم التقديم على الطلب من قبلك بتاريخ [تاريخ]، ويتم الرد على الطلب خلال 30 يوم عمل. كما نود إفادتك بأن طلبك لم يُكمل شهر بعد، حيث سيتم الرد على طلبك خلال مدة لا تتجاوز 30 يوم عمل سواء بالتفعيل أو الرفض. وفي حال لم يتم الرد عليك بعد 30 يوم عمل، يمكنك التواصل مع صندوق أبوظبي للتقاعد عبر ",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن متابعة حالة طلب بطاقة مزايا"
+  },
+  {
+   "description": "تحياتي .. صندوق أبوظبي للتقاعد كيفية حصول على بطاقة إسعاد من شرطة دبي تسجيل اهتمامات المتقاعدين",
+   "resolution": "يرجى تسجيل عن طريق منصة تم - الدخول على منصة تم بالهوية الرقمية - الدخول على خدمات صندوق أبوظبي للتقاعد - اختيار خدمة (إصدار بطاقة اسعاد)",
+   "main_service": "الاستفادة من مزايا المتقاعدين والمستحقين",
+   "sub_classification": "مزايا و اصدار بطاقة اسعاد والبطاقات الاخرى",
+   "root_cause": "الاستفسار عن إجراءات إصدار بطاقة إسعاد"
+  },
+  {
+   "description": "اين موقع صندوق ابوظبي للتقاعد ؟",
+   "resolution": "مركز التواجد البلدي – مدينة خليفة مركز التواجد البلدي – محمد بن زايد",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن موقع الصندوق"
+  },
+  {
+   "description": "ما هو مقر صندوق أبوظبي للتقاعد في أبوظبي؟",
+   "resolution": "صندوق أبوظبي للتقاعد مغلق مؤقتاً حالياً. يمكنك التوجه إلى أحد البدائل التالية لإنجاز خدماتك: بلدية مدينة أبوظبي مركز التواجد البلدي – مدينة خليفة التواجد البلدي – محمد بن زايد يمكنك زيارة أي من هذه المراكز للحصول على الخدمة المطلوبة.",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن مقر صندوق أبوظبي للتقاعد في أبوظبي"
+  },
+  {
+   "description": "اين يقع موقع صندوق ابوظبي للتقاعد ؟",
+   "resolution": "بلدية مدينة أبوظبي مركز التواجد البلدي – مدينة خليفة مركز التواجد البلدي – محمد بن زايد",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن موقع الصندوق"
+  },
+  {
+   "description": "أين يقع مقر صندوق أبوظبي للتقاعد في مدينة أبوظبي ؟",
+   "resolution": "تم إفادة المتعامل من خلال الرابط التالي https://www.pension.gov.ae/ar-ae/Pages/ContactUs.aspx",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن موقع مقر الصندوق في مدينة أبوظبي"
+  },
+  {
+   "description": "أود الاستفسار عن موقع صندوق أبوظبي للتقاعد في إمارة أبوظبي؟",
+   "resolution": "-بلدية مدينة أبوظبي -مركز التواجد البلدي – مدينة خليفة -موقع التواجد البلدي – محمد بن زايد",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن موقع الصندوق في إمارة أبوظبي"
+  },
+  {
+   "description": "اي هو مواقع التواجد البلدي لصندوق ابوظبي للتقاعد؟",
+   "resolution": "موقع بلدية مدينة أبوظبي موقع صندوق أبوظبي للتقاعد - فرع العين موقع صندوق أبوظبي للتقاعد - فرع مدينة زايد موقع صندوق أبوظبي للتقاعد - فرع الشارقة موقع مركز التواجد البلدي – مدينة خليفة موقع التواجد البلدي – محمد بن زايد",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن مواقع فروع الصندوق ومراكز الخدمة"
+  },
+  {
+   "description": "كيف يمكنني معرفة مواقع مراكز التواجد البلدي التابعة لصندوق أبوظبي للتقاعد؟",
+   "resolution": "مراكز إسعاد المتعاملين تتوفر مراكز إسعاد المتعاملين في عدة مواقع تشمل: أبوظبي – مراكز التواجد البلدي – العين – الظفرة – الشارقة مواقع مراكز التواجد البلدي مدينة خليفة: https://g.co/kgs/fcoF9cM مدينة محمد بن زايد: https://g.co/kgs/E56AbzQ بلدية مدينة أبوظبي: https://maps.app.goo.gl/dXDCut9kB9WGaggT7",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن مواقع مراكز التواجد البلدي التابعة للصندوق"
+  },
+  {
+   "description": "ما هي مواقع صندوق ابوظبي للتقاعد في ابوظبي؟",
+   "resolution": "مركز التواجد البلدي – مدينة خليفة مركز التواجد البلدي – محمد بن زايد بلدية مدينة أبوظبي",
+   "main_service": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "sub_classification": "مواقع صندوق أبوظبي للتقاعد وقنوات التواصل",
+   "root_cause": "الاستفسار عن مواقع الصندوق في أبوظبي"
+  }
+ ],
+ "examples_note": "Reviewed (يدوي - مُراجع, confidence ≥ 0.8) cases from the ADPF Q2 2026 master, redacted, up to 12 per sub-classification. The classifier is given the examples most similar to each batch."
+}

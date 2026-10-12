@@ -10,17 +10,15 @@ Everything the service raises deliberately becomes an ``ApiError`` before it rea
 the client, so there is exactly one renderer and no route returns a bare
 ``{"detail": ...}``.
 
-One validation failure is singled out from the rest. A required column arriving absent
-is the commonest way a real export is wrong, and pydantic reports it per record — a
-hundred thousand rows with no ``الحل`` column produce a hundred thousand identical
-errors, which is a useless answer to a simple question. ``_missing_columns`` folds
-those into one ``missing_required_columns`` error naming the columns and the records
-that failed.
+A missing required input — a column absent from every record, a required setting
+(X2–X4) or the taxonomy — is answered as one ``missing_required_columns`` error whose
+message reads "The following input field(s) were missing or unmapped: …" and whose
+``detail.fields`` names each one with its U-/X-id. Required is decided per column,
+not per record, so this is checked once per request (``pipeline.check_inputs``).
 
-**Records are never echoed back.** Each pydantic error carries the offending record as
-``input``, and a record is customer data — for the complaints module it is a named
-person with an identity-document number. The folded error reports indices and counts,
-never values.
+**Records are never echoed back.** A pydantic error carries the offending record as
+``input``, and a record is customer data; ``input`` and ``ctx`` are stripped before a
+validation error goes over the wire.
 """
 from __future__ import annotations
 
@@ -34,8 +32,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..exceptions import StageFailure
-from .models.records import HARD_REQUIRED_COLUMNS, InquiryRecord
+from ..exceptions import MissingInputs, StageFailure
 
 __all__ = [
     "ApiError",
@@ -44,34 +41,13 @@ __all__ = [
     "MISSING_COLUMNS_CODE",
     "StageFailure",
     "UpstreamError",
+    "missing_inputs_error",
     "register_exception_handlers",
 ]
 
 logger = logging.getLogger(__name__)
 
 MISSING_COLUMNS_CODE = "missing_required_columns"
-
-# Pydantic reports a missing field by its **alias** when the model declares one, so a
-# record missing ``case_number`` comes back located at ``رقم_الطلب``. Folding on the
-# snake_case name alone would therefore never match, and every real missing-column
-# payload would fall through to the generic per-record error — which is the failure
-# this fold exists to prevent. Both spellings are accepted, and the message names the
-# snake_case one because that is what a caller building a payload wrote.
-_ALIAS_TO_FIELD: dict[str, str] = {
-    (field.alias or name): name
-    for name, field in InquiryRecord.model_fields.items()
-}
-_REQUIRED_LOCATIONS: dict[str, str] = {
-    spelling: field
-    for field in HARD_REQUIRED_COLUMNS
-    for spelling in (field, InquiryRecord.model_fields[field].alias or field)
-}
-
-# How many offending record indices to name. Enough to find the problem in a
-# hand-built payload; bounded because a file with a column missing has *every* record
-# offending, and echoing a hundred thousand indices answers nothing the count does not.
-MAX_REPORTED_RECORDS = 20
-
 
 class ErrorBody(BaseModel):
     """The failure itself."""
@@ -131,64 +107,17 @@ class UpstreamError(ApiError):
         super().__init__(status.HTTP_502_BAD_GATEWAY, "upstream_error", message)
 
 
-def _missing_columns(errors: list[dict[str, Any]]) -> ApiError | None:
-    """Fold per-record missing-key failures into one error naming the columns.
-
-    Returns ``None`` when nothing in ``errors`` is a required column arriving absent,
-    in which case the caller renders the ordinary validation error.
-
-    A required field pydantic never received arrives as ``type="missing"`` at
-    ``("body", "records", <i>, "<column>")``, which carries the column and the record
-    index already — spelled with the model's alias, which is why ``_REQUIRED_LOCATIONS``
-    maps both spellings back to the snake_case field name.
-
-    Errors of other kinds are counted rather than echoed: a payload with a missing
-    column usually has the same wrong shape throughout, and the columns are what the
-    caller has to fix first.
-    """
-    columns: set[str] = set()
-    records: set[int] = set()
-    others = 0
-
-    for error in errors:
-        loc = error.get("loc") or ()
-        if len(loc) < 4 or loc[0] != "body" or loc[1] != "records":
-            others += 1
-            continue
-        index = loc[2]
-        if not isinstance(index, int):
-            others += 1
-            continue
-        field = _REQUIRED_LOCATIONS.get(str(loc[3]))
-        if error.get("type") == "missing" and field is not None:
-            columns.add(field)
-            records.add(index)
-        else:
-            others += 1
-
-    if not columns:
-        return None
-
-    named = sorted(columns)
-    reported = sorted(records)
-    detail: dict[str, Any] = {
-        "columns": named,
-        "records": reported[:MAX_REPORTED_RECORDS],
-        "records_total": len(reported),
-    }
-    if others:
-        detail["other_error_count"] = others
-
-    plural = "columns" if len(named) > 1 else "column"
+def missing_inputs_error(exc: MissingInputs) -> ApiError:
+    """The 422 for a request missing required inputs, naming every one."""
     return ApiError(
         422,
         MISSING_COLUMNS_CODE,
-        f"{len(reported)} record(s) are missing the required {plural} "
-        f"{', '.join(named)}. Every record must carry these keys — the pipeline's "
-        "first stage refuses a run without them. Send null for a blank cell rather than "
-        "omitting the key. Either the snake_case name or the normalised Arabic "
-        "column name is accepted.",
-        detail=detail,
+        str(exc),
+        detail={
+            "fields": [
+                {"field": m.field, "id": m.uid, "label": m.label} for m in exc.missing
+            ]
+        },
     )
 
 
@@ -208,10 +137,6 @@ def register_exception_handlers(app: FastAPI) -> None:
         _: Request, exc: RequestValidationError
     ) -> JSONResponse:
         errors = exc.errors()
-        missing = _missing_columns(errors)
-        if missing is not None:
-            logger.info("%s: %s", missing.code, missing.message)
-            return missing.response()
 
         # Three keys are dropped before this goes over the wire.
         #
@@ -235,6 +160,12 @@ def register_exception_handlers(app: FastAPI) -> None:
             "The request body did not match the expected schema.",
             detail=redacted,
         ).response()
+
+    @app.exception_handler(MissingInputs)
+    async def _missing_inputs(_: Request, exc: MissingInputs) -> JSONResponse:
+        error = missing_inputs_error(exc)
+        logger.info("%s: %s", error.code, error.message)
+        return error.response()
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:

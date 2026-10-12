@@ -28,6 +28,9 @@ except ImportError:  # pragma: no cover - dotenv is a declared dependency
 # it onto whatever CORE42_MODEL / CORE42_MODEL_FAST name the deployment uses.
 CHAT_MODEL = "core42-chat"   # reasoning tier: analysis, gap analysis, report prose
 FAST_MODEL = "core42-fast"   # bulk tier: per-case classification
+DEEP_MODEL = "core42-deep"   # deep-review tier: the second, higher-effort classification pass
+
+_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
 
 _RESTART_HINT = (
     "Set them in the .env file next to the service, or as environment "
@@ -94,6 +97,11 @@ class Core42Settings:
     # per-case classification.
     model: str = "gpt-5.1"
     model_fast: str = "gpt-5.1"
+    # The deep review's model (defaults to ``model``) and how hard it reasons.
+    # gpt-5.1 does no reasoning unless asked: without an effort it answers at once
+    # and spends zero reasoning tokens. Empty or "none" sends no effort at all.
+    model_deep: str = "gpt-5.1"
+    deep_reasoning_effort: str = "medium"
     websearch_model: str = "gpt-5.1"
 
     max_output_tokens: int = 32768
@@ -106,7 +114,7 @@ class Core42Settings:
     # In-flight Core42 requests PER PROCESS (0 = uncapped). Stage 3 fans out to
     # 5 threads and Stage 6 to 7-9, so without a cap the gateway sees far more
     # concurrency than it tolerates and answers with 429s.
-    max_concurrency: int = 4
+    max_concurrency: int = 5
 
     max_retries: int = 2
     retry_delay: float = 2.0
@@ -132,6 +140,8 @@ class Core42Settings:
             return self.model
         if name == FAST_MODEL:
             return self.model_fast
+        if name == DEEP_MODEL:
+            return self.model_deep
         if name in self.aliases:
             return self.aliases[name]
         lowered = name.lower()
@@ -155,6 +165,15 @@ class Core42Settings:
             )
 
 
+def _effort(value: str) -> str:
+    value = (value or "").strip().lower()
+    if value in ("", "none", "off"):
+        return ""
+    if value not in _EFFORTS:
+        raise ValueError(f"LLM_DEEP_REASONING_EFFORT must be one of {', '.join(_EFFORTS)}; got {value!r}.")
+    return value
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Core42Settings:
     load_dotenv()
@@ -166,11 +185,13 @@ def get_settings() -> Core42Settings:
         base_url=_normalize_base_url(_env("CORE42_BASE_URL", "https://api.core42.ai/v1", env)),
         model=model,
         model_fast=_env("CORE42_MODEL_FAST", "", env) or model,
+        model_deep=_env("CORE42_MODEL_DEEP", "", env) or model,
+        deep_reasoning_effort=_effort(_env("LLM_DEEP_REASONING_EFFORT", "medium", env)),
         websearch_model=_env("CORE42_WEBSEARCH_MODEL", "", env) or model,
         max_output_tokens=_env_int("LLM_MAX_OUTPUT_TOKENS", 32768, env),
         output_token_headroom=_env_float("LLM_OUTPUT_TOKEN_HEADROOM", 1.5, env),
         timeout=_env_float("LLM_TIMEOUT", 240.0, env),
-        max_concurrency=_env_int("LLM_MAX_CONCURRENCY", 4, env),
+        max_concurrency=_env_int("LLM_MAX_CONCURRENCY", 5, env),
         max_retries=_env_int("LLM_MAX_RETRIES", 2, env),
         retry_delay=_env_float("LLM_RETRY_DELAY", 2.0, env),
         temperature=_env_float("LLM_TEMPERATURE", 0.2, env),

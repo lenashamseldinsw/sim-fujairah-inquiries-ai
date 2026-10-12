@@ -84,6 +84,7 @@ immediately and the work runs in the queue worker.
 | `CORE42_BASE_URL` | `https://api.core42.ai/v1` |
 | `CORE42_MODEL` | e.g. `gpt-5.1` |
 | `CORE42_MODEL_FAST` | e.g. `gpt-5.1` (may equal `CORE42_MODEL`) |
+| `CORE42_MODEL_DEEP` / `LLM_DEEP_REASONING_EFFORT` | Shared Core42 layer settings used by the inquiries deep review; unused by this service |
 | `NOVECOMP_STORAGE_BACKEND` | `blob` |
 | `NOVECOMP_STORAGE_CONNECTION_STRING` | The storage account's connection string, **including `AccountKey`** — without it callers get links they cannot open (see below) |
 | `NOVECOMP_JOB_BACKEND` | `table` |
@@ -101,7 +102,7 @@ immediately and the work runs in the queue worker.
 | `NOVECOMP_JOB_TTL_SEC` | `86400` | How long a finished job can still be polled. Report files outlive this |
 | `NOVECOMP_JOB_MAX_CONCURRENT` | `2` | Runs at once per worker. Each holds its whole export in memory |
 | `NOVECOMP_MAX_RECORDS` | `100000` | Larger exports are refused up front |
-| `LLM_MAX_CONCURRENCY` | `4` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
+| `LLM_MAX_CONCURRENCY` | `5` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
 | `NOVECOMP_LOG_LEVEL` | `INFO` | |
 
 A setting declared but left blank means its default, as if it were not there — a

@@ -1,41 +1,17 @@
 """
 Shared fixtures.
 
-**This is the only file allowed to reach outside the service.** The porting guide's
-rule: the new service must not import from the Streamlit application, and only the
-parity tests may break that — from here, where it is visible. ``legacy_root`` is what
-does it, and every other module in this package imports noveintel_complaints and nothing else.
+The service is self-contained: no test reaches outside it. (The Streamlit application
+it was ported from has been removed from the ``noveintel`` branch, and with it the
+parity tests that compared the vendored stages against it.)
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from noveintel_complaints.api.models import EntityInfo, ComplaintRecord, GenerateComplaintsReportRequest
-
-# The repository the service was ported out of. Two levels up from tests/.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-LEGACY_FLOW = REPO_ROOT / "real" / "complaints-flow"
-
-
-@pytest.fixture(scope="session")
-def legacy_root() -> Path:
-    """Put the legacy application on the path, for parity tests only.
-
-    Skips rather than fails when the checkout is not there: a deployed service has no
-    ``real/`` directory, and a parity test that cannot find its reference has nothing
-    to say — it is not a failure of the code under test.
-    """
-    if not LEGACY_FLOW.is_dir():
-        pytest.skip(f"The legacy flow is not in this checkout ({LEGACY_FLOW}).")
-    for path in (str(REPO_ROOT), str(LEGACY_FLOW)):
-        if path not in sys.path:
-            sys.path.insert(0, path)
-    return LEGACY_FLOW
-
 
 @pytest.fixture
 def entity() -> EntityInfo:

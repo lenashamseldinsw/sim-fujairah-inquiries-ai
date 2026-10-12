@@ -1,7 +1,8 @@
 # Schema reference — Customer Inquiries Analytics
 
-Every field of the request and the result, including the parts OpenAPI can only type
-as `object`.
+Every field of the request and the result. The OpenAPI document at `/docs` has the
+same models; this adds what it cannot say — which inputs are required, what each
+engine key is computed from, and what the model writes versus what the engine counts.
 
 ---
 
@@ -11,129 +12,198 @@ as `object`.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `records` | `InquiryRecord[]` | ✔ | At least one. |
-| `options` | `AnalysisOptions` | | Defaults apply when omitted. |
-| `entity` | `EntityInfo` | ✔ | No defaults of its own. |
+| `records` | `InquiryRecord[]` | yes, ≥ 1 | One per case. |
+| `settings` | `TenantSettings` | X2, X3, X4 | The Definition Sheet's context fields. |
+| `reference_lists` | `ReferenceLists` | `taxonomy` | The tenant's tables. |
+| `history` | `History \| null` | no | Stored snapshots for the comparison (R9). |
+| `options` | `AnalysisOptions` | no | `language`, `include_english`, `granularity`, `sections`. |
+| `entity` | `EntityInfo` | yes | Identity and branding. |
 
-### `AnalysisOptions`
+A request missing any required input is refused with `422 missing_required_columns`
+and the message *"The following input field(s) were missing or unmapped: …"*, naming
+each with its U-/X-id ([`api.md`](api.md)).
 
-| Field | Type | Default | Notes |
+### `InquiryRecord` — the universal columns
+
+Records are keyed by the canonical names below. A key spelled like any listed alias, or
+the Arabic or English label, is renamed on the way in; matching folds ه/ة, the hamza
+forms of alef, ى/ي, diacritics, tatweel, spaces/underscores/hyphens and case (R4).
+`(Do Not Modify) …` system columns are dropped and listed in the parse log. Unknown keys
+are kept as unmapped pass-throughs and never read by a section.
+
+**Required means the column, not the value.** A required column is present when any
+record carries it. A blank `case_id` marks an export artefact row — dropped and counted.
+A blank description or resolution is kept and degrades to «لم يُزوَّد».
+
+| Id | Field | Arabic / English | Kind | Required | Also recognised as | Role |
+|---|---|---|---|---|---|---|
+| U1 | `case_id` | رقم الطلب / Case ID | text | **yes** | `Case Number`, `case_number`, `رقم الحالة` | Dedup key; evidence ids. A row without one is an export artefact: dropped and counted. |
+| U2 | `description` | تفاصيل الطلب / Description | long_text | **yes** | `case_details`, `وصف الحالة` | What the customer asked. Classification input H; redacted before any model sees it. |
+| U3 | `resolution_text` | الحل / Resolution | long_text | **yes** | `Resolution Response`, `resolution`, `رد المعالجة` | What the agent did. Classification input I — outranks the description. |
+| U4 | `case_type` | نوع المكالمة / Recorded type | text | **yes** | `Case Type`, `contact_type`, `نوع الحالة` | The CRM's own type label. Scope filter and the recorded side of recorded-vs-actual. |
+| U5 | `crm_service` | الخدمة / Recorded service | text |  | `Service Name`, `service` | The CRM's service tag. Context only — the recorded side of RECORDED_VS_TRUE. |
+| U6 | `crm_service_group` | الخدمة الرئيسية / Recorded main service | text |  | `Service Category`, `main_service` | The CRM's service grouping. Classifier context only. |
+| U7 | `severity` | شدة الطلب / Severity | text |  | `Priority`, `شدة الشكوى` | Severity distribution; labels relabelled through the vocabulary list. |
+| U8 | `channel` | قناة تقديم الخدمة / Channel | text |  | `Case Channel`, `service_channel`, `قناه تقديم الخدمة`, `القناة` | Channel mix and the digital-channel share. |
+| U9 | `opened_datetime` | تاريخ الإنشاء / Opened date-time | datetime | **yes** | `Date Opened`, `date_opened`, `Created On` | Period anchor and the monthly distribution. |
+| U10 | `closed_datetime` | تاريخ إغلاق الطلب / Closed date-time | datetime |  | `date_closed`, `تاريخ الإغلاق`, `Date Closed` | Closed-cases count. Blank means open. |
+| U11 | `sla_status` | إغلاق الطلب خلال الوقت المحدد / SLA status | text |  | `SLA Color`, `sla_compliance`, `سلا امتثال`, `SLA Status` | Normalised to within / near / over / unspecified. |
+| U12 | `status` | الحالة / Status | text |  | `Status`, `الحالة SLA`, `Case Status` | Open/closed split, pending detection, and the SLA fallback when U11 is blank. |
+| U13 | `department` | الإدارة العامة / Department | text |  | `general_administration`, `إدارة عامة`, `Department` | Department distribution. |
+| U14 | `owner` | المالك / Owner | text |  | `Owner` | Agent-level reporting (X9) when enabled; queue owners are told from people. |
+| U15 | `resolved_by` | تم الحل بواسطة / Resolved by | text |  | — | Carried to the companion workbook only. |
+| U16 | `sub_classification_hint` | التصنيف الفرعي / Sub-classification hint | text |  | `sub_classification` | A hint for the rule chain when it names a taxonomy entry. |
+| U17 | `escalation_datetime` | موعد التصعيد / Escalation date-time | datetime |  | `Next Escalation Date` | SLA window; pending-case detection. |
+| U18 | `entity` | الإمارة / Entity / emirate | text |  | `Entity`, `الجهة` | Scoping a multi-entity export. |
+| U19 | `accepted_datetime` | تاريخ القبول / Accepted date-time | datetime |  | — | TAMM acceptance indicator. |
+| U20 | `classified_datetime` | تاريخ التصنيف / Classified date-time | datetime |  | — | TAMM classification indicator. |
+| U21 | `first_response_datetime` | تاريخ أول رد / First-response date-time | datetime |  | — | Timestamp-based timeliness. |
+| U22 | `resolved_datetime` | تاريخ الحل / Resolved date-time | datetime |  | `Resolved On` | TAMM resolution indicator and timestamp-based timeliness. |
+| U23 | `customer_verdict` | رأي المتعامل / Customer verdict | text |  | — | TAMM accuracy indicator (accepted / dissatisfied). |
+| U24 | `reopen_flag` | إعادة فتح / Reopen flag | flag |  | — | TAMM accuracy indicator. |
+| U25 | `fcr_flag` | الحل من أول اتصال / First-contact resolution flag | flag |  | `FCR` | TAMM first-contact-resolution indicator. |
+| U25b | `closure_reason` | سبب الإغلاق / Closure reason | text |  | — | FCR exclusions (auto-closed, closed on customer request, …). |
+| U25c | `satisfaction_score` | درجة الرضا / Satisfaction score | number |  | — | Carried; a metric gap recommendation when absent. |
+| U-title | `crm_title` | عنوان الحالة / Case title | text |  | `Case Title` | The CRM's auto-title. Never used as truth (codebook golden rule). |
+| U-updated | `updated_datetime` | تاريخ التحديث / Updated date-time | datetime |  | `Updated Date` | Last touch. Not a closure proxy unless the tenant says so. |
+
+#### Frozen labels (D1–D8)
+
+Labels an earlier run settled and the platform stored. The classifier fills only what
+is missing and never overwrites one. `label_provenance` accepts the Arabic or English
+provenance names; labels supplied without one are treated as reviewed (`deep_review`).
+
+Provenance values (D6), as printed: «آلي - موثوق» (`auto` — keyword rules, or labels
+copied from an identical case) · «نموذج» (`llm` — the model's first pass) · «آلي - مُصحّح»
+(`auto_corrected` — corrected by a codebook rule) · «يدوي - مُراجع» (`deep_review` — the
+deep AI review, a second higher-effort pass; not a person).
+
+| Id | Field | Recognised as |
+|---|---|---|
+| D1 | `label_contact_type` | التصنيف الفعلي, `actual_contact_type` |
+| D2a | `label_main_service` | الخدمة الرئيسية المصنفة, `classified_main_service` |
+| D2 | `label_sub_classification` | تصنيف إدارة التميز, `classified_sub_classification` |
+| D3 | `label_reason` | سبب التصنيف, `classification_reason` |
+| D5 | `label_confidence` | ثقة النموذج, `ثقة التصنيف`, `confidence` |
+| D6 | `label_provenance` | مصدر السبب الجذري, `مصدر التصنيف`, `provenance` |
+| D7 | `label_root_cause` | السبب الجذري للاستفسار, `root_cause` |
+| D8 | `label_bundle` | حزمة السبب الجذري, `الحزمة الموضوعية`, `bundle`, `umbrella` |
+| D1b | `label_true_type` | النوع الحقيقي, `true_type` |
+
+#### Sensitive columns — excluded at ingest (R3, BR-34/35)
+
+Accepted only so their values can redact the same row's free text; then dropped. They
+are never stored, sent to a model, logged or written to an artefact.
+
+| Field | Recognised as |
+|---|---|
+| `customer_name` | اسم مقدم الطلب, Customer, `applicant_name`, `اسم المتعامل`, `Customer Name` |
+| `nationality` | الجنسية, Nationality |
+| `national_id` | رقم الهوية, ID number, `emirates_id`, `id_number`, `Emirates ID` |
+| `mobile` | الهاتف الجوال, Mobile, `mobile_number`, `phone`, `رقم الهاتف`, `Phone` |
+| `employee_number` | الرقم الوظيفي, Employee number, `الرقم الوظيفى` |
+| `created_by` | انشاء بواسطة, Created by, `إنشاء بواسطة` |
+| `email` | البريد الإلكتروني, Email, `e-mail` |
+
+#### How values are read
+
+`""`, `"-"`, `"--"`, `"nan"`, `"none"`, `"null"`, `"n/a"`, `"na"`, `"#n/a"`, `"#null!"` and a
+float `NaN` are blank. Whitespace inside a value is collapsed. A number, date or
+boolean in a text column is stringified; a dict or list is rejected.
+
+- **Dates** — ISO 8601 first, then day-first (`03/04/2026` is 3 April). The same rule
+  reads the period and every per-case date.
+- **SLA** — `sla_status` is normalised to `within` · `near` · `over` · `unspecified`:
+  SLA colours (🟢 Green / 🟡 Amber / 🔴 Red), `نعم`/`لا`, yes/no, booleans. When blank,
+  `status` is read for an unmistakable timeliness word only; "Closed" is not "on time".
+- **Recorded type** — `case_type` is read to `inquiry` · `service_request` · `complaint`
+  · `incident` · `suggestion` · `compliment` (bilingual "Information - معلومات" works);
+  `settings.case_type_map` covers a tenant's own values.
+- **Bilingual labels** — "English - عربي" values are split; either half matches.
+- **Free text** is redacted before anything reads it: names → `[الاسم]`, Emirates ID →
+  `[الهوية الإماراتية]`, case and tracking references → `[رقم التتبع]`, dates →
+  `[تاريخ]`, amounts → `[مبلغ]`, employer names → `[جهة العمل]`, phone / e-mail →
+  `[بيانات اتصال]`. Links are kept.
+
+### `TenantSettings` — X1–X12
+
+| Id | Field | Default | Notes |
 |---|---|---|---|
-| `language` | `"ar"` \| `"en"` | `"ar"` | Which report the caller asked for. Echoed back as `primary_language`. The **Arabic report is always produced** — the analysis runs in Arabic. To decide whether English exists at all, use `include_english`. |
-| `include_english` | `bool` | `true` | Produce the English report. A full translation of all nine sections and the largest block of tokens in a run; `false` roughly halves cost and wall clock. |
-| `granularity` | `"monthly"` \| `"quarterly"` \| `"semi_annual"` \| `"annual"` \| `null` | `null` | How to label the period. Omit to derive it from the case dates. **Setting it does not filter the data** — every record sent is analysed; only the label changes. |
+| X1 | `source_system` | — | Printed in the introduction and the sources table. |
+| X2 | `timeliness_target_working_days` | **required** | ADPF: 2. |
+| X3 | `timeliness_framework` | **required** | `entity_process_kpi` · `tamm` · `gsr` · `other`. |
+| X4 | `case_type_scope` | **required** | `inquiries_and_service_requests` · `inquiries_only` · `all_recorded_types`. Applied after dedup; excluded types counted. |
+| X5 | `llm_threshold` | 0.75 | Rule-chain confidence below this → the model. |
+| X6 | `review_threshold` | 0.65 | Below this, or still breaking a codebook rule → the deep AI review. Still below after it → flagged `low_confidence`, counted with its best labels. ≤ X5; ADPF ran X5 = X6 = 0.90. |
+| X7 | `digital_channel_definition` | `all_non_phone` | Or `live_chat_and_self_service`. `digital_channels` overrides with an explicit list. |
+| X8 | `root_cause_extraction` | `false` | Root causes, umbrellas, S10–S11. |
+| X8a | `umbrella_count_range` | `"6–10"` | The discovery step's target. |
+| X9 | `agent_level_reporting` | `false` | Per-owner figures, queues excluded, never ranked. Owner names reach the workbook only when on. |
+| X10 | `focus_services_count` | 2 | S11 (1–5). |
+| X11 | `working_calendar` | `"Sun–Thu 07:30–15:30"` | Working-time maths; `public_holidays` adds dates. |
+| X12 | `comparison_basis` | `previous_period` | Or `same_period_last_year` — which `history` snapshot is read. |
+| — | `frameworks` | the X3 framework | Registry selections with targets — see below. |
+| — | `deflectable_bundles` | procedures, eligibility, values, payment dates, locations | Umbrella names that count as self-serviceable. |
+| — | `event_threshold_pct` / `event_min_cases` | 50 / 30 | EVENTS. |
+| — | `top_root_causes` / `root_causes_per_bundle` | 12 / 5 | ROOT_CAUSE_TOP. |
+| — | `queue_owner_pattern` | `SM-ND\|queue\|قائمة\|فريق` | Regex telling queues from people. |
+| — | `case_type_map` | — | Recorded value → canonical type. |
 
-Deliberately short: the knobs here are the ones the pipeline honours. An option the
-six stages ignored would be a lie in the OpenAPI document.
+#### The framework registry (`frameworks`)
 
-### `InquiryRecord`
+`[{ "id": "...", "targets": { ... } }]`. Each indicator is computed when the export
+supports it, otherwise reported as a fixed-wording recommendation to enable the field —
+never as zero.
 
-Every field accepts two names — the `snake_case` one and the normalised Arabic column
-— and a payload may mix them. Unknown keys are **kept** and passed through to the
-dataframe, so a tenant recording an extra column has it counted in the "structured
-fields" figure the methodology section prints.
-
-| JSON name | Arabic column | Required | Notes |
+| Framework `id` | Indicator | Needs | Default target |
 |---|---|---|---|
-| `case_number` | `رقم_الطلب` | ✔ | A string, not a number: leading zeros are meaningful. |
-| `case_details` | `تفاصيل_الطلب` | ✔ | What the customer asked for. A free-text field the classification reads. |
-| `contact_type` | `نوع_المكالمة` | ✔ | The type as originally recorded. **What the run is measured against** — the reclassification rate is how often the pipeline disagrees. |
-| `resolution` | `الحل` | ✔ | How the case was answered. The second free-text field, and what the gap analysis compares against the guidebook. |
-| `date_opened` | `تاريخ_الإنشاء` | | The reporting period is derived from these. |
-| `date_closed` | `تاريخ_إغلاق_الطلب` | | Null or empty means still open — the closure rate is computed from exactly this. |
-| `service_channel` | `قناة_تقديم_الخدمة` | | Open vocabulary; a tenant's own channel names are kept. |
-| `sla_status` | `الحالة_SLA` | | Reported as given; not recomputed from the dates. |
-| `sla_compliance` | `سلا_امتثال` | | Yes/no. See below. |
-| `sub_classification` | `التصنيف_الفرعي` | | The source system's detailed category. |
-| `main_service` | `الخدمة_الرئيسية` | | Drives the per-service breakdown and service-level FAQ extraction. |
-| `service` | `الخدمة` | | A secondary service field some exports carry. |
-| `general_administration` | `الإدارة_العامة` | | Drives the workload map's per-department view. |
+| `entity_process_kpi` | Response-time compliance | `sla_status`, or resolved/closed timestamps | X2 working days |
+| `tamm_contact_centre` | Acceptance | `accepted_datetime` | 120 working minutes (`acceptance_minutes`) |
+| | Classification | `classified_datetime` | 16 working hours (`classification_working_hours`) |
+| | Resolution | `sla_status`, or `resolved_datetime` | the agreed SLA |
+| | Accuracy | `customer_verdict` or `reopen_flag` | — |
+| | Pending cases | open cases + `escalation_datetime` | — |
+| | First-contact resolution | `fcr_flag` (+ `closure_reason` for the exclusions) | — |
+| `ad_gov_customer_service_guide` | Guide compliance | — | reference only, cited in the closing |
+| `gsr` | GSR pillars | — | reference only |
 
-#### How blank values are read
+### `ReferenceLists`
 
-A spreadsheet export carries several spellings of "empty", and all of them mean the
-same thing. `""`, `"  "`, `"-"`, `"--"`, `"nan"`, `"none"`, `"null"`, `"n/a"`, `"na"`,
-`"#n/a"`, `"#null!"` and a float `NaN` are all read as no value — case-insensitively,
-after collapsing whitespace.
+| Field | Required | Shape |
+|---|---|---|
+| `taxonomy` | **yes** | `"adpf_codebook_v1"`, or `{ main_services: [{ name_ar, name_en?, signals[], guidance?, crm_service_aliases[], sub_classifications: [{ name_ar, name_en?, signals[] }] }], crm_service_map: {tag: main}, edge_cases[], other_service?, examples[] }` |
+| `faq_catalogue` | no | `[{ question_ar, answer_ar?, question_en?, answer_en?, main_service?, keywords[] }]` — FAQ coverage |
+| `vocabulary` | no | `{ ar: {avoid: use}, en: {avoid: use} }`. Omitted: the ADPF list; `{}`: none |
+| `transactions` | no | `[{ main_service, sub_service?, service_code?, total_requests, taxonomy_main_service?, taxonomy_sub_classification?, counts_in_denominator }]` |
+| `guidebook` | no | `{ title, pages, year, topics[], entries: [{title, text}] }`, or the Fujairah `guidebook_final.json` shape unchanged |
+| `umbrellas` | no | `{ version, umbrellas: [{ id, name_ar, name_en?, meaning_ar?, meaning_en? }] }` — the confirmed set |
 
-Any of these means `null`, and a `null` reaches the pipeline as an empty cell — exactly as the
-original app read it from Excel. That holds for the required columns too, except
-`case_number`, where a blank value is a validation error.
+**The `adpf_codebook_v1` preset** is the ADPF classification codebook v1: 13 main
+services and their sub-classifications with the codebook's assignment signals, English
+names, the edge cases, a crosswalk learned from the Q2 master, and 111 reviewed,
+redacted examples. The classifier shows each batch the examples most similar to it.
 
-**Required means the column, not the value.** Every record must carry these keys, but `case_details`, `contact_type`, `resolution` may be `null` for a blank cell — the pipeline keeps such rows and routes them down its fallback path, and refusing them would sink a whole export over one blank resolution. `case_number` is the exception: it must have a value, or the case cannot be traced back to its row in the workbook. Send `null` for a blank cell rather than leaving the key out; a missing key means the column is missing.
+`taxonomy.examples` is how a tenant teaches the classifier its reviewers' practice:
+`[{ description, resolution, main_service, sub_classification, root_cause? }]`, redacted.
 
-Whitespace inside a value is *collapsed*, not merely stripped: Arabic pasted out of a
-web form carries newlines and runs of spaces mid-string, and the pipeline compares
-these values against each other.
+### `History`
 
-A number, date or boolean in a text column is stringified — an ordinary export
-artefact. A **dict or list is rejected**: that cannot come from a cell, and `str()`
-would turn a caller's structural mistake into a plausible-looking value that survives
-into the report.
-
-#### Yes/no fields
-
-`sla_compliance` accepts `"نعم"`/`"لا"`, `"yes"`/`"no"`, `"y"`/`"n"`, `"true"`/`"false"`,
-`1`/`0` and real booleans. Anything unrecognised becomes `null` rather than being
-guessed — a cell reading "partially" is not a no, and treating it as one would move a
-case into the compliant column.
-
-#### Dates
-
-Any format pandas can read; ISO 8601 is safest. **ISO is tried first**, because
-`2025-01-05` is unambiguously 5 January and a day-first reading turns it into 1 May.
-Only what ISO cannot read is retried day-first, which is right for the ambiguous slash
-formats the regional source systems produce — there `03/04/2025` is 3 April.
-
-An unreadable date is dropped rather than raised on. A run whose period is weakly
-labelled is still a run worth doing.
+`{ previous_period?: PeriodSnapshot, same_period_last_year?: PeriodSnapshot }`. A
+`PeriodSnapshot` is what every bundle returns as `snapshot`: `label_ar`, `label_en`,
+`total_cases`, `classified`, `within_deadline_pct`, `digital_share_pct`,
+`reclassification_rate`, `channel_pct`, `bundle_counts`, `contact_type_counts`,
+`main_service_counts`.
 
 ### `EntityInfo`
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name_ar` | `string` | ✔ | Used when the report language is `ar`. |
-| `name_en` | `string` | ✔ | Used for `en`, and slugified into every storage key. |
-| `name_short` | `string` | | Identity line under the name on the cover. |
-| `logo_base64` | `string` | | With or without a `data:image/...;base64,` prefix. **The HTTP form.** |
-| `logo_path` | `string` | | A path on the *server's* filesystem — library use only. Mutually exclusive with `logo_base64`. |
-| `brand.primary` | hex colour | | Defaults to NoveAI Navy `#201853`. **Carried but not yet applied** — see below. |
-| `brand.secondary` | hex colour | | Defaults to NoveAI Magenta `#7E2362`. Likewise. |
-| `closing_statement` | `string` | | Replaces the model-written closing when present. |
-| `center_name_ar` / `_en` | `string` | | Sub-unit shown on the cover. |
+`name_ar`, `name_en` (required); `name_short`, `center_name_ar`, `center_name_en`,
+`logo_base64` (or `logo_path`, server-side), `brand: { primary, secondary }`,
+`closing_statement` (the vision statement the closing ties to).
 
-**No tenant defaults, ever.** Names are required; everything else is simply absent
-when not given. Defaulting any of it would mean a tenant that supplies a name but no
-logo silently prints someone else's.
-
-A logo that will not decode is **dropped with a log warning**, not raised on: a cover
-without a logo is cosmetic, and throwing away six stages of analysis over a malformed
-data URI is not a trade anyone would choose.
-
-**`brand` drives the document's look.** Headings, section banners, table headers, the
-cover and the table of contents take `primary`; accents take `secondary`. Charts take
-`primary` for their accent series.
-
-Two deliberate exceptions:
-
-* **Semantic colours are not brandable.** The red in the severity palette means
-  critical, and the neutral greys beside it carry no identity. Repainting them in a
-  tenant's brand would destroy meaning. This is the same reasoning that makes
-  `STATUS_COLORS` platform-locked.
-* **Omitting `brand` is not the same as sending its defaults.** `BrandColors` defaults
-  to the NoveAI palette because it is a shared contract model that must carry no
-  organisation's colours — but a request that leaves `brand` out renders in the
-  report's own design palette instead, which is what every report looked like before
-  theming existed. Send `brand` explicitly to override it, including if you genuinely
-  want the NoveAI palette.
-
-A malformed colour (`"navy"`, `"#12345"`, a non-string) falls back to the design
-palette rather than reaching the document, where a bad value produces a file Word
-offers to repair. `#abc` shorthand and a missing `#` are both accepted.
-
-`STATUS_COLORS` — `compliant` `#2E8B6B`, `watch` `#C68A2E`, `breach` `#B5393F` — is
-**platform-locked** and not tenant-configurable: a compliant cell must read the same
-across every tenant.
+**Colours (Prerequisites §5).** Without `brand`: NoveAI Navy `#201853` and Magenta
+`#7E2362`. With it: the tenant's colours on headings, banners, table headers, the cover,
+the contents and chart accents. The within / near / over colours `#2E8B6B` / `#C68A2E`
+/ `#B5393F` are platform-locked.
 
 ---
 
@@ -141,126 +211,156 @@ across every tenant.
 
 ### `InquiriesBundle`
 
-| Field | Type | Notes |
+| Field | Notes |
+|---|---|
+| `run_id` | Job id, log correlation id, part of every artefact key. |
+| `period` | The reporting window, from the opening dates. |
+| `total_cases` | `|S|` — in-scope cases after artefact rows, duplicates and the scope. The one denominator (R2). |
+| `metrics` | The engine output — below. |
+| `narratives` | `{ ar, en? }` — `ReportNarratives`: `report` (29 fields) and `sections`. |
+| `classification` | `ClassificationSummary` — below. |
+| `charts` | `ChartSpec[]` — select by `key`. |
+| `report` | `{ ar, en? }` — S0–S11 as data. |
+| `documents` | `RunDocuments`. |
+| `snapshot` | `PeriodSnapshot` — store it; send it back as `history`. |
+| `usage` | `RunUsage`. |
+| `warnings` | `BundleWarning[]` — [`api.md`](api.md) lists the codes. |
+| `primary_language` | As requested. |
+
+### `metrics` — the engine output (Data Mapping §4)
+
+Every number the report prints is here; the prose is checked against it. `S` is the
+in-scope case set, `L` its labelled subset whose true type is an inquiry or service
+request.
+
+| Key | Computed as |
+|---|---|
+| `KPI` | `total_cases` = \|S\|; `classified` = \|L\| and `classified_pct`; `closed_cases`; `reclassification_rate`; `main_services`, `sub_classes` (distinct in L); `bundles`; `within_deadline_pct` = (within + near) / \|S\|; `digital_share_pct`; `top_service` {name, pct of L, count}; `inq_per_100_tx`; period label and date range; `source_system`; `deep_reviewed`; `low_confidence_after_review` |
+| `MONTHLY` | counts of S by opening month, % of S, month-over-month change |
+| `CHANNEL` | counts and % of S by channel as recorded, with the digital flag |
+| `CASE_TYPE_RECORDED` | counts and % of S by recorded type |
+| `MAIN_SERVICE`, `SUB_CLASS` | counts and % of L; a «غير مصنَّف» row = \|S\| − \|L\| − out-of-scope, % of S |
+| `ACTUAL_TYPE` | D1 over S (sums to \|S\| — the S3.2 table) |
+| `RECORDED_VS_ACTUAL` | recorded type vs D1, per contact type, and the crosstab |
+| `RECLASSIFICATION` | D4 count, rate over S, redacted evidence sample |
+| `SUB_CLASS_BY_TYPE` | D2 within each D1 |
+| `SERVICE` | the recorded service tag (O9) |
+| `RECORDED_VS_TRUE` | catalogue crosswalk(recorded tag) = main service: match / mismatch %, least- and most-matching tags |
+| `TIMELINESS`, `SLA` | within · near · over · unspecified, counts and % of S; within-deadline and breached % |
+| `NEAR_OVER_BY_SERVICE` | share of near + over within each main service (≥ 10 cases) |
+| `SEVERITY` | after relabelling (عادي → روتيني، عاجل → حرج) |
+| `CLOSED` | closed = closed date present; closure rate |
+| `DEPARTMENT` | counts, with each department's dominant type and sub-classification |
+| `OUT_OF_SCOPE_DETECTED` | true type complaint / incident / compliment — the Domain 02 handoff |
+| `CLASSIFICATION_QUALITY` | provenance split and %, mean confidence, % ≥ X5, deep-reviewed, duplicates reused, low-confidence after review (`queue_size_at_compute`), cleared, taxonomy, umbrella set version, routed to model |
+| `EVENTS` | clusters (umbrellas with X8, else sub-classifications) whose month count ≥ (1 + θ) × the previous month and ≥ the minimum |
+| `BUNDLE` (X8) | counts and % of L per umbrella; carried umbrellas at zero included; `new` flags |
+| `ROOT_CAUSE_TOP` (X8) | top-k causes; per umbrella top-n |
+| `BUNDLE_BY_SERVICE` (X8) | main service × umbrella counts and row % |
+| `NEAR_OVER_BY_BUNDLE` (X8) | share of near + over within each umbrella |
+| `SERVICE_FOCUS` (X8) | per top-N service: count, share, months, peak, within-deadline (1 − over / count), sub-classes, umbrellas, phone and live-chat % |
+| `DEFLECTABLE_PCT` (X8) | cases in deflectable umbrellas / \|L\| |
+| `INQ_PER_100_TX` | \|L\| / Σ transactions (rows with `counts_in_denominator`) × 100; per main and sub service by join |
+| `FAQ_COVERAGE` | share of how-to cases matching a catalogue FAQ (service + keywords), per service |
+| `AGENT` (X9) | per non-queue owner: count, %, within-deadline %; alphabetical, never ranked |
+| `COMPARISON` | deltas against the `history` snapshot X12 selects |
+| `JOURNEY_MAP` | frictions: name AR/EN, root-cause category, remedy, case count = Σ of the case groups assigned to it |
+| `NOTIFICATION_OPPORTUNITIES` | type, trigger, sample message, eliminable cases = Σ of their groups |
+| `VALIDATED_FAQS` | question, answer, frequency = cases matched to it (each case to one FAQ; `faq_id` on the case), catalogue status |
+| `GAP_TABLE` | per friction: guidebook status, excerpt, gap type, deterministic priority, recommendation, case count |
+| `PATTERNS` | the largest case groups |
+| `FRAMEWORKS` | every registry indicator: status, value, numerator / denominator, target, recommendation |
+| `PARSE_LOG` | records received, artefact rows, duplicates, entity rows, scope exclusions, mapped / unmapped / present-but-empty / label / system / sensitive columns, unreadable dates |
+| `METRIC_GAPS`, `DATA_NOTES` | fixed-wording recommendations for missing optional inputs; notes for present-but-empty columns |
+
+**What the model decides, and what it never does.** It writes labels (contact type,
+main service, sub-classification, root cause), names umbrellas, frictions, FAQs,
+notification opportunities and gap assessments, and writes prose. It never writes a
+count: every figure above is computed from labels and group assignments.
+
+### `ClassificationSummary`
+
+`taxonomy`, `llm_threshold`, `review_threshold`, `provenance` (D6 split), `mean_confidence`,
+`deep_review` (`reviewed`, `low_confidence`, `duplicates_reused`, up to 500
+`low_confidence_case_ids`, `truncated`), `umbrella_set_version`,
+`umbrellas` — each `{ id, name_ar, name_en, meaning_ar, meaning_en, cases, new,
+member_root_causes }` for the Domain Admin's confirmation.
+
+### `narratives` — `ReportNarratives`
+
+`report` is the Full Report Prompt §4 `InquiriesReportNarratives`, 29 fields:
+`intro_statement`, `executive_summary`, `comparative_analysis`, `statistics_intro`,
+`monthly_narrative`, `main_service_narrative`, `sub_service_narrative`,
+`transactions_ratio_narrative`, `channel_narrative`, `recorded_vs_true_narrative`,
+`timeliness_narrative`, `service_focus_narratives[]`, `root_causes_intro`,
+`bundle_distribution_narrative`, `bundle_by_service_narrative`, `bundle_narratives[]`,
+`top_root_causes_narrative`, `timeliness_by_bundle_narrative`,
+`digital_opportunity_narrative`, `priority_faqs[]`, `roadmap_intro`, `initiatives[]`
+(`title`, `horizon`, `bundle_ref`, `addresses_cases`, `description`), `key_findings[]`,
+`recommendations[]`, `closing_statement`, `methodology_note`, `event_narratives[]`,
+`friction_points[]`, `top_service_short`. Conditional fields are empty when their input
+is absent. `addresses_cases` is the referenced item's engine count.
+
+`sections` is `SectionNarratives`: `contact_type_narrative`,
+`reclassification_narrative`, `out_of_scope_narrative`, `department_narrative`,
+`journey_narrative`, `digital_gaps_narrative`, `gap_root_causes_narrative`,
+`digital_transformation_narrative`, `ai_use_cases_intro`, `ai_use_cases[]` (`title`,
+`function`, `source_ref`, `effort`, `impact_cases`).
+
+### `report` — S0–S11 as data
+
+`{ document_name, language, rtl, entity, period, cover, metadata, sections[] }`. `cover`
+is S0 (`tiles` O1–O6, both totals labelled — R7). Each section has `id` (S1…S11), `key`
+(`ReportSection`), `title`, and any of `content`, `bullets`, `tables` (`columns`, `rows`),
+`charts`, `notes`, `subsections`.
+
+| Id | `key` | Present |
 |---|---|---|
-| `run_id` | `string` | 12 hex chars. Also the job id, the log correlation id, and part of every storage key. |
-| `period` | `Period` | The window the run covers. |
-| `total_cases` | `int` | Cases analysed after validation — the denominator for every percentage. |
-| `metrics` | `object` | The deterministic ground truth. **Detailed below.** |
-| `charts` | `ChartSpec[]` | Select by `key`, never by position. |
-| `report` | `{ "ar": object, "en"?: object }` | The report as structured data. **Detailed below.** |
-| `documents` | `RunDocuments` | Where the artefacts were filed. |
-| `usage` | `RunUsage` | Tokens and cost, in total and per stage. |
-| `warnings` | `BundleWarning[]` | Non-fatal problems. Empty on a clean run. |
-| `primary_language` | `"ar"` \| `"en"` | What was **asked for**, not what was produced. |
-
-### `Period`
-
-`granularity`, `index` (1-12 / 1-4 / 1-2 / 1), `year`, `start`, `end` (ISO dates),
-`label_ar`, `label_en`.
-
-Named off the **end** of the span: a run lapping into a new quarter is still a report
-about the quarter that closed. Identical in shape to module 01's, so one parser reads
-both.
-
-### `metrics` — the ground truth
-
-OpenAPI types this as `object` because its contents follow the data. Every figure the
-report prints comes from here, and **this is what to check the prose against.**
-Nothing in it is recomputed — recomputing would create a second source of truth that
-could disagree with the document.
-
-| Key | Type | Meaning |
-|---|---|---|
-| `total_cases` | `int` | Cases after validation. |
-| `classified_cases` | `int` | Cases carrying a final classification. Equals `total_cases` on a complete run. |
-| `rule_classified_count` | `int` | Settled by stage 2's rules, with no model call. |
-| `llm_queue_count` | `int` | Handed to stage 3 because the rules were not confident. |
-| `human_review_count` | `int` | Stage 3 was not confident either. Counted in the totals; flagged in the workbook. |
-| `reclassified_count` | `int` | Cases whose true type differs from what was recorded. |
-| `reclassification_rate` | `float` | The above as a percentage of `total_cases`. |
-| `contact_type_counts` | `{string: int}` | Final classification distribution. |
-| `original_contact_type_counts` | `{string: int}` | As originally recorded. The pair is what the reclassification chart shows. |
-| `channel_counts` | `{string: int}` | Cases per submission channel. |
-| `department_counts` | `{string: int}` | Cases per owning department. |
-| `patterns` | `object[]` | Stage 4 clusters: `cluster`, `sub_theme`, `case_count`, `example_case_ids`, Arabic variants. |
-| `journey_map` | `object[]` | Friction points: `cluster`, `friction_point`, `root_cause_category`, `case_count`. |
-| `validated_faqs` | `object[]` | Stage 5-validated FAQs: `question`, `answer`, `frequency`, `validation_status`. |
-| `gap_table` | `object[]` | Guidebook gaps: `topic`, `case_count`, `guidebook_status`, `severity`, `recommendation`, coverage and clarity assessments. |
-| `notification_opportunities` | `object[]` | Cases a proactive message would have prevented. |
-| `proactive_notification_case_count` | `int` | The reconciled total for the above. |
-| `month_year` | `string \| null` | The period as the pipeline labelled it internally. |
-| `guidebook` | `object` | `pages`, `faq_count`, `year`, `topics` — what the gap analysis was checked against. |
-
-`root_cause_category` is one of `missing_info`, `inaccessible_info`,
-`no_proactive_notification`, `platform_bug`, `policy_complexity`.
-
-`guidebook_status` is one of `Covered`, `Partially Covered`, `Missing`; `severity` is
-`Critical`, `Medium` or `Adequate`.
-
-### `report` — the document as data
-
-Also typed `object`. Keyed by language; each value is the structure the Word document
-was rendered from, so a consumer can render its own instead of handing a reader a
-`.docx`.
-
-Nine sections: `executive_summary`, `methodology`, `workload_map`,
-`customer_journey`, `digital_gaps`, `digital_transformation`, `ai_use_cases`,
-`improvement_roadmap`, `conclusion`.
-
-Each carries an `id`, a `title`, a `level`, prose `content`, and lists of `tables` and
-`charts`. A table has `columns`, `rows`, `row_count` and `col_count`.
-
-`"en"` is absent when `include_english` was `false`, or when the translation did not
-complete — in which case `warnings` carries `english_export_unavailable`.
+| S1 | `executive_summary` | always |
+| S2 | `methodology` | always — sources, parse log, method with X5/X6 and counts, fields from the confirmed schema, quality line (R1) |
+| S3 | `classification_map` | always; subsections by available input |
+| S4 | `customer_journey` | always (a note when no friction was found) |
+| S5 | `digital_gaps` | always; the gap table needs the guidebook |
+| S6 | `digital_transformation` | always |
+| S7 | `ai_use_cases` | always; the comparison with `history` |
+| S8 | `improvement_roadmap` | always |
+| S9 | `conclusion` | always |
+| S10 | `root_causes` | X8 on |
+| S11 | `service_focus` | X8 on |
 
 ### `charts` — `ChartSpec[]`
 
-| Field | Type | Notes |
-|---|---|---|
-| `key` | `ChartKey` | Stable identifier. **Select on this.** |
-| `kind` | `bar` \| `column` \| `pie` \| `doughnut` \| `line` \| `stacked_bar` | |
-| `title_ar` / `title_en` | `string` | English falls back to Arabic when untranslated. |
-| `categories_ar` / `categories_en` | `string[]` | Same order. |
-| `series` | `{ name_ar, name_en, values[] }[]` | One value per category. |
-| `colors` | `string[]` | One per series, or per category for a pie. Empty means the consumer picks. |
+`key`, `kind` (`bar` · `column` · `pie` · `doughnut` · `line` · `stacked_bar` · `heatmap`),
+`output_id` (the Builder output, O1–O26), `title_ar/en`, `categories_ar/en`, `series[]`
+(`name_ar`, `name_en`, `values`), `colors`.
 
-`ChartKey` for this module: `classification_mix`, `service_distribution`, `sla_compliance`, `severity_mix`.
-
-**The number of charts varies with the data** — a tenant that records no severity gets
-no severity chart — so a key absent from `charts` is not an error, and indexing by
-position renders the wrong chart under the right heading. This is the cross-module
-contract the BO adopted on 2026-08-27.
+Keys: `classification_mix` (O7), `actual_type_mix` (O8), `service_distribution` (O9),
+`timeliness_donut` (O10, locked colours), `severity_mix` (O11), `channel_donut` (O12),
+`sub_class_by_type` (O13), `department_distribution` (O14), `monthly_bar` (O19),
+`period_comparison` / `channel_comparison_bar` (O20), `classification_quality` (O21),
+`bundle_bar` (O22), `bundle_service_heatmap` (O23, data only — not drawn in Word),
+`top_root_causes_bar` (O24), `near_over_by_bundle_bar` (O25), `inq_per_100_bar` (O26),
+`main_service_bar`, `sub_service_bar`, `recorded_vs_true_stacked`, `faq_coverage_bar`,
+`howto_by_service_bar`, `focus_{1–5}_monthly_bar`, `focus_{1–5}_subclass_donut`,
+`focus_{1–5}_bundle_bar`.
 
 ### `documents` — `RunDocuments`
 
-| Field | Type | Notes |
-|---|---|---|
-| `report` | `{ "ar": DocumentRef, "en"?: DocumentRef }` | The Word reports. Module 01's shape, so one parser reads both modules. |
-| `workbook` | `DocumentRef \| null` | Every classified case, with the audit columns the report's counts can be verified against with a COUNTIF. |
-| `report_data` | `{ "ar": DocumentRef, "en"?: DocumentRef }` | The report JSON the documents were rendered from. |
+| Field | Notes |
+|---|---|
+| `report` | `{ ar, en? }` Word documents. |
+| `report_data` | `{ ar, en? }` the report JSON they were drawn from. |
+| `workbook` | The companion workbook (R10): summary · all cases · one sheet per actual contact type · reclassification · deep review · out of scope (Domain 02). Columns: the universal columns sent (by U-id), then D1, D1b, D2a, D2, D3, D4, D5, D6, D7, D8, deep-reviewed, low-confidence, copied-from-duplicate, FAQ link, corrections. No identity column; redacted text. |
+| `labels` | Per-case labels JSON: `label_*` fields, `misclassified`, `deep_reviewed`, `low_confidence`, `duplicate_of`, `faq_id`, `corrections` — what the platform stores and sends back next period as frozen labels. |
 
-#### `DocumentRef`
-
-`container`, `key`, `filename`, `content_type`, `size_bytes`, `url`, `expires_at`.
-
-`expires_at` is `null` for a backend whose links do not expire — which the local
-filesystem store's do not. A SAS-minting backend fills it in.
+`DocumentRef`: `container`, `key`, `filename`, `content_type`, `size_bytes`, `url`,
+`expires_at`.
 
 ### `usage` — `RunUsage`
 
-| Field | Type | Notes |
-|---|---|---|
-| `tokens` | `int` | `input_tokens + output_tokens`. |
-| `cost` | `float \| null` | USD. **`null` when unpriced, never `0.0`** — an unpriced run and a free one are different facts. |
-| `input_tokens` / `output_tokens` | `int` | Priced separately; output typically costs several times input. |
-| `calls` | `int` | Calls that returned a response. Dozens in a real run. |
-| `model` | `string \| null` | As reported by the responses. Several names joined by `", "` means one rate pair priced more than one model, and the cost is approximate. |
-| `by_stage` | `{string: StageUsage}` | The same figures per stage. Aggregate cost says nothing actionable; cost per stage says which prompt to cut. |
-
-One honest limit: this counts calls the code saw return. A gateway retrying
-internally never surfaces an object to read, so a heavily-retried run may have cost
-more. It is a good-faith accounting of observed calls, not a billing reconciliation.
+`tokens`, `cost` (`null` when unpriced, never `0.0`), `input_tokens`, `output_tokens`,
+`calls`, `model`, `by_stage` — `classification`, `umbrella_discovery`, `journey`, `faqs`,
+`gaps`, `narratives`.
 
 ---
 
@@ -273,17 +373,13 @@ more. It is a good-faith accounting of observed calls, not a billing reconciliat
 ### `JobState`
 
 `job_id`, `status`, `created_at`, `started_at`, `finished_at`, `stage`, `progress`
-(0.0–1.0, in steps at stage boundaries), `message` (for display — do not branch on
-it), `result`, `error`.
+(0.0–1.0), `message` (display only), `result`, `error`.
 
 ### `JobError`
 
-`code` — one of `unprocessable_records`, `upstream_error`, `stage_failed`,
-`runtime_exceeded`, `worker_restarted`, `request_unavailable`, `delivery_failed`,
-`cancelled`, `internal_error` — plus `message` and `stage`. [`api.md`](api.md) says
-what each means.
+`code` — `missing_required_columns`, `unprocessable_records`, `upstream_error`,
+`stage_failed`, `runtime_exceeded`, `worker_restarted`, `request_unavailable`,
+`delivery_failed`, `cancelled`, `internal_error` — plus `message` and `stage`.
 
-`worker_restarted` means the worker died mid-run. The job was **abandoned rather than
-resumed**: resuming half a pipeline would stitch one process's stage 4 onto another's
-stage 5 and produce a report whose figures came from two different runs. Retrying is
-safe.
+A run whose worker died is **abandoned, not resumed**: the steps are not checkpointed,
+and a report whose figures came from two half-runs would be wrong. Retrying is safe.

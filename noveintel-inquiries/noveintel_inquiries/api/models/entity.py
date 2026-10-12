@@ -13,19 +13,16 @@ that supplies a name but no logo silently prints someone else's logo — the sor
 mistake nobody catches until it is printed. The only defaults here are platform-level:
 the NoveAI brand palette, which belongs to no tenant.
 
-Two things are deliberately *not* tenant-configurable:
+**Colours default to the documented palette.** Prerequisites §5: the report adopts
+the tenant's brand; NoveAI Navy (#201853) and Magenta (#7E2362) are the default. A
+request that sends no ``brand`` is drawn in that default; one that sends ``brand`` is
+drawn in the tenant's colours. Two things are deliberately *not* tenant-configurable:
 
-  * the status palette (compliant / watch / breach) — platform-locked by the BO
-    decision of 2026-07-07 and defined here as ``STATUS_COLORS``;
-  * anything a pipeline stage computes — branding never reaches the analysis.
-
-One honest limit, specific to this module. ``brand`` is carried end to end and handed
-to the document builders, but the inquiries report's palette is still the fixed design
-(gold) baked into module-level style objects in
-``stages/build_report_ar.py``. The logo, the organisation names and the closing
-statement *are* applied. Colours are accepted, echoed, and not yet themed — see
-``docs/schema.md``. They are in the contract now so that theming the builders later
-is not a breaking change.
+  * the status palette — within / near / over deadline, the same triple as Domain
+    01's compliant / watch / breach — platform-locked and defined here as
+    ``STATUS_COLORS``. A red that means "over deadline" must read the same for every
+    tenant;
+  * anything the analysis computes — branding never reaches a model call.
 """
 from __future__ import annotations
 
@@ -41,6 +38,7 @@ __all__ = [
     "BrandColors",
     "EntityInfo",
     "STATUS_COLORS",
+    "TIMELINESS_COLORS",
     "NOVEAI_NAVY",
     "NOVEAI_MAGENTA",
 ]
@@ -57,6 +55,14 @@ STATUS_COLORS: dict[str, str] = {
     "breach": "#B5393F",
 }
 
+# The same triple under the timeliness names the report prints (Prerequisites §5).
+TIMELINESS_COLORS: dict[str, str] = {
+    "within": STATUS_COLORS["compliant"],
+    "near": STATUS_COLORS["watch"],
+    "over": STATUS_COLORS["breach"],
+    "unspecified": "#9AA0A6",
+}
+
 HexColor = Annotated[str, Field(pattern=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")]
 
 _DATA_URI_RE = re.compile(r"^data:image/[a-zA-Z0-9.+-]+;base64,")
@@ -68,17 +74,15 @@ class BrandColors(BaseModel):
     primary: HexColor = Field(
         default=NOVEAI_NAVY,
         description=(
-            "Primary brand colour, used for section banners and heading text. "
-            "Defaults to NoveAI Navy. Accepted and echoed; not yet applied to the "
-            "Word theme — see the module docstring."
+            "Primary brand colour: headings, banners, table headers, the cover and "
+            "each chart's accent series. Defaults to NoveAI Navy (Prerequisites §5)."
         ),
     )
     secondary: HexColor = Field(
         default=NOVEAI_MAGENTA,
         description=(
-            "Secondary brand colour, used for accents, table headers and the cover. "
-            "Defaults to NoveAI Magenta. Accepted and echoed; not yet applied to the "
-            "Word theme — see the module docstring."
+            "Secondary brand colour: accents and the second chart series. Defaults "
+            "to NoveAI Magenta (Prerequisites §5)."
         ),
     )
 
@@ -125,8 +129,9 @@ class EntityInfo(BaseModel):
     closing_statement: str | None = Field(
         default=None,
         description=(
-            "Tenant-supplied closing paragraph. When present it replaces the "
-            "model-written closing statement in the report."
+            "The entity's vision statement (Module 03). The report's closing "
+            "statement is written to tie back to it, and it is printed beneath the "
+            "closing. Omit to close without one."
         ),
     )
     center_name_ar: str | None = Field(

@@ -301,8 +301,10 @@ def _classify(exc: Exception) -> JobError:
     ``stage_failed`` otherwise. Anything else is summarised by type: an unhandled
     exception's text can contain a fragment of the caller's data.
     """
-    from ..exceptions import StageFailure
+    from ..exceptions import MissingInputs, StageFailure
 
+    if isinstance(exc, MissingInputs):
+        return JobError(code=MissingInputs.code, message=str(exc))
     if isinstance(exc, StageFailure):
         return JobError(code=exc.code, message=str(exc), stage=exc.stage)
     if isinstance(exc, ValueError):

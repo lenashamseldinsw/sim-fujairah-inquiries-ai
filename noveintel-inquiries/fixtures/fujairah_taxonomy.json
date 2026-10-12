@@ -1,0 +1,304 @@
+{
+ "id": "fujairah_police_v1",
+ "version": "v1",
+ "other_service": "خدمات عامة",
+ "edge_cases": [
+  "A contested traffic fine is a complaint about a fine, even when the customer also asks to pay or update data.",
+  "When the resolution confirms the fine does not belong to the emirate, the case is a suspected erroneous fine.",
+  "Explaining a procedure or sending a link is an inquiry; renewing, issuing or updating on the customer's record is a service request."
+ ],
+ "main_services": [
+  {
+   "name_ar": "المرور والترخيص",
+   "name_en": "Traffic & licensing",
+   "guidance": "Traffic fines, vehicle and driving licences, renewals, deliveries of documents.",
+   "signals": [
+    "مخالفة",
+    "مخالفات",
+    "رخصة",
+    "ترخيص",
+    "مركبة",
+    "سيارة",
+    "ملكية",
+    "fine",
+    "vehicle",
+    "licence",
+    "license"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "اعتراض على مخالفة مرورية",
+     "name_en": "Contesting a traffic fine",
+     "signals": [
+      "اعتراض",
+      "الغاء المخالفة",
+      "إلغاء المخالفة"
+     ]
+    },
+    {
+     "name_ar": "شكوى عن مخالفة مشكوك فيها",
+     "name_en": "Suspected erroneous fine",
+     "signals": [
+      "لم اكن",
+      "ليست سيارتي",
+      "مخالفة خاطئة"
+     ]
+    },
+    {
+     "name_ar": "طلب تجديد رخصة أو ملكية",
+     "name_en": "Licence or registration renewal",
+     "signals": [
+      "تجديد"
+     ]
+    },
+    {
+     "name_ar": "طلب سداد مخالفة",
+     "name_en": "Fine payment",
+     "signals": [
+      "سداد",
+      "دفع المخالفة"
+     ]
+    },
+    {
+     "name_ar": "استفسار عن الرخص والمركبات",
+     "name_en": "Licence and vehicle inquiry",
+     "signals": [
+      "استفسار",
+      "كيف"
+     ]
+    },
+    {
+     "name_ar": "طلب توصيل أو استلام",
+     "name_en": "Document delivery or collection",
+     "signals": [
+      "توصيل",
+      "استلام"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "البلاغات الأمنية",
+   "name_en": "Security reports",
+   "guidance": "Filing or following a security or criminal report.",
+   "signals": [
+    "بلاغ",
+    "جنائي",
+    "سرقة",
+    "احتيال",
+    "report",
+    "police"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "تقديم بلاغ أمني أو مروري",
+     "name_en": "Filing a security or traffic report",
+     "signals": [
+      "تقديم بلاغ"
+     ]
+    },
+    {
+     "name_ar": "طلب فتح ملف أو بلاغ",
+     "name_en": "Opening a case file",
+     "signals": [
+      "فتح بلاغ",
+      "فتح ملف"
+     ]
+    },
+    {
+     "name_ar": "استفسار عن البلاغات الأمنية",
+     "name_en": "Security report inquiry",
+     "signals": [
+      "استفسار"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "الأسلحة والتصاريح",
+   "name_en": "Weapons & permits",
+   "guidance": "Weapon licences and special permits.",
+   "signals": [
+    "سلاح",
+    "أسلحة",
+    "تصريح",
+    "weapon",
+    "permit"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "طلب تصريح سلاح أو ترخيص",
+     "name_en": "Weapon permit or licence",
+     "signals": [
+      "سلاح"
+     ]
+    },
+    {
+     "name_ar": "طلب تصريح خاص",
+     "name_en": "Special permit",
+     "signals": [
+      "تصريح خاص"
+     ]
+    },
+    {
+     "name_ar": "استفسار عن الأسلحة والتراخيص",
+     "name_en": "Weapons licensing inquiry",
+     "signals": [
+      "استفسار"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "الشهادات والوثائق",
+   "name_en": "Certificates & documents",
+   "guidance": "Good-conduct and other certificates, documents not received.",
+   "signals": [
+    "شهادة",
+    "حسن سيرة",
+    "وثيقة",
+    "pcc",
+    "certificate"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "طلب إصدار شهادة أو وثيقة",
+     "name_en": "Certificate or document issuance",
+     "signals": [
+      "اصدار",
+      "إصدار"
+     ]
+    },
+    {
+     "name_ar": "شكوى عن عدم استلام الخدمة",
+     "name_en": "Service not received",
+     "signals": [
+      "لم استلم",
+      "لم يصل",
+      "not received"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "الأنظمة والقنوات الرقمية",
+   "name_en": "Systems & digital channels",
+   "guidance": "App or website errors, payments failing, data updates on the system.",
+   "signals": [
+    "تطبيق",
+    "الموقع",
+    "النظام",
+    "خطأ",
+    "app",
+    "system",
+    "error",
+    "payment"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "شكوى على خطأ تقني أو في النظام",
+     "name_en": "Technical or system error",
+     "signals": [
+      "خطأ",
+      "عطل",
+      "error"
+     ]
+    },
+    {
+     "name_ar": "استفسار تقني",
+     "name_en": "Technical inquiry",
+     "signals": [
+      "كيف"
+     ]
+    },
+    {
+     "name_ar": "طلب تعديل أو تحديث بيانات",
+     "name_en": "Data amendment or update",
+     "signals": [
+      "تحديث",
+      "تعديل",
+      "update"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "خدمة المتعاملين والمتابعة",
+   "name_en": "Customer service & follow-up",
+   "guidance": "Following up a request, lack of response, delays, general complaints and thanks.",
+   "signals": [
+    "متابعة",
+    "تأخر",
+    "لم يتم الرد",
+    "شكوى",
+    "شكرا"
+   ],
+   "sub_classifications": [
+    {
+     "name_ar": "متابعة طلب مقدم",
+     "name_en": "Follow-up on a submitted request",
+     "signals": [
+      "متابعة"
+     ]
+    },
+    {
+     "name_ar": "شكوى على عدم الرد",
+     "name_en": "No response",
+     "signals": [
+      "لم يتم الرد",
+      "لا يوجد رد"
+     ]
+    },
+    {
+     "name_ar": "شكوى على تأخر المعالجة",
+     "name_en": "Processing delay",
+     "signals": [
+      "تأخر",
+      "تاخر"
+     ]
+    },
+    {
+     "name_ar": "شكوى عامة",
+     "name_en": "General complaint",
+     "signals": [
+      "شكوى"
+     ]
+    },
+    {
+     "name_ar": "شكر وتقدير عام",
+     "name_en": "General thanks",
+     "signals": [
+      "شكرا",
+      "شكراً"
+     ]
+    }
+   ]
+  },
+  {
+   "name_ar": "خدمات عامة",
+   "name_en": "General services",
+   "guidance": "Fits no family above.",
+   "signals": [],
+   "sub_classifications": [
+    {
+     "name_ar": "استفسار عام",
+     "name_en": "General inquiry",
+     "signals": []
+    },
+    {
+     "name_ar": "استفسار عن الإجراءات والمتطلبات",
+     "name_en": "Procedures and requirements inquiry",
+     "signals": [
+      "متطلبات",
+      "إجراءات"
+     ]
+    },
+    {
+     "name_ar": "طلب خدمة عام",
+     "name_en": "General service request",
+     "signals": []
+    }
+   ]
+  }
+ ]
+}

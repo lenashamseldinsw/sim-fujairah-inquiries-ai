@@ -1,80 +1,72 @@
 """
 Shared fixtures.
 
-**This is the only file allowed to reach outside the service.** The porting guide's
-rule: the new service must not import from the Streamlit application, and only the
-parity tests may break that — from here, where it is visible. ``legacy_root`` is what
-does it, and every other module in this package imports noveintel_inquiries and nothing else.
+The service is self-contained: no test reaches outside this project. Model calls are
+answered by ``tests.fakes.FakeGateway``, so the suite needs no network and no key.
 """
 from __future__ import annotations
 
-import sys
+import gzip
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from noveintel_inquiries.api.models import EntityInfo, InquiryRecord, GenerateInquiriesReportRequest
+from noveintel_inquiries.api.models import EntityInfo, GenerateInquiriesReportRequest
 
-# The repository the service was ported out of. Two levels up from tests/.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-LEGACY_FLOW = REPO_ROOT / "real" / "inquiries-flow"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+PROJECT_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
-
-@pytest.fixture(scope="session")
-def legacy_root() -> Path:
-    """Put the legacy application on the path, for parity tests only.
-
-    Skips rather than fails when the checkout is not there: a deployed service has no
-    ``real/`` directory, and a parity test that cannot find its reference has nothing
-    to say — it is not a failure of the code under test.
-    """
-    if not LEGACY_FLOW.is_dir():
-        pytest.skip(f"The legacy flow is not in this checkout ({LEGACY_FLOW}).")
-    for path in (str(REPO_ROOT), str(LEGACY_FLOW)):
-        if path not in sys.path:
-            sys.path.insert(0, path)
-    return LEGACY_FLOW
+SETTINGS: dict[str, Any] = {
+    "timeliness_target_working_days": 2,
+    "timeliness_framework": "entity_process_kpi",
+    "case_type_scope": "inquiries_and_service_requests",
+}
 
 
 @pytest.fixture
 def entity() -> EntityInfo:
     """A tenant identity with no logo — the minimum a request must carry."""
-    return EntityInfo(name_ar="شرطة الفجيرة", name_en="Fujairah Police")
+    return EntityInfo(name_ar="صندوق أبوظبي للتقاعد", name_en="Abu Dhabi Pension Fund")
 
 
 @pytest.fixture
 def record_dicts() -> list[dict[str, Any]]:
-    """A small, valid payload in the snake_case form."""
+    """A small payload keyed by the universal column names."""
     return [
         {
-            "case_number": "1001",
-            "case_details": "استفسار عن تجديد رخصة القيادة",
-            "contact_type": "استفسار",
-            "resolution": "تم توجيه المتعامل إلى الخدمة الذاتية",
-            "date_opened": "2025-01-15",
-            "date_closed": "2025-01-16",
-            "service_channel": "هاتف",
-            "main_service": "تجديد رخصة القيادة",
-            "general_administration": "الإدارة العامة للمرور",
+            "case_id": "260630-7987523",
+            "opened_datetime": "2026-06-30T23:37:48",
+            "case_type": "Information - معلومات",
+            "channel": "Phone",
+            "description": "كيف يمكنني ضم مدة خدمة سابقة؟",
+            "resolution_text": "من خلال هذه الخدمة يمكن للمؤمن عليه تقديم طلب ضم مدة خدمته السابقة https://www.tamm.abudhabi/x",
+            "sla_status": "🟢 Green",
+            "status": "Closed",
+            "crm_service": "Add Previous Service Period-ضم مدة خدمة سابقة",
         },
         {
-            "case_number": "1002",
-            "case_details": "شكوى من تأخر معالجة الطلب",
-            "contact_type": "شكوى",
-            "resolution": "تمت المعالجة والاعتذار للمتعامل",
-            "date_opened": "2025-02-20",
-            "date_closed": "2025-02-28",
-            "service_channel": "بريد إلكتروني",
-            "main_service": "سداد مخالفة",
+            "case_id": "260630-7987318",
+            "opened_datetime": "2026-05-12T10:00:00",
+            "case_type": "Request for Service - طلب الخدمة",
+            "channel": "Live Chat",
+            "description": "أود الحصول على شهادة مكافأة نهاية الخدمة مع اسم البنك",
+            "resolution_text": "تم إصدار الشهادة المطلوبة وإرسالها",
+            "sla_status": "🟡 Amber",
+            "status": "Closed",
+            "crm_service": "Gratuity Calculation - آلية إحتساب مكافأة نهاية الخدمة",
         },
         {
-            "case_number": "1003",
-            "case_details": "طلب إصدار شهادة حسن سيرة وسلوك",
-            "contact_type": "طلب",
-            "resolution": "تم إصدار الشهادة",
-            "date_opened": "2025-03-02",
-            "service_channel": "خدمة ذاتية",
+            "case_id": "260410-1000001",
+            "opened_datetime": "2026-04-10T09:00:00",
+            "case_type": "Information - معلومات",
+            "channel": "Self Service",
+            "description": "متى موعد صرف المعاش التقاعدي لهذا الشهر",
+            "resolution_text": "نفيدكم بأن موعد صرف المعاش التقاعدي في الأسبوع الأخير من الشهر",
+            "sla_status": "🔴 Red",
+            "status": "Closed",
+            "crm_service": "Pension Disbursement - صرف المعاشات التقاعدية",
         },
     ]
 
@@ -84,14 +76,35 @@ def request_body(record_dicts, entity) -> dict[str, Any]:
     """A ready-to-POST body."""
     return {
         "records": record_dicts,
+        "settings": dict(SETTINGS),
+        "reference_lists": {"taxonomy": "adpf_codebook_v1"},
         "entity": entity.model_dump(exclude_none=True),
         "options": {"include_english": False},
     }
 
 
 @pytest.fixture
-def analysis_request(record_dicts, entity) -> GenerateInquiriesReportRequest:
-    """The same payload as a validated request model."""
-    return GenerateInquiriesReportRequest(
-        records=[InquiryRecord(**row) for row in record_dicts], entity=entity
-    )
+def analysis_request(request_body) -> GenerateInquiriesReportRequest:
+    return GenerateInquiriesReportRequest.model_validate(request_body)
+
+
+@pytest.fixture
+def gateway(monkeypatch):
+    """Every Core42 call answered locally."""
+    from .fakes import install
+
+    return install(monkeypatch)
+
+
+@pytest.fixture(scope="session")
+def adpf_labelled() -> list[dict[str, Any]]:
+    """The ADPF Q2 2026 labelled master, mapped to the universal columns.
+
+    The labels, timestamps, channels, SLA colours and service tags of all 10,630 cases;
+    no free text and no owner, which the engine tests do not read.
+    """
+    path = FIXTURES / "adpf_q2_2026_labels.json.gz"
+    if not path.is_file():
+        pytest.skip("The ADPF labelled master fixture is not in this checkout.")
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        return json.load(fh)

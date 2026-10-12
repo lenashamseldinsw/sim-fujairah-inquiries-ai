@@ -1,13 +1,13 @@
 """
 The HTTP contract, driven through ``TestClient`` with the job runner stubbed.
 
-Everything but the six stages is real: the app, the error envelope, the models, the
+Everything but the run is real: the app, the error envelope, the models, the
 job store writing to a temporary directory. What is replaced is the *run* — a genuine
 one is minutes of model calls, and none of the promises tested here depend on what the
 model says.
 
 The failure modes are pinned deliberately (porting guide §7): a 422 for a bad body, a
-422 for a missing column folded into one error, a 401 when a key is configured, a 404
+422 naming every missing required input, a 401 when a key is configured, a 404
 for an unknown job, and a failed job reported inside a 200 rather than as an HTTP
 error.
 """
@@ -120,12 +120,17 @@ class TestValidateRoute:
         client.post("/v1/inquiries/validate", json=request_body)
         assert client.runner.submitted == []
 
-    def test_records_without_dates_still_validate(self, client, request_body):
-        for record in request_body["records"]:
-            record.pop("date_opened", None)
+    def test_it_returns_the_parse_log(self, client, request_body):
         body = client.post("/v1/inquiries/validate", json=request_body).json()
-        assert body["period"] is None
-        assert "date" in body["period_error"]
+        assert body["parse_log"]["in_scope_total"] == len(request_body["records"])
+        assert "case_id" in body["parse_log"]["columns_mapped"]
+
+    def test_unreadable_dates_are_refused_up_front(self, client, request_body):
+        for record in request_body["records"]:
+            record["opened_datetime"] = "not a date"
+        response = client.post("/v1/inquiries/validate", json=request_body)
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "unprocessable_records"
 
 
 class TestCreateRoute:
@@ -147,19 +152,36 @@ class TestCreateRoute:
         second = client.post("/v1/inquiries", json=request_body).json()["job_id"]
         assert first != second
 
-    def test_a_missing_required_column_is_folded_into_one_error(
-        self, client, request_body
-    ):
-        """A hundred thousand rows with no resolution column must not produce a
-        hundred thousand identical errors."""
+    def test_a_missing_required_column_is_named(self, client, request_body):
         for record in request_body["records"]:
-            record.pop("resolution")
+            record.pop("resolution_text")
         response = client.post("/v1/inquiries", json=request_body)
         assert response.status_code == 422
         error = response.json()["error"]
         assert error["code"] == "missing_required_columns"
-        assert error["detail"]["columns"] == ["resolution"]
-        assert error["detail"]["records_total"] == len(request_body["records"])
+        assert error["message"].startswith("The following input field(s) were missing or unmapped:")
+        assert [f["field"] for f in error["detail"]["fields"]] == ["resolution_text"]
+        assert error["detail"]["fields"][0]["id"] == "U3"
+        assert client.runner.submitted == []
+
+    def test_missing_settings_and_taxonomy_are_named_together(self, client, request_body):
+        request_body.pop("settings")
+        request_body.pop("reference_lists")
+        error = client.post("/v1/inquiries", json=request_body).json()["error"]
+        assert error["code"] == "missing_required_columns"
+        assert [f["id"] for f in error["detail"]["fields"]] == ["X2", "X3", "X4", "OCL"]
+
+    def test_validate_names_missing_inputs_the_same_way(self, client, request_body):
+        for record in request_body["records"]:
+            record.pop("opened_datetime")
+        error = client.post("/v1/inquiries/validate", json=request_body).json()["error"]
+        assert error["code"] == "missing_required_columns" and "opened_datetime" in error["message"]
+
+    def test_a_job_is_not_created_for_an_unreadable_period(self, client, request_body):
+        for record in request_body["records"]:
+            record["opened_datetime"] = "n/a date"
+        response = client.post("/v1/inquiries", json=request_body)
+        assert response.status_code == 400 and client.runner.submitted == []
 
     def test_a_validation_error_never_echoes_the_record(self, client, request_body):
         """A record is customer data. The offending row must not come back.
@@ -168,17 +190,17 @@ class TestCreateRoute:
         cannot pass or fail on wording that happens to appear in the error message.
         """
         secret = "784-1990-1234567-1"
-        request_body["records"][0]["case_number"] = {"id": secret}
+        request_body["records"][0]["case_id"] = {"id": secret}
         response = client.post("/v1/inquiries", json=request_body)
         assert response.status_code == 422
         assert secret not in response.text
         # The field is still named, so the caller can find what to fix.
-        assert "case_number" in response.text
+        assert "case_id" in response.text
 
     def test_a_coercion_failure_is_422_not_500(self, client, request_body):
         """A custom validator's error carries a non-serialisable exception in `ctx`;
         left in the response it renders as a 500 instead of the 422 it is."""
-        request_body["records"][0]["case_details"] = ["a", "list"]
+        request_body["records"][0]["description"] = ["a", "list"]
         response = client.post("/v1/inquiries", json=request_body)
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_request"
@@ -245,13 +267,13 @@ class TestPolling:
         to the run, not to the request asking about it."""
         client.runner.outcome = JobStatus.FAILED
         client.runner.error = JobError(
-            code="stage_failed", message="Stage 5 found no gaps.", stage="stage5"
+            code="stage_failed", message="narratives failed.", stage="narratives"
         )
         job_id = client.post("/v1/inquiries", json=request_body).json()["job_id"]
         body = poll(client, job_id)
         assert body["status"] == "failed"
         assert body["error"]["code"] == "stage_failed"
-        assert body["error"]["stage"] == "stage5"
+        assert body["error"]["stage"] == "narratives"
         assert body["result"] is None
 
 

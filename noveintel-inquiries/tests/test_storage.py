@@ -23,7 +23,7 @@ def period() -> Period:
 class TestKeys:
     def test_layout_is_widest_first(self, entity, period):
         key = build_key(entity, period, "abc123", "report_ar.docx")
-        assert key == "fujairah-police/2025-01-01/abc123/report_ar.docx"
+        assert key == "abu-dhabi-pension-fund/2025-01-01/abc123/report_ar.docx"
 
     def test_the_period_start_not_today(self, entity, period):
         """Re-running last quarter's analysis tomorrow still files under last quarter."""
