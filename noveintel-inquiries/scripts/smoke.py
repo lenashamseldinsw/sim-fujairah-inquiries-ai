@@ -144,7 +144,7 @@ def report(state: dict) -> int:
     print(f"  charts           {[c['key'] for c in bundle['charts']]}")
     print(f"  report data      {sorted(bundle['report'])}")
     quality = bundle["classification"]
-    print(f"  classification   {quality['provenance']}  review queue {quality['review_queue']['size']}")
+    print(f"  classification   {quality['provenance']}")
 
     print("  artefacts")
     for language, ref in sorted(documents.get("report", {}).items()):

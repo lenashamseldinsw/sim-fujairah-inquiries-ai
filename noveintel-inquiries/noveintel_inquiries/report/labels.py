@@ -7,25 +7,16 @@ reports cannot drift, and so a wording ruling is a one-line change.
 """
 from __future__ import annotations
 
-from ..api.models.enums import ReportSection as RS
+from ..api.models.enums import SECTION_TITLES as _SECTION_TITLES
 
-__all__ = ["SECTION_TITLES", "T", "CATEGORY", "GAP_TYPE", "GUIDEBOOK_STATUS", "PRIORITY",
+__all__ = ["SECTION_TITLES", "SECTION_NUMBER", "T", "CATEGORY", "GAP_TYPE", "GUIDEBOOK_STATUS", "PRIORITY",
            "HORIZON", "EFFORT", "FAQ_STATUS", "t"]
 
-SECTION_TITLES: dict[RS, dict[str, str]] = {
-    RS.COVER: {"ar": "الغلاف والمؤشرات", "en": "Cover & KPI cards"},
-    RS.EXECUTIVE_SUMMARY: {"ar": "أولاً: الملخص التنفيذي", "en": "1. Executive Summary"},
-    RS.METHODOLOGY: {"ar": "ثانياً: المنهجية", "en": "2. Methodology"},
-    RS.CLASSIFICATION_MAP: {"ar": "ثالثاً: خريطة تصنيف الطلبات", "en": "3. Classification Map"},
-    RS.CUSTOMER_JOURNEY: {"ar": "رابعاً: التحديات في رحلة المتعامل", "en": "4. Customer Journey Frictions"},
-    RS.DIGITAL_GAPS: {"ar": "خامساً: تحليل الفجوات الرقمية", "en": "5. Digital Gap Analysis"},
-    RS.DIGITAL_TRANSFORMATION: {"ar": "سادساً: خطة التحويل الرقمي", "en": "6. Digital Transformation Plan"},
-    RS.AI_USE_CASES: {"ar": "سابعاً: حالات الاستخدام بالذكاء الاصطناعي", "en": "7. Artificial Intelligence Use Cases"},
-    RS.IMPROVEMENT_ROADMAP: {"ar": "ثامناً: خارطة الطريق التحسينية", "en": "8. Improvement Roadmap"},
-    RS.CONCLUSION: {"ar": "تاسعاً: الخلاصة", "en": "9. Conclusion"},
-    RS.ROOT_CAUSES: {"ar": "عاشراً: الأسباب الجذرية والحزم الموضوعية", "en": "10. Root Causes & Thematic Bundles"},
-    RS.SERVICE_FOCUS: {"ar": "حادي عشر: تركيز الخدمات ذات الأولوية", "en": "11. Priority Service Focus"},
-}
+# The section titles are part of the contract (a request names sections by them).
+SECTION_TITLES = _SECTION_TITLES
+
+# "القسم 01 — …" / "Section 01 — …", numbered among the shown numbered sections.
+SECTION_NUMBER = {"ar": "القسم {n:02d} — {title}", "en": "Section {n:02d} — {title}"}
 
 # Every other fixed string, keyed for lookup with ``t(key, lang)``.
 T: dict[str, dict[str, str]] = {
@@ -122,6 +113,32 @@ T: dict[str, dict[str, str]] = {
     "finding": {"ar": "النتيجة", "en": "Finding"},
     # Subsection titles
     "s1_findings": {"ar": "أبرز المؤشرات", "en": "Headline indicators"},
+    # The sample output's subsection titles.
+    "comparison_with": {"ar": "المقارنة مع {period}", "en": "Comparison with {period}"},
+    "st_monthly": {"ar": "التوزيع الشهري للحالات", "en": "Monthly distribution of cases"},
+    "st_services": {"ar": "التوزيع حسب الخدمة الرئيسية", "en": "Distribution by main service"},
+    "st_tx": {"ar": "الاستفسارات مقابل المعاملات", "en": "Inquiries against transactions"},
+    "st_channels": {"ar": "توزيع القنوات", "en": "Channel distribution"},
+    "st_recorded_true": {"ar": "التصنيف المسجل في النظام مقابل الموضوع الحقيقي", "en": "Recorded classification against the true subject"},
+    "st_timeliness": {"ar": "الالتزام بزمن الاستجابة", "en": "Response-time compliance"},
+    "rc_matrix": {"ar": "ارتباط الحزم بالخدمات الرئيسية", "en": "Bundles by main service"},
+    "rc_per_bundle": {"ar": "الحزم بالتفصيل", "en": "Bundles in detail"},
+    "rc_top": {"ar": "الأسباب الجذرية الأكثر تكراراً", "en": "Most frequent root causes"},
+    "rc_timeliness": {"ar": "الالتزام بزمن الاستجابة حسب الحزمة", "en": "Response-time compliance by bundle"},
+    "dc_howto": {"ar": "خريطة أسئلة «الكيفية» حسب الخدمة", "en": "How-to questions by service"},
+    "dc_priority_faqs": {"ar": "الأسئلة الشائعة ذات الأولوية", "en": "Priority frequently asked questions"},
+    "rm_immediate": {"ar": "الأفق الفوري — أول 30 يوماً", "en": "Immediate horizon — the first 30 days"},
+    "rm_short": {"ar": "الأفق القصير — من شهر إلى ثلاثة أشهر", "en": "Short horizon — one to three months"},
+    "rm_medium": {"ar": "الأفق المتوسط — من ثلاثة إلى ستة أشهر", "en": "Medium horizon — three to six months"},
+    "cn_findings": {"ar": "أبرز النتائج", "en": "Key findings"},
+    "cn_recommendations": {"ar": "التوصيات", "en": "Recommendations"},
+    "ap_methodology": {"ar": "منهجية التحليل", "en": "Analysis methodology"},
+    "ap_events": {"ar": "رصد نوعي", "en": "Qualitative observations"},
+    "ap_frictions": {"ar": "نقاط الاحتكاك في رحلة المتعامل", "en": "Friction points in the customer journey"},
+    "ap_sources": {"ar": "المصادر المُحلَّلة", "en": "Sources analysed"},
+    "ap_method": {"ar": "منهجية التصنيف", "en": "Classification method"},
+    "ap_fields": {"ar": "الحقول المُحلَّلة", "en": "Fields analysed"},
+    "ap_quality": {"ar": "جودة التصنيف", "en": "Classification quality"},
     "s1_comparison": {"ar": "المقارنة مع الفترة السابقة", "en": "Comparison with the previous period"},
     "s2_sources": {"ar": "2.1 المصادر المُحلَّلة", "en": "2.1 Sources analysed"},
     "s2_method": {"ar": "2.2 منهجية التصنيف", "en": "2.2 Classification method"},

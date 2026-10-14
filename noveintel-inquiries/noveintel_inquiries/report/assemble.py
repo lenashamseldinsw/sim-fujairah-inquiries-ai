@@ -1,5 +1,5 @@
 """
-Assembling the report — S0–S11 as data, in one language.
+Assembling the report — the sample output's sections as data, in one language.
 
 Every table and chart here is drawn from the engine output; every paragraph is a
 narrative field; every heading and header is static text from ``labels``. Nothing is
@@ -14,14 +14,14 @@ from __future__ import annotations
 from typing import Any
 
 from ..api.models.entity import TIMELINESS_COLORS
-from ..api.models.enums import SECTION_IDS, ReportSection as RS
+from ..api.models.enums import NUMBERED_SECTIONS, ReportSection as RS
 from ..api.models.narratives import ReportNarratives
 from ..engine.localize import Localizer
 from ..engine.wording import PROVENANCE, TIMELINESS_LABELS
-from .labels import (
-    CATEGORY, EFFORT, FAQ_STATUS, GAP_TYPE, GUIDEBOOK_STATUS, HORIZON, PRIORITY,
-    SECTION_TITLES, t,
-)
+from .labels import CATEGORY, SECTION_NUMBER, SECTION_TITLES, t
+
+# Used only by the retired sections' code, kept below as comments:
+# from .labels import EFFORT, FAQ_STATUS, GAP_TYPE, GUIDEBOOK_STATUS, HORIZON, PRIORITY
 
 __all__ = ["assemble_report", "fmt_int", "fmt_pct", "categorical_palette"]
 
@@ -139,13 +139,11 @@ def assemble_report(
     b = _Builder(lang, loc, primary, secondary)
     m = metrics
     n = narratives.report
-    s = narratives.sections
+    # narratives.sections held the retired sections' prose; nothing prints it now.
     ar = lang == "ar"
     E = lambda labels: [en_loc.name(x) for x in labels]  # noqa: E731
     title = lambda key: SECTION_TITLES[key][lang]  # noqa: E731
-    sid = lambda key: SECTION_IDS[key]  # noqa: E731
     kpi = m["KPI"]
-    sections: list[dict] = []
 
     # ── S0 cover ─────────────────────────────────────────────────────────────
     tiles = [
@@ -172,7 +170,7 @@ def assemble_report(
     if kpi.get("bundles"):
         extras.append((b.t("kpi_bundles"), fmt_int(kpi["bundles"]), None))
     cover = {
-        "id": "S0",
+        "id": "cover",
         "key": RS.COVER.value,
         "title": b.t("doc_title"),
         "entity": entity.name(lang),
@@ -185,23 +183,30 @@ def assemble_report(
         "extra_tiles": [{"label": a, "value": v, "output_id": o} for a, v, o in extras],
     }
 
-    # ── S1 executive summary ─────────────────────────────────────────────────
-    kpi_rows = [[tile["label"], tile["value"]] for tile in cover["tiles"] + cover["extra_tiles"]]
-    s1_subs = [b.section(None, "S1.1", b.t("s1_findings"), tables=[b.table(["indicator", "value"], kpi_rows)])]
+
+    # Each kept section is built into ``built``; the order, the filter by the tenant's list
+    # and the numbering of Sections 01–05 are applied once, at the end.
+    built: dict[RS, dict] = {}
+
+    # ── Executive summary ────────────────────────────────────────────────────
     comp = m.get("COMPARISON")
+    es_subs: list[dict] = []
+    # Retired: a headline-indicator table here repeated the cover's; the sample has it on the cover only.
+    # kpi_rows = [[tile["label"], tile["value"]] for tile in cover["tiles"] + cover["extra_tiles"]]
+    # es_subs.append(b.section(None, "", b.t("s1_findings"), tables=[b.table(["indicator", "value"], kpi_rows)]))
     if comp and n.comparative_analysis:
         rows = [
             [b.t("kpi_total"), fmt_int(comp["total_cases"]["previous"]), fmt_int(comp["total_cases"]["current"])],
             [b.t("kpi_within"), fmt_pct(comp["within_deadline_pct"]["previous"]), fmt_pct(comp["within_deadline_pct"]["current"])],
             [b.t("kpi_digital"), fmt_pct(comp["digital_share_pct"]["previous"]), fmt_pct(comp["digital_share_pct"]["current"])],
         ]
-        s1_subs.append(b.section(None, "S1.2", b.t("s1_comparison"), content=n.comparative_analysis,
-                                 tables=[b.table(["indicator", "previous", "current"], rows)]))
-    sections.append(b.section(RS.EXECUTIVE_SUMMARY.value, sid(RS.EXECUTIVE_SUMMARY), title(RS.EXECUTIVE_SUMMARY),
-                              content="\n".join(x for x in (n.intro_statement, n.executive_summary) if x),
-                              subsections=s1_subs))
+        es_subs.append(b.section(None, "", b.t("comparison_with").format(period=comp["label"] if ar else comp["label_en"]),
+                                 content=n.comparative_analysis, tables=[b.table(["indicator", "previous", "current"], rows)]))
+    built[RS.EXECUTIVE_SUMMARY] = b.section(RS.EXECUTIVE_SUMMARY.value, "", title(RS.EXECUTIVE_SUMMARY),
+                                            content="\n".join(x for x in (n.intro_statement, n.executive_summary) if x),
+                                            subsections=es_subs)
 
-    # ── S2 methodology (generated from run data — R1) ────────────────────────
+    # ── Appendix: methodology (generated from run data — R1) ─────────────────
     log = m["PARSE_LOG"]
     source_rows: list[list[str]] = []
     crm = settings.source_system or ("نظام إدارة علاقات المتعاملين" if ar else "CRM case export")
@@ -266,11 +271,11 @@ def assemble_report(
         parse_rows.append([(f"خارج نطاق أنواع الحالات: {kind}" if ar else f"Outside the case-type scope: {kind}"), fmt_int(count)])
     parse_rows.append(["الحالات ضمن النطاق" if ar else "Cases in scope", fmt_int(log["in_scope_total"])])
     parse_rows.append(["أسئلة شائعة مقترحة من هذا التحليل" if ar else "FAQs proposed by this analysis", fmt_int(validated)])
-    s21 = b.section(None, "S2.1", b.t("s2_sources"), tables=[
+    s21 = b.section(None, "", b.t("ap_sources"), tables=[
         b.table(["source", "nature", "size", "period"], source_rows),
         b.table(["item", "count"], parse_rows),
     ])
-    s22 = b.section(None, "S2.2", b.t("s2_method"), content=_method_text(lang, method, settings))
+    s22 = b.section(None, "", b.t("ap_method"), content=_method_text(lang, method, settings))
     field_rows = []
     from ..api.models.columns import COLUMN_BY_NAME
 
@@ -302,13 +307,13 @@ def assemble_report(
             f"حُذفت {len(log['system_columns_dropped'])} حقول نظام." if ar else
             f"{len(log['system_columns_dropped'])} system column(s) were dropped."
         )
-    s23 = b.section(None, "S2.3", b.t("s2_fields"), tables=[b.table(["field", "role"], field_rows)],
+    s23 = b.section(None, "", b.t("ap_fields"), tables=[b.table(["field", "role"], field_rows)],
                     notes=excluded_note + [x[lang] for x in m.get("DATA_NOTES", [])])
     cq = m["CLASSIFICATION_QUALITY"]
     prov_labels = list(cq["provenance"].keys())
     prov_en = E(prov_labels)
     s24 = b.section(
-        None, "S2.4", b.t("s2_quality"),
+        None, "", b.t("ap_quality"),
         content=_quality_line(lang, cq),
         tables=[b.table(["provenance", "cases", "share"], [
             [b.L(k), fmt_int(v), fmt_pct(p)] for (k, v), p in zip(cq["provenance"].items(), cq["provenance_pct"])
@@ -317,41 +322,25 @@ def assemble_report(
                         ("مصدر التصنيف", "Classification source"), prov_labels, prov_en,
                         [("الحالات", "Cases", list(cq["provenance"].values()))], b.palette[: len(prov_labels)])],
     )
-    s25 = b.section(None, "S2.5", b.t("s2_note"), content=n.methodology_note)
-    sections.append(b.section(RS.METHODOLOGY.value, sid(RS.METHODOLOGY), title(RS.METHODOLOGY),
-                              subsections=[s21, s22, s23, s24, s25]))
+    methodology = b.section(None, "", b.t("ap_methodology"), content=n.methodology_note,
+                            subsections=[s21, s22, s23, s24])
 
-    # ── S3 classification map ────────────────────────────────────────────────
-    s3: list[dict] = []
+
+    # ── Section 01: general statistics and indicator dashboard ───────────────
+    # The sample's order: monthly · main services · inquiries vs transactions · channels ·
+    # recorded vs true · timeliness. The Fujairah subsections it does not have (contact
+    # types and reclassification, sub-classes by type, out-of-scope detections, severity,
+    # departments, owner level) are retired below, commented out.
+    st: list[dict] = []
     mon = m["MONTHLY"]
     month_labels = mon["labels"] if ar else mon["labels_en"]
-    s3.append(b.section(
-        None, "S3.1", b.t("s3_overview"),
-        content="\n".join(x for x in (n.statistics_intro, n.monthly_narrative) if x),
-        bullets=n.event_narratives,
+    st.append(b.section(
+        None, "", b.t("st_monthly"), content=n.monthly_narrative,
         tables=[b.table(["month", "cases", "share", "change"], [
             [lab, fmt_int(v), fmt_pct(p), fmt_pct(d)] for lab, v, p, d in zip(month_labels, mon["values"], mon["pct"], mon["delta_pct"])
         ])] if mon["values"] else [],
         charts=[b.chart("monthly_bar", "O19", "column", ("التوزيع الشهري للحالات", "Monthly distribution of cases"),
                         mon["labels"], mon["labels_en"], [("الحالات", "Cases", mon["values"])], [primary])] if mon["values"] else [],
-    ))
-    at = m["ACTUAL_TYPE"]
-    rva = m["RECORDED_VS_ACTUAL"]
-    rec = m["RECLASSIFICATION"]
-    sample_rows = [[x["case_id"], b.L(x["recorded"]), b.L(x["actual"]), x["evidence"]] for x in rec["sample"]]
-    s3.append(b.section(
-        None, "S3.2", b.t("s3_types"),
-        content="\n".join(x for x in (s.contact_type_narrative, s.reclassification_narrative) if x),
-        tables=[b.table(["contact_type", "count", "share"], b.dist_rows(at))]
-        + ([b.table(["case_id", "recorded", "actual", "evidence"], sample_rows)] if sample_rows else []),
-        charts=[
-            b.chart("actual_type_mix", "O8", "doughnut", ("التوزيع الفعلي لأنواع التواصل", "Actual contact-type distribution"),
-                    at["labels"], E(at["labels"]), [("الحالات", "Cases", at["values"])], b.palette[: len(at["labels"])]),
-            b.chart("classification_mix", "O7", "column", ("التصنيف الأصلي مقابل الصحيح", "Recorded vs actual classification"),
-                    rva["categories"], E(rva["categories"]),
-                    [("التصنيف الأصلي", "Recorded", rva["recorded"]), ("التصنيف الصحيح", "Actual", rva["actual"])],
-                    [secondary, primary]),
-        ],
     ))
     ms, sc = m["MAIN_SERVICE"], m["SUB_CLASS"]
     svc_charts = [
@@ -364,49 +353,27 @@ def assemble_report(
         sv = m["SERVICE"]
         svc_charts.append(b.chart("service_distribution", "O9", "bar", ("توزيع الطلبات على الخدمات (الوسم المسجَّل)", "Cases by recorded service tag"),
                                   sv["labels"][:15], sv["labels_en"][:15], [("الحالات", "Cases", sv["values"][:15])], [primary]))
-    s3.append(b.section(
-        None, "S3.3", b.t("s3_services"),
+    st.append(b.section(
+        None, "", b.t("st_services"),
         content="\n".join(x for x in (n.main_service_narrative, n.sub_service_narrative) if x),
         tables=[b.table(["main_service", "cases", "share"], b.dist_rows(ms)),
                 b.table(["sub_classification", "cases", "share"], b.dist_rows(sc))],
         charts=svc_charts,
     ))
-    by_type = m.get("SUB_CLASS_BY_TYPE", {})
-    if by_type:
-        type_subs: list[dict] = []
-        top_subs: list[str] = []
-        for block in by_type.values():
-            for lab in block["labels"][:5]:
-                if lab not in top_subs:
-                    top_subs.append(lab)
-        top_subs = top_subs[:10]
-        series = [
-            (ctype, E([ctype])[0], [dict(zip(block["labels"], block["values"])).get(x, 0) for x in top_subs])
-            for ctype, block in by_type.items()
-        ]
-        for i, (ctype, block) in enumerate(by_type.items()):
-            type_subs.append(b.section(None, f"S3.4.{i + 1}", b.L(ctype),
-                                       tables=[b.table(["sub_classification", "cases", "share"], b.dist_rows(block)[:12])]))
-        s3.append(b.section(
-            None, "S3.4", b.t("s3_by_type"), subsections=type_subs,
-            charts=[b.chart("sub_class_by_type", "O13", "stacked_bar", ("التصنيفات الفرعية حسب نوع التواصل", "Sub-classifications by contact type"),
-                            top_subs, E(top_subs), series, b.palette[: len(series)])],
+    if m.get("INQ_PER_100_TX"):
+        tx = m["INQ_PER_100_TX"]
+        blocks = []
+        for key in ("by_main_service", "by_sub_service"):
+            blk = tx[key]
+            if blk["labels"]:
+                blocks.append(b.table(["main_service" if key == "by_main_service" else "sub_classification", "inquiries", "transactions", "per_100"],
+                                      [[b.L(x), fmt_int(i), fmt_int(tr), fmt_int(p)] for x, i, tr, p in zip(blk["labels"], blk["inquiries"], blk["transactions"], blk["per_100"])]))
+        sub = tx["by_sub_service"] if tx["by_sub_service"]["labels"] else tx["by_main_service"]
+        st.append(b.section(
+            None, "", b.t("st_tx"), content=n.transactions_ratio_narrative, tables=blocks,
+            charts=[b.chart("inq_per_100_bar", "O26", "bar", ("الاستفسارات لكل 100 معاملة", "Inquiries per 100 transactions"),
+                            sub["labels"][:12], E(sub["labels"][:12]), [("لكل 100 معاملة", "Per 100 transactions", sub["per_100"][:12])], [primary])],
         ))
-    rvt = m.get("RECORDED_VS_TRUE", {})
-    if rvt.get("available"):
-        tags = [x["tag"] for x in rvt["by_tag"]]
-        s3.append(b.section(
-            None, "S3.5", b.t("s3_recorded_true"), content=n.recorded_vs_true_narrative,
-            tables=[b.table(["recorded_tag", "cases", "match"], [[b.L(x["tag"]), fmt_int(x["cases"]), fmt_pct(x["match_pct"])] for x in rvt["least_matching"]])],
-            charts=[b.chart("recorded_vs_true_stacked", "O7", "stacked_bar",
-                            ("التصنيف المسجَّل في النظام مقابل الموضوع الحقيقي", "Recorded classification vs true subject"),
-                            tags, E(tags),
-                            [("مطابق", "Matches", [x["matches"] for x in rvt["by_tag"]]),
-                             ("قابل لإعادة التصنيف الذكي", "Eligible for smart re-classification", [x["cases"] - x["matches"] for x in rvt["by_tag"]])],
-                            [primary, TIMELINESS_COLORS["near"]])],
-        ))
-    elif n.recorded_vs_true_narrative:
-        s3.append(b.section(None, "S3.5", b.t("s3_recorded_true"), content=n.recorded_vs_true_narrative))
     ch = m.get("CHANNEL", {})
     if ch.get("labels"):
         ch_rows = [[b.L(lab), fmt_int(v), fmt_pct(p), b.t("yes") if d else b.t("no")]
@@ -420,8 +387,23 @@ def assemble_report(
                                      [("الفترة السابقة", "Previous period", [c["previous_pct"] or 0 for c in comp["channels"]]),
                                       ("الفترة الحالية", "This period", [c["current_pct"] or 0 for c in comp["channels"]])],
                                      [secondary, primary]))
-        s3.append(b.section(None, "S3.6", b.t("s3_channels"), content=n.channel_narrative,
+        st.append(b.section(None, "", b.t("st_channels"), content=n.channel_narrative,
                             tables=[b.table(["channel", "cases", "share", "digital"], ch_rows)], charts=ch_charts))
+    rvt = m.get("RECORDED_VS_TRUE", {})
+    if rvt.get("available"):
+        tags = [x["tag"] for x in rvt["by_tag"]]
+        st.append(b.section(
+            None, "", b.t("st_recorded_true"), content=n.recorded_vs_true_narrative,
+            tables=[b.table(["recorded_tag", "cases", "match"], [[b.L(x["tag"]), fmt_int(x["cases"]), fmt_pct(x["match_pct"])] for x in rvt["least_matching"]])],
+            charts=[b.chart("recorded_vs_true_stacked", "O7", "stacked_bar",
+                            ("التصنيف المسجَّل في النظام مقابل الموضوع الحقيقي", "Recorded classification vs true subject"),
+                            tags, E(tags),
+                            [("مطابق", "Matches", [x["matches"] for x in rvt["by_tag"]]),
+                             ("قابل لإعادة التصنيف الذكي", "Eligible for smart re-classification", [x["cases"] - x["matches"] for x in rvt["by_tag"]])],
+                            [primary, TIMELINESS_COLORS["near"]])],
+        ))
+    elif n.recorded_vs_true_narrative:
+        st.append(b.section(None, "", b.t("st_recorded_true"), content=n.recorded_vs_true_narrative))
     tl = m["TIMELINESS"]
     if tl.get("available"):
         keys = ["within", "near", "over", "unspecified"]
@@ -439,175 +421,374 @@ def assemble_report(
         if m.get("NEAR_OVER_BY_SERVICE"):
             no = m["NEAR_OVER_BY_SERVICE"]
             tables.append(b.table(["main_service", "near_over", "cases"], [[b.L(x), fmt_pct(p), fmt_int(c)] for x, p, c in zip(no["labels"], no["pct"], no["counts"])][:10]))
-        s3.append(b.section(
-            None, "S3.7", b.t("s3_timeliness"), content=n.timeliness_narrative, tables=tables,
+        st.append(b.section(
+            None, "", b.t("st_timeliness"), content=n.timeliness_narrative, tables=tables,
             charts=[b.chart("timeliness_donut", "O10", "pie", ("الالتزام بزمن الاستجابة", "Response-time compliance"),
                             [TIMELINESS_LABELS[k]["ar"] for k in keys], [TIMELINESS_LABELS[k]["en"] for k in keys],
                             [("الحالات", "Cases", [tl[k] for k in keys])], [TIMELINESS_COLORS[k] for k in keys])],
         ))
     else:
-        s3.append(b.section(None, "S3.7", b.t("s3_timeliness"), notes=[_omitted(lang, "sla_status")],
+        st.append(b.section(None, "", b.t("st_timeliness"), notes=[_omitted(lang, "sla_status")],
                             tables=[_fw_table(b, m, lang)] if m.get("FRAMEWORKS") else []))
-    if m.get("INQ_PER_100_TX"):
-        tx = m["INQ_PER_100_TX"]
-        blocks = []
-        for key in ("by_main_service", "by_sub_service"):
-            blk = tx[key]
-            if blk["labels"]:
-                blocks.append(b.table(["main_service" if key == "by_main_service" else "sub_classification", "inquiries", "transactions", "per_100"],
-                                      [[b.L(x), fmt_int(i), fmt_int(tr), fmt_int(p)] for x, i, tr, p in zip(blk["labels"], blk["inquiries"], blk["transactions"], blk["per_100"])]))
-        sub = tx["by_sub_service"] if tx["by_sub_service"]["labels"] else tx["by_main_service"]
-        s3.append(b.section(
-            None, "S3.8", b.t("s3_tx"), content=n.transactions_ratio_narrative, tables=blocks,
-            charts=[b.chart("inq_per_100_bar", "O26", "bar", ("الاستفسارات لكل 100 معاملة", "Inquiries per 100 transactions"),
-                            sub["labels"][:12], E(sub["labels"][:12]), [("لكل 100 معاملة", "Per 100 transactions", sub["per_100"][:12])], [primary])],
-        ))
-    oos = m["OUT_OF_SCOPE_DETECTED"]
-    if oos["total"]:
-        oos_rows = [[b.L(lbl), fmt_int(oos[k])] for k, lbl in (("complaint", "شكوى"), ("incident", "بلاغ"), ("compliment", "شكر وثناء")) if oos[k]]
-        s3.append(b.section(None, "S3.9", b.t("s3_oos"), content=s.out_of_scope_narrative,
-                            tables=[b.table(["contact_type", "cases"], oos_rows)]))
-    if m.get("SEVERITY"):
-        sv = m["SEVERITY"]
-        s3.append(b.section(None, "S3.10", b.t("s3_severity"),
-                            tables=[b.table(["severity", "cases", "share"], b.dist_rows(sv))],
-                            charts=[b.chart("severity_mix", "O11", "pie", ("شدة الطلب", "Severity"), sv["labels"], E(sv["labels"]),
-                                            [("الحالات", "Cases", sv["values"])], b.palette[: len(sv["labels"])])]))
-    if m.get("DEPARTMENT"):
-        dp = m["DEPARTMENT"]
-        s3.append(b.section(None, "S3.11", b.t("s3_departments"), content=s.department_narrative,
-                            tables=[b.table(["department", "cases", "share", "dominant_type"],
-                                            [[b.L(x), fmt_int(v), fmt_pct(p), b.L(dp["dominant_type"].get(x, ""))] for x, v, p in zip(dp["labels"], dp["values"], dp["pct"])][:15])],
-                            charts=[b.chart("department_distribution", "O14", "bar", ("التوزيع حسب الإدارات", "Distribution by department"),
-                                            dp["labels"][:12], E(dp["labels"][:12]), [("الحالات", "Cases", dp["values"][:12])], [primary])]))
-    if m.get("AGENT"):
-        s3.append(b.section(None, "S3.12", b.t("s3_agents"),
-                            notes=["عرض محايد غير تقييمي؛ تُستبعد قوائم الانتظار ولا يُرتَّب الأفراد." if ar else
-                                   "A neutral, non-evaluative view; queues are excluded and people are not ranked."],
-                            tables=[b.table(["owner", "cases", "share", "kpi_within"],
-                                            [[a["owner"], fmt_int(a["count"]), fmt_pct(a["pct"]), fmt_pct(a["within_deadline_pct"])] for a in m["AGENT"]])]))
-    sections.append(b.section(RS.CLASSIFICATION_MAP.value, sid(RS.CLASSIFICATION_MAP), title(RS.CLASSIFICATION_MAP), subsections=s3))
+    built[RS.STATISTICS] = b.section(RS.STATISTICS.value, "", title(RS.STATISTICS), content=n.statistics_intro, subsections=st)
 
-    # ── S4 journey ───────────────────────────────────────────────────────────
+    # ── Retired (BO, 2026-10-14): the Definition Sheet's S3 "classification map" in full.
+    #    Section 01 above re-uses its monthly, services, transactions, channels, recorded-vs-
+    #    true and timeliness parts; the rest — contact types and reclassification (S3.2),
+    #    sub-classes by type (S3.4), out-of-scope detections (S3.9), severity (S3.10),
+    #    departments (S3.11), owner level (S3.12) — is not in the sample output.
+    # # ── S3 classification map ────────────────────────────────────────────────
+    # s3: list[dict] = []
+    # mon = m["MONTHLY"]
+    # month_labels = mon["labels"] if ar else mon["labels_en"]
+    # s3.append(b.section(
+    #     None, "S3.1", b.t("s3_overview"),
+    #     content="\n".join(x for x in (n.statistics_intro, n.monthly_narrative) if x),
+    #     bullets=n.event_narratives,
+    #     tables=[b.table(["month", "cases", "share", "change"], [
+    #         [lab, fmt_int(v), fmt_pct(p), fmt_pct(d)] for lab, v, p, d in zip(month_labels, mon["values"], mon["pct"], mon["delta_pct"])
+    #     ])] if mon["values"] else [],
+    #     charts=[b.chart("monthly_bar", "O19", "column", ("التوزيع الشهري للحالات", "Monthly distribution of cases"),
+    #                     mon["labels"], mon["labels_en"], [("الحالات", "Cases", mon["values"])], [primary])] if mon["values"] else [],
+    # ))
+    # at = m["ACTUAL_TYPE"]
+    # rva = m["RECORDED_VS_ACTUAL"]
+    # rec = m["RECLASSIFICATION"]
+    # sample_rows = [[x["case_id"], b.L(x["recorded"]), b.L(x["actual"]), x["evidence"]] for x in rec["sample"]]
+    # s3.append(b.section(
+    #     None, "S3.2", b.t("s3_types"),
+    #     content="\n".join(x for x in (s.contact_type_narrative, s.reclassification_narrative) if x),
+    #     tables=[b.table(["contact_type", "count", "share"], b.dist_rows(at))]
+    #     + ([b.table(["case_id", "recorded", "actual", "evidence"], sample_rows)] if sample_rows else []),
+    #     charts=[
+    #         b.chart("actual_type_mix", "O8", "doughnut", ("التوزيع الفعلي لأنواع التواصل", "Actual contact-type distribution"),
+    #                 at["labels"], E(at["labels"]), [("الحالات", "Cases", at["values"])], b.palette[: len(at["labels"])]),
+    #         b.chart("classification_mix", "O7", "column", ("التصنيف الأصلي مقابل الصحيح", "Recorded vs actual classification"),
+    #                 rva["categories"], E(rva["categories"]),
+    #                 [("التصنيف الأصلي", "Recorded", rva["recorded"]), ("التصنيف الصحيح", "Actual", rva["actual"])],
+    #                 [secondary, primary]),
+    #     ],
+    # ))
+    # ms, sc = m["MAIN_SERVICE"], m["SUB_CLASS"]
+    # svc_charts = [
+    #     b.chart("main_service_bar", None, "bar", ("التوزيع حسب الخدمة الرئيسية", "Distribution by main service"),
+    #             ms["labels"], E(ms["labels"]), [("الحالات", "Cases", ms["values"])], [primary]),
+    #     b.chart("sub_service_bar", None, "bar", ("التوزيع حسب التصنيف الفرعي", "Distribution by sub-classification"),
+    #             sc["labels"][:15], E(sc["labels"][:15]), [("الحالات", "Cases", sc["values"][:15])], [secondary]),
+    # ]
+    # if m.get("SERVICE"):
+    #     sv = m["SERVICE"]
+    #     svc_charts.append(b.chart("service_distribution", "O9", "bar", ("توزيع الطلبات على الخدمات (الوسم المسجَّل)", "Cases by recorded service tag"),
+    #                               sv["labels"][:15], sv["labels_en"][:15], [("الحالات", "Cases", sv["values"][:15])], [primary]))
+    # s3.append(b.section(
+    #     None, "S3.3", b.t("s3_services"),
+    #     content="\n".join(x for x in (n.main_service_narrative, n.sub_service_narrative) if x),
+    #     tables=[b.table(["main_service", "cases", "share"], b.dist_rows(ms)),
+    #             b.table(["sub_classification", "cases", "share"], b.dist_rows(sc))],
+    #     charts=svc_charts,
+    # ))
+    # by_type = m.get("SUB_CLASS_BY_TYPE", {})
+    # if by_type:
+    #     type_subs: list[dict] = []
+    #     top_subs: list[str] = []
+    #     for block in by_type.values():
+    #         for lab in block["labels"][:5]:
+    #             if lab not in top_subs:
+    #                 top_subs.append(lab)
+    #     top_subs = top_subs[:10]
+    #     series = [
+    #         (ctype, E([ctype])[0], [dict(zip(block["labels"], block["values"])).get(x, 0) for x in top_subs])
+    #         for ctype, block in by_type.items()
+    #     ]
+    #     for i, (ctype, block) in enumerate(by_type.items()):
+    #         type_subs.append(b.section(None, f"S3.4.{i + 1}", b.L(ctype),
+    #                                    tables=[b.table(["sub_classification", "cases", "share"], b.dist_rows(block)[:12])]))
+    #     s3.append(b.section(
+    #         None, "S3.4", b.t("s3_by_type"), subsections=type_subs,
+    #         charts=[b.chart("sub_class_by_type", "O13", "stacked_bar", ("التصنيفات الفرعية حسب نوع التواصل", "Sub-classifications by contact type"),
+    #                         top_subs, E(top_subs), series, b.palette[: len(series)])],
+    #     ))
+    # rvt = m.get("RECORDED_VS_TRUE", {})
+    # if rvt.get("available"):
+    #     tags = [x["tag"] for x in rvt["by_tag"]]
+    #     s3.append(b.section(
+    #         None, "S3.5", b.t("s3_recorded_true"), content=n.recorded_vs_true_narrative,
+    #         tables=[b.table(["recorded_tag", "cases", "match"], [[b.L(x["tag"]), fmt_int(x["cases"]), fmt_pct(x["match_pct"])] for x in rvt["least_matching"]])],
+    #         charts=[b.chart("recorded_vs_true_stacked", "O7", "stacked_bar",
+    #                         ("التصنيف المسجَّل في النظام مقابل الموضوع الحقيقي", "Recorded classification vs true subject"),
+    #                         tags, E(tags),
+    #                         [("مطابق", "Matches", [x["matches"] for x in rvt["by_tag"]]),
+    #                          ("قابل لإعادة التصنيف الذكي", "Eligible for smart re-classification", [x["cases"] - x["matches"] for x in rvt["by_tag"]])],
+    #                         [primary, TIMELINESS_COLORS["near"]])],
+    #     ))
+    # elif n.recorded_vs_true_narrative:
+    #     s3.append(b.section(None, "S3.5", b.t("s3_recorded_true"), content=n.recorded_vs_true_narrative))
+    # ch = m.get("CHANNEL", {})
+    # if ch.get("labels"):
+    #     ch_rows = [[b.L(lab), fmt_int(v), fmt_pct(p), b.t("yes") if d else b.t("no")]
+    #                for lab, v, p, d in zip(ch["labels"], ch["values"], ch["pct"], ch["digital"])]
+    #     ch_charts = [b.chart("channel_donut", "O12", "doughnut", ("توزيع القنوات", "Channel mix"),
+    #                          ch["labels"], E(ch["labels"]), [("الحالات", "Cases", ch["values"])], b.palette[: len(ch["labels"])])]
+    #     if comp and comp.get("channels"):
+    #         labels = [c["label"] for c in comp["channels"]]
+    #         ch_charts.append(b.chart("channel_comparison_bar", "O20", "column", ("القنوات مقارنة بالفترة السابقة", "Channels vs the previous period"),
+    #                                  labels, E(labels),
+    #                                  [("الفترة السابقة", "Previous period", [c["previous_pct"] or 0 for c in comp["channels"]]),
+    #                                   ("الفترة الحالية", "This period", [c["current_pct"] or 0 for c in comp["channels"]])],
+    #                                  [secondary, primary]))
+    #     s3.append(b.section(None, "S3.6", b.t("s3_channels"), content=n.channel_narrative,
+    #                         tables=[b.table(["channel", "cases", "share", "digital"], ch_rows)], charts=ch_charts))
+    # tl = m["TIMELINESS"]
+    # if tl.get("available"):
+    #     keys = ["within", "near", "over", "unspecified"]
+    #     keys = [k for k in keys if tl[k] or k != "unspecified"]
+    #     tl_rows = [[TIMELINESS_LABELS[k][lang], fmt_int(tl[k]), fmt_pct(tl[f"{k}_pct"])] for k in keys]
+    #     fw_rows = [
+    #         [i[f"name_{lang}"], _fw_name(i["framework"], lang),
+    #          fmt_pct(i["value_pct"]) if i["value_pct"] is not None else _fw_status(i["status"], lang),
+    #          i[f"target_{lang}"] or "—", i[f"recommendation_{lang}"] or "—"]
+    #         for i in m.get("FRAMEWORKS", [])
+    #     ]
+    #     tables = [b.table(["status", "cases", "share"], tl_rows)]
+    #     if fw_rows:
+    #         tables.append(b.table(["indicator", "framework", "value", "target", "recommendation"], fw_rows))
+    #     if m.get("NEAR_OVER_BY_SERVICE"):
+    #         no = m["NEAR_OVER_BY_SERVICE"]
+    #         tables.append(b.table(["main_service", "near_over", "cases"], [[b.L(x), fmt_pct(p), fmt_int(c)] for x, p, c in zip(no["labels"], no["pct"], no["counts"])][:10]))
+    #     s3.append(b.section(
+    #         None, "S3.7", b.t("s3_timeliness"), content=n.timeliness_narrative, tables=tables,
+    #         charts=[b.chart("timeliness_donut", "O10", "pie", ("الالتزام بزمن الاستجابة", "Response-time compliance"),
+    #                         [TIMELINESS_LABELS[k]["ar"] for k in keys], [TIMELINESS_LABELS[k]["en"] for k in keys],
+    #                         [("الحالات", "Cases", [tl[k] for k in keys])], [TIMELINESS_COLORS[k] for k in keys])],
+    #     ))
+    # else:
+    #     s3.append(b.section(None, "S3.7", b.t("s3_timeliness"), notes=[_omitted(lang, "sla_status")],
+    #                         tables=[_fw_table(b, m, lang)] if m.get("FRAMEWORKS") else []))
+    # if m.get("INQ_PER_100_TX"):
+    #     tx = m["INQ_PER_100_TX"]
+    #     blocks = []
+    #     for key in ("by_main_service", "by_sub_service"):
+    #         blk = tx[key]
+    #         if blk["labels"]:
+    #             blocks.append(b.table(["main_service" if key == "by_main_service" else "sub_classification", "inquiries", "transactions", "per_100"],
+    #                                   [[b.L(x), fmt_int(i), fmt_int(tr), fmt_int(p)] for x, i, tr, p in zip(blk["labels"], blk["inquiries"], blk["transactions"], blk["per_100"])]))
+    #     sub = tx["by_sub_service"] if tx["by_sub_service"]["labels"] else tx["by_main_service"]
+    #     s3.append(b.section(
+    #         None, "S3.8", b.t("s3_tx"), content=n.transactions_ratio_narrative, tables=blocks,
+    #         charts=[b.chart("inq_per_100_bar", "O26", "bar", ("الاستفسارات لكل 100 معاملة", "Inquiries per 100 transactions"),
+    #                         sub["labels"][:12], E(sub["labels"][:12]), [("لكل 100 معاملة", "Per 100 transactions", sub["per_100"][:12])], [primary])],
+    #     ))
+    # oos = m["OUT_OF_SCOPE_DETECTED"]
+    # if oos["total"]:
+    #     oos_rows = [[b.L(lbl), fmt_int(oos[k])] for k, lbl in (("complaint", "شكوى"), ("incident", "بلاغ"), ("compliment", "شكر وثناء")) if oos[k]]
+    #     s3.append(b.section(None, "S3.9", b.t("s3_oos"), content=s.out_of_scope_narrative,
+    #                         tables=[b.table(["contact_type", "cases"], oos_rows)]))
+    # if m.get("SEVERITY"):
+    #     sv = m["SEVERITY"]
+    #     s3.append(b.section(None, "S3.10", b.t("s3_severity"),
+    #                         tables=[b.table(["severity", "cases", "share"], b.dist_rows(sv))],
+    #                         charts=[b.chart("severity_mix", "O11", "pie", ("شدة الطلب", "Severity"), sv["labels"], E(sv["labels"]),
+    #                                         [("الحالات", "Cases", sv["values"])], b.palette[: len(sv["labels"])])]))
+    # if m.get("DEPARTMENT"):
+    #     dp = m["DEPARTMENT"]
+    #     s3.append(b.section(None, "S3.11", b.t("s3_departments"), content=s.department_narrative,
+    #                         tables=[b.table(["department", "cases", "share", "dominant_type"],
+    #                                         [[b.L(x), fmt_int(v), fmt_pct(p), b.L(dp["dominant_type"].get(x, ""))] for x, v, p in zip(dp["labels"], dp["values"], dp["pct"])][:15])],
+    #                         charts=[b.chart("department_distribution", "O14", "bar", ("التوزيع حسب الإدارات", "Distribution by department"),
+    #                                         dp["labels"][:12], E(dp["labels"][:12]), [("الحالات", "Cases", dp["values"][:12])], [primary])]))
+    # if m.get("AGENT"):
+    #     s3.append(b.section(None, "S3.12", b.t("s3_agents"),
+    #                         notes=["عرض محايد غير تقييمي؛ تُستبعد قوائم الانتظار ولا يُرتَّب الأفراد." if ar else
+    #                                "A neutral, non-evaluative view; queues are excluded and people are not ranked."],
+    #                         tables=[b.table(["owner", "cases", "share", "kpi_within"],
+    #                                         [[a["owner"], fmt_int(a["count"]), fmt_pct(a["pct"]), fmt_pct(a["within_deadline_pct"])] for a in m["AGENT"]])]))
+    # sections.append(b.section(RS.CLASSIFICATION_MAP.value, sid(RS.CLASSIFICATION_MAP), title(RS.CLASSIFICATION_MAP), subsections=s3))
+    #
+
+    # ── Appendix: qualitative observations and journey friction points ───────
     jm = m.get("JOURNEY_MAP", [])
     pick = lambda item, field: item.get(f"{field}_{lang}") or item.get(f"{field}_ar") or ""  # noqa: E731
+    appendix_subs = [methodology]
+    if n.event_narratives:
+        appendix_subs.append(b.section(None, "", b.t("ap_events"), bullets=n.event_narratives))
     if jm:
         rows = [[pick(f, "name"), fmt_int(f["case_count"]), CATEGORY.get(f["root_cause_category"], {}).get(lang, ""), pick(f, "remedy")] for f in jm]
-        sections.append(b.section(RS.CUSTOMER_JOURNEY.value, sid(RS.CUSTOMER_JOURNEY), title(RS.CUSTOMER_JOURNEY),
-                                  content=s.journey_narrative,
-                                  subsections=[b.section(None, "S4.1", b.t("s4_frictions"),
-                                                         tables=[b.table(["friction", "cases", "root_cause_category", "remedy"], rows)],
-                                                         bullets=n.friction_points)]))
+        appendix_subs.append(b.section(None, "", b.t("ap_frictions"), bullets=n.friction_points,
+                                       tables=[b.table(["friction", "cases", "root_cause_category", "remedy"], rows)]))
     else:
-        sections.append(b.section(RS.CUSTOMER_JOURNEY.value, sid(RS.CUSTOMER_JOURNEY), title(RS.CUSTOMER_JOURNEY),
-                                  notes=["لم تُرصد نقاط احتكاك قابلة للتجميع في بيانات هذه الفترة." if ar else
-                                         "No groupable friction points were found in this period's data."]))
+        appendix_subs.append(b.section(None, "", b.t("ap_frictions"),
+                                       notes=["لم تُرصد نقاط احتكاك قابلة للتجميع في بيانات هذه الفترة." if ar else
+                                              "No groupable friction points were found in this period's data."]))
+    built[RS.APPENDICES] = b.section(RS.APPENDICES.value, "", title(RS.APPENDICES), subsections=appendix_subs)
 
-    # ── S5 digital gaps ──────────────────────────────────────────────────────
-    s5: list[dict] = []
-    gaps = m.get("GAP_TABLE", [])
-    if gaps:
-        rows = [[pick(g, "topic"), fmt_int(g["case_count"]), GUIDEBOOK_STATUS[g["guidebook_status"]][lang],
-                 g["guidebook_excerpt"] or "—", GAP_TYPE.get(g["gap_type"], {}).get(lang, ""), PRIORITY[g["priority"]][lang],
-                 pick(g, "recommendation")] for g in gaps]
-        s5.append(b.section(None, "S5.1", b.t("s5_gaps"),
-                            tables=[b.table(["topic", "cases", "guidebook_status", "excerpt", "gap_type", "priority", "recommendation"], rows)]))
-        by_cat: dict[str, int] = {}
-        for f in jm:
-            by_cat[f["root_cause_category"]] = by_cat.get(f["root_cause_category"], 0) + f["case_count"]
-        s5.append(b.section(None, "S5.2", b.t("s5_roots"), content=s.gap_root_causes_narrative,
-                            tables=[b.table(["root_cause_category", "cases"], [[CATEGORY.get(k, {}).get(lang, k), fmt_int(v)] for k, v in sorted(by_cat.items(), key=lambda x: -x[1])])]))
-    if m.get("FAQ_COVERAGE") or m.get("DEFLECTABLE_PCT") or n.digital_opportunity_narrative:
-        tables, charts = [], []
-        fc = m.get("FAQ_COVERAGE")
-        if fc:
-            tables.append(b.table(["main_service", "howto_cases", "coverage"],
-                                  [[b.L(x), fmt_int(h), fmt_pct(c)] for x, h, c in zip(fc["labels"], fc["howto_cases"], fc["coverage_pct"])]))
-            charts += [
-                b.chart("faq_coverage_bar", None, "bar", ("تغطية الأسئلة الشائعة حسب الخدمة", "FAQ coverage by service"),
-                        fc["labels"][:12], E(fc["labels"][:12]), [("التغطية", "Coverage", fc["coverage_pct"][:12])], [primary]),
-                b.chart("howto_by_service_bar", None, "bar", ("أسئلة «الكيفية» حسب الخدمة", "How-to questions by service"),
-                        fc["labels"][:12], E(fc["labels"][:12]), [("الحالات", "Cases", fc["howto_cases"][:12])], [secondary]),
-            ]
-        if m.get("DEFLECTABLE_PCT"):
-            d = m["DEFLECTABLE_PCT"]
-            tables.append(b.table(["indicator", "value"], [[
-                "نسبة الحالات في حزم قابلة للخدمة الذاتية" if ar else "Share of cases in self-serviceable bundles",
-                f"{fmt_pct(d['pct'])} ({fmt_int(d['count'])})"]]))
-        s5.append(b.section(None, "S5.3", b.t("s5_opportunity"), content=n.digital_opportunity_narrative,
-                            bullets=n.priority_faqs, tables=tables, charts=charts))
-    if kpi.get("digital_share_pct") is not None and s5:
-        s5[0].setdefault("notes", []).append(
-            f"نسبة التواصل عبر القنوات الرقمية: {fmt_pct(kpi['digital_share_pct'])}." if ar else
-            f"Share of contact through digital channels: {fmt_pct(kpi['digital_share_pct'])}."
-        )
-    s5_notes = [] if gaps else [_omitted(lang, "guidebook")]
-    sections.append(b.section(RS.DIGITAL_GAPS.value, sid(RS.DIGITAL_GAPS), title(RS.DIGITAL_GAPS),
-                              content=s.digital_gaps_narrative, notes=s5_notes, subsections=s5))
+    # ── Section 04: targeted digital-content opportunities ───────────────────
+    dc_tables, dc_charts = [], []
+    fc = m.get("FAQ_COVERAGE")
+    if fc:
+        dc_tables.append(b.table(["main_service", "howto_cases", "coverage"],
+                                 [[b.L(x), fmt_int(h), fmt_pct(c)] for x, h, c in zip(fc["labels"], fc["howto_cases"], fc["coverage_pct"])]))
+        dc_charts += [
+            b.chart("faq_coverage_bar", None, "bar", ("تغطية الأسئلة الشائعة حسب الخدمة", "FAQ coverage by service"),
+                    fc["labels"][:12], E(fc["labels"][:12]), [("التغطية", "Coverage", fc["coverage_pct"][:12])], [primary]),
+            b.chart("howto_by_service_bar", None, "bar", ("أسئلة «الكيفية» حسب الخدمة", "How-to questions by service"),
+                    fc["labels"][:12], E(fc["labels"][:12]), [("الحالات", "Cases", fc["howto_cases"][:12])], [secondary]),
+        ]
+    if m.get("DEFLECTABLE_PCT"):
+        d = m["DEFLECTABLE_PCT"]
+        dc_tables.append(b.table(["indicator", "value"], [[
+            "نسبة الحالات في حزم قابلة للخدمة الذاتية" if ar else "Share of cases in self-serviceable bundles",
+            f"{fmt_pct(d['pct'])} ({fmt_int(d['count'])})"]]))
+    dc_subs = [b.section(None, "", b.t("dc_priority_faqs"), bullets=n.priority_faqs)] if n.priority_faqs else []
+    dc_notes = []
+    if kpi.get("digital_share_pct") is not None:
+        dc_notes.append(f"نسبة التواصل عبر القنوات الرقمية: {fmt_pct(kpi['digital_share_pct'])}." if ar else
+                        f"Share of contact through digital channels: {fmt_pct(kpi['digital_share_pct'])}.")
+    built[RS.DIGITAL_CONTENT_OPPORTUNITIES] = b.section(
+        RS.DIGITAL_CONTENT_OPPORTUNITIES.value, "", title(RS.DIGITAL_CONTENT_OPPORTUNITIES),
+        content=n.digital_opportunity_narrative, tables=dc_tables, charts=dc_charts, notes=dc_notes, subsections=dc_subs,
+    )
 
-    # ── S6 digital transformation (deterministic tables — R6) ────────────────
-    s6: list[dict] = []
-    faqs = m.get("VALIDATED_FAQS", [])
-    if faqs:
-        s6.append(b.section(None, "S6.1", b.t("s6_faqs"), tables=[b.table(
-            ["question", "answer", "frequency", "faq_status"],
-            [[pick(q, "question"), pick(q, "answer"), fmt_int(q["frequency"]), FAQ_STATUS[q["validation_status"]][lang]] for q in faqs],
-        )]))
-    notes = m.get("NOTIFICATION_OPPORTUNITIES", [])
-    if notes:
-        s6.append(b.section(None, "S6.2", b.t("s6_notifications"), tables=[b.table(
-            ["notification", "trigger", "sample_message", "eliminable"],
-            [[pick(x, "type"), pick(x, "trigger"), pick(x, "message"), fmt_int(x["cases_eliminated"])] for x in notes],
-        )]))
-    sections.append(b.section(RS.DIGITAL_TRANSFORMATION.value, sid(RS.DIGITAL_TRANSFORMATION), title(RS.DIGITAL_TRANSFORMATION),
-                              content=s.digital_transformation_narrative, subsections=s6,
-                              notes=[] if s6 else ["لم تُستخرج أسئلة شائعة أو فرص إشعارات بأدلة كافية في هذه الفترة." if ar else
-                                                   "No FAQs or notification opportunities with enough evidence were found this period."]))
+    # ── Retired (BO, 2026-10-14): the Definition Sheet's S4–S7. The journey's friction
+    #    points are an appendix above and S5's digital-content part is Section 04; the
+    #    rest — the S4 journey section, the S5.1/S5.2 guidebook gap analysis, the S6
+    #    digital-transformation plan and the S7 AI use cases — is not in the sample output.
+    # # ── S4 journey ───────────────────────────────────────────────────────────
+    # jm = m.get("JOURNEY_MAP", [])
+    # pick = lambda item, field: item.get(f"{field}_{lang}") or item.get(f"{field}_ar") or ""  # noqa: E731
+    # if jm:
+    #     rows = [[pick(f, "name"), fmt_int(f["case_count"]), CATEGORY.get(f["root_cause_category"], {}).get(lang, ""), pick(f, "remedy")] for f in jm]
+    #     sections.append(b.section(RS.CUSTOMER_JOURNEY.value, sid(RS.CUSTOMER_JOURNEY), title(RS.CUSTOMER_JOURNEY),
+    #                               content=s.journey_narrative,
+    #                               subsections=[b.section(None, "S4.1", b.t("s4_frictions"),
+    #                                                      tables=[b.table(["friction", "cases", "root_cause_category", "remedy"], rows)],
+    #                                                      bullets=n.friction_points)]))
+    # else:
+    #     sections.append(b.section(RS.CUSTOMER_JOURNEY.value, sid(RS.CUSTOMER_JOURNEY), title(RS.CUSTOMER_JOURNEY),
+    #                               notes=["لم تُرصد نقاط احتكاك قابلة للتجميع في بيانات هذه الفترة." if ar else
+    #                                      "No groupable friction points were found in this period's data."]))
+    #
+    # # ── S5 digital gaps ──────────────────────────────────────────────────────
+    # s5: list[dict] = []
+    # gaps = m.get("GAP_TABLE", [])
+    # if gaps:
+    #     rows = [[pick(g, "topic"), fmt_int(g["case_count"]), GUIDEBOOK_STATUS[g["guidebook_status"]][lang],
+    #              g["guidebook_excerpt"] or "—", GAP_TYPE.get(g["gap_type"], {}).get(lang, ""), PRIORITY[g["priority"]][lang],
+    #              pick(g, "recommendation")] for g in gaps]
+    #     s5.append(b.section(None, "S5.1", b.t("s5_gaps"),
+    #                         tables=[b.table(["topic", "cases", "guidebook_status", "excerpt", "gap_type", "priority", "recommendation"], rows)]))
+    #     by_cat: dict[str, int] = {}
+    #     for f in jm:
+    #         by_cat[f["root_cause_category"]] = by_cat.get(f["root_cause_category"], 0) + f["case_count"]
+    #     s5.append(b.section(None, "S5.2", b.t("s5_roots"), content=s.gap_root_causes_narrative,
+    #                         tables=[b.table(["root_cause_category", "cases"], [[CATEGORY.get(k, {}).get(lang, k), fmt_int(v)] for k, v in sorted(by_cat.items(), key=lambda x: -x[1])])]))
+    # if m.get("FAQ_COVERAGE") or m.get("DEFLECTABLE_PCT") or n.digital_opportunity_narrative:
+    #     tables, charts = [], []
+    #     fc = m.get("FAQ_COVERAGE")
+    #     if fc:
+    #         tables.append(b.table(["main_service", "howto_cases", "coverage"],
+    #                               [[b.L(x), fmt_int(h), fmt_pct(c)] for x, h, c in zip(fc["labels"], fc["howto_cases"], fc["coverage_pct"])]))
+    #         charts += [
+    #             b.chart("faq_coverage_bar", None, "bar", ("تغطية الأسئلة الشائعة حسب الخدمة", "FAQ coverage by service"),
+    #                     fc["labels"][:12], E(fc["labels"][:12]), [("التغطية", "Coverage", fc["coverage_pct"][:12])], [primary]),
+    #             b.chart("howto_by_service_bar", None, "bar", ("أسئلة «الكيفية» حسب الخدمة", "How-to questions by service"),
+    #                     fc["labels"][:12], E(fc["labels"][:12]), [("الحالات", "Cases", fc["howto_cases"][:12])], [secondary]),
+    #         ]
+    #     if m.get("DEFLECTABLE_PCT"):
+    #         d = m["DEFLECTABLE_PCT"]
+    #         tables.append(b.table(["indicator", "value"], [[
+    #             "نسبة الحالات في حزم قابلة للخدمة الذاتية" if ar else "Share of cases in self-serviceable bundles",
+    #             f"{fmt_pct(d['pct'])} ({fmt_int(d['count'])})"]]))
+    #     s5.append(b.section(None, "S5.3", b.t("s5_opportunity"), content=n.digital_opportunity_narrative,
+    #                         bullets=n.priority_faqs, tables=tables, charts=charts))
+    # if kpi.get("digital_share_pct") is not None and s5:
+    #     s5[0].setdefault("notes", []).append(
+    #         f"نسبة التواصل عبر القنوات الرقمية: {fmt_pct(kpi['digital_share_pct'])}." if ar else
+    #         f"Share of contact through digital channels: {fmt_pct(kpi['digital_share_pct'])}."
+    #     )
+    # s5_notes = [] if gaps else [_omitted(lang, "guidebook")]
+    # sections.append(b.section(RS.DIGITAL_GAPS.value, sid(RS.DIGITAL_GAPS), title(RS.DIGITAL_GAPS),
+    #                           content=s.digital_gaps_narrative, notes=s5_notes, subsections=s5))
+    #
+    # # ── S6 digital transformation (deterministic tables — R6) ────────────────
+    # s6: list[dict] = []
+    # faqs = m.get("VALIDATED_FAQS", [])
+    # if faqs:
+    #     s6.append(b.section(None, "S6.1", b.t("s6_faqs"), tables=[b.table(
+    #         ["question", "answer", "frequency", "faq_status"],
+    #         [[pick(q, "question"), pick(q, "answer"), fmt_int(q["frequency"]), FAQ_STATUS[q["validation_status"]][lang]] for q in faqs],
+    #     )]))
+    # notes = m.get("NOTIFICATION_OPPORTUNITIES", [])
+    # if notes:
+    #     s6.append(b.section(None, "S6.2", b.t("s6_notifications"), tables=[b.table(
+    #         ["notification", "trigger", "sample_message", "eliminable"],
+    #         [[pick(x, "type"), pick(x, "trigger"), pick(x, "message"), fmt_int(x["cases_eliminated"])] for x in notes],
+    #     )]))
+    # sections.append(b.section(RS.DIGITAL_TRANSFORMATION.value, sid(RS.DIGITAL_TRANSFORMATION), title(RS.DIGITAL_TRANSFORMATION),
+    #                           content=s.digital_transformation_narrative, subsections=s6,
+    #                           notes=[] if s6 else ["لم تُستخرج أسئلة شائعة أو فرص إشعارات بأدلة كافية في هذه الفترة." if ar else
+    #                                                "No FAQs or notification opportunities with enough evidence were found this period."]))
+    #
+    # # ── S7 AI use cases + period comparison (R9) ─────────────────────────────
+    # src_names = {x["id"]: x[f"name_{lang}"] or x["name_ar"] for x in initiative_sources}
+    # uc_rows = [[u.title, u.function, src_names.get(u.source_ref, u.source_ref), fmt_int(u.impact_cases), EFFORT[u.effort.value][lang]] for u in s.ai_use_cases]
+    # s7_subs = []
+    # if comp:
+    #     rows = [[b.t("kpi_total"), fmt_int(comp["total_cases"]["previous"]), fmt_int(comp["total_cases"]["current"])],
+    #             [b.t("kpi_within"), fmt_pct(comp["within_deadline_pct"]["previous"]), fmt_pct(comp["within_deadline_pct"]["current"])],
+    #             [b.t("kpi_digital"), fmt_pct(comp["digital_share_pct"]["previous"]), fmt_pct(comp["digital_share_pct"]["current"])],
+    #             [b.t("kpi_reclass"), fmt_pct(comp["reclassification_rate"]["previous"]), fmt_pct(comp["reclassification_rate"]["current"])]]
+    #     s7_subs.append(b.section(None, "S7.1", b.t("s7_comparison"), tables=[b.table(["indicator", "previous", "current"], rows)],
+    #                              charts=[b.chart("period_comparison", "O20", "column", ("المقارنة مع الفترة السابقة", "Period comparison"),
+    #                                              ["إجمالي الحالات"], ["Total cases"],
+    #                                              [(comp["label"], comp["label_en"], [comp["total_cases"]["previous"]]),
+    #                                               (period.label_ar, period.label_en, [comp["total_cases"]["current"]])],
+    #                                              [secondary, primary])]))
+    # sections.append(b.section(RS.AI_USE_CASES.value, sid(RS.AI_USE_CASES), title(RS.AI_USE_CASES),
+    #                           content=s.ai_use_cases_intro,
+    #                           tables=[b.table(["use_case", "function", "source_ref", "impact_cases", "effort"], uc_rows)] if uc_rows else [],
+    #                           subsections=s7_subs))
+    #
 
-    # ── S7 AI use cases + period comparison (R9) ─────────────────────────────
+    # ── Section 05: proposed improvement roadmap, by horizon (as in the sample) ──
     src_names = {x["id"]: x[f"name_{lang}"] or x["name_ar"] for x in initiative_sources}
-    uc_rows = [[u.title, u.function, src_names.get(u.source_ref, u.source_ref), fmt_int(u.impact_cases), EFFORT[u.effort.value][lang]] for u in s.ai_use_cases]
-    s7_subs = []
-    if comp:
-        rows = [[b.t("kpi_total"), fmt_int(comp["total_cases"]["previous"]), fmt_int(comp["total_cases"]["current"])],
-                [b.t("kpi_within"), fmt_pct(comp["within_deadline_pct"]["previous"]), fmt_pct(comp["within_deadline_pct"]["current"])],
-                [b.t("kpi_digital"), fmt_pct(comp["digital_share_pct"]["previous"]), fmt_pct(comp["digital_share_pct"]["current"])],
-                [b.t("kpi_reclass"), fmt_pct(comp["reclassification_rate"]["previous"]), fmt_pct(comp["reclassification_rate"]["current"])]]
-        s7_subs.append(b.section(None, "S7.1", b.t("s7_comparison"), tables=[b.table(["indicator", "previous", "current"], rows)],
-                                 charts=[b.chart("period_comparison", "O20", "column", ("المقارنة مع الفترة السابقة", "Period comparison"),
-                                                 ["إجمالي الحالات"], ["Total cases"],
-                                                 [(comp["label"], comp["label_en"], [comp["total_cases"]["previous"]]),
-                                                  (period.label_ar, period.label_en, [comp["total_cases"]["current"]])],
-                                                 [secondary, primary])]))
-    sections.append(b.section(RS.AI_USE_CASES.value, sid(RS.AI_USE_CASES), title(RS.AI_USE_CASES),
-                              content=s.ai_use_cases_intro,
-                              tables=[b.table(["use_case", "function", "source_ref", "impact_cases", "effort"], uc_rows)] if uc_rows else [],
-                              subsections=s7_subs))
+    rm_subs = []
+    for horizon, label in (("immediate", "rm_immediate"), ("short", "rm_short"), ("medium", "rm_medium")):
+        items = [i for i in n.initiatives if i.horizon.value == horizon]
+        if items:
+            rm_subs.append(b.section(None, "", b.t(label), tables=[b.table(
+                ["initiative", "source_ref", "cases", "description"],
+                [[i.title, src_names.get(i.bundle_ref, i.bundle_ref), fmt_int(i.addresses_cases), i.description] for i in items],
+            )]))
+    built[RS.IMPROVEMENT_ROADMAP] = b.section(RS.IMPROVEMENT_ROADMAP.value, "", title(RS.IMPROVEMENT_ROADMAP),
+                                              content=n.roadmap_intro, subsections=rm_subs)
+    # Retired: the one-table roadmap with a horizon column.
+    # ini_rows = [[i.title, HORIZON[i.horizon.value][lang], src_names.get(i.bundle_ref, i.bundle_ref), fmt_int(i.addresses_cases), i.description]
+    #             for i in sorted(n.initiatives, key=lambda x: ["immediate", "short", "medium"].index(x.horizon.value))]
+    # sections.append(b.section(RS.IMPROVEMENT_ROADMAP.value, sid(RS.IMPROVEMENT_ROADMAP), title(RS.IMPROVEMENT_ROADMAP),
+    #                           content=n.roadmap_intro,
+    #                           tables=[b.table(["initiative", "horizon", "source_ref", "cases", "description"], ini_rows)] if ini_rows else []))
+    #
 
-    # ── S8 roadmap ───────────────────────────────────────────────────────────
-    ini_rows = [[i.title, HORIZON[i.horizon.value][lang], src_names.get(i.bundle_ref, i.bundle_ref), fmt_int(i.addresses_cases), i.description]
-                for i in sorted(n.initiatives, key=lambda x: ["immediate", "short", "medium"].index(x.horizon.value))]
-    sections.append(b.section(RS.IMPROVEMENT_ROADMAP.value, sid(RS.IMPROVEMENT_ROADMAP), title(RS.IMPROVEMENT_ROADMAP),
-                              content=n.roadmap_intro,
-                              tables=[b.table(["initiative", "horizon", "source_ref", "cases", "description"], ini_rows)] if ini_rows else []))
-
-    # ── S9 conclusion ────────────────────────────────────────────────────────
+    # ── Conclusion and recommendations ───────────────────────────────────────
     closing = [n.closing_statement] if n.closing_statement else []
     if entity.closing_statement:
         closing.append(entity.closing_statement)
     closing.append(f"{b.t('end_of_report')} | {entity.name(lang)} | {period.label(lang)}")
-    sections.append(b.section(RS.CONCLUSION.value, sid(RS.CONCLUSION), title(RS.CONCLUSION), subsections=[
-        b.section(None, "S9.1", b.t("s9_findings"), bullets=n.key_findings),
-        b.section(None, "S9.2", b.t("s9_recommendations"), bullets=n.recommendations),
-        b.section(None, "S9.3", b.t("s9_kpis"), tables=[b.table(["indicator", "value"], kpi_rows)], content="\n".join(closing)),
-    ]))
+    built[RS.CONCLUSION] = b.section(RS.CONCLUSION.value, "", title(RS.CONCLUSION), subsections=[
+        b.section(None, "", b.t("cn_findings"), bullets=n.key_findings),
+        b.section(None, "", b.t("cn_recommendations"), bullets=n.recommendations),
+        # The closing paragraph follows the recommendations, untitled, as in the sample.
+        b.section(None, "", "", content="\n".join(closing)),
+        # Retired: a key-indicator table repeating the cover's.
+        # b.section(None, "S9.3", b.t("s9_kpis"), tables=[b.table(["indicator", "value"], kpi_rows)]),
+    ])
 
-    # ── S10–S11 (X8) ─────────────────────────────────────────────────────────
+    # ── Sections 02 and 03 (X8): service focus and root causes ───────────────
     if m.get("BUNDLE"):
         bd = m["BUNDLE"]
         meta = {u["id"]: u for u in umbrella_meta}
         colours = {uid: b.palette[i % len(b.palette)] for i, uid in enumerate(sorted(bd["ids"], key=lambda x: (meta.get(x, {}).get("order", 99), x)))}
-        s10 = [b.section(None, "S10.1", b.t("s10_bundles"), content=n.bundle_distribution_narrative,
+        s10 = [b.section(None, "", "", content=n.bundle_distribution_narrative,
                          tables=[b.table(["bundle", "cases", "share"], b.dist_rows(bd))],
                          charts=[b.chart("bundle_bar", "O22", "bar", ("توزيع دوافع التواصل (الحزم الموضوعية)", "Contact motives (thematic bundles)"),
                                          bd["labels"], E(bd["labels"]), [("الحالات", "Cases", bd["values"])],
@@ -617,7 +798,7 @@ def assemble_report(
         heat = b.chart("bundle_service_heatmap", "O23", "heatmap", ("الحزم حسب الخدمة الرئيسية", "Bundles by main service"),
                        services, E(services), [(lab, E([lab])[0], [matrix[sv].get(lab, 0) for sv in services]) for lab in bd["labels"]])
         heat["render_in_document"] = False
-        s10.append(b.section(None, "S10.2", b.t("s10_matrix"), content=n.bundle_by_service_narrative,
+        s10.append(b.section(None, "", b.t("rc_matrix"), content=n.bundle_by_service_narrative,
                              tables=[b.table(["main_service", *[b.L(x) for x in bd["labels"]]],
                                              [[b.L(sv), *[fmt_int(matrix[sv].get(lab, 0)) for lab in bd["labels"]]] for sv in services])],
                              charts=[heat]))
@@ -628,22 +809,22 @@ def assemble_report(
             u = meta.get(uid, {})
             meaning = u.get(f"meaning_{lang}") or u.get("meaning_ar") or ""
             inner = per.get(lab, {"labels": [], "values": []})
-            bundle_subs.append(b.section(None, f"S10.3.{i + 1}", b.L(lab),
+            bundle_subs.append(b.section(None, "", b.L(lab),
                                          content="\n".join(x for x in (meaning, narr.get(b.L(lab)) or narr.get(lab, "")) if x),
                                          tables=[b.table(["root_cause", "cases"], [[b.L(r), fmt_int(v)] for r, v in zip(inner["labels"], inner["values"])])] if inner["labels"] else []))
-        s10.append(b.section(None, "S10.3", b.t("s10_per_bundle"), subsections=bundle_subs))
+        s10.append(b.section(None, "", b.t("rc_per_bundle"), subsections=bundle_subs))
         top = m["ROOT_CAUSE_TOP"]
-        s10.append(b.section(None, "S10.4", b.t("s10_top"), content=n.top_root_causes_narrative,
+        s10.append(b.section(None, "", b.t("rc_top"), content=n.top_root_causes_narrative,
                              tables=[b.table(["root_cause", "cases"], [[b.L(r), fmt_int(v)] for r, v in zip(top["labels"], top["values"])])],
                              charts=[b.chart("top_root_causes_bar", "O24", "bar", ("الأسباب الجذرية الأكثر تكراراً", "Most frequent root causes"),
                                              top["labels"], E(top["labels"]), [("الحالات", "Cases", top["values"])], [primary])]))
         if m.get("NEAR_OVER_BY_BUNDLE"):
             no = m["NEAR_OVER_BY_BUNDLE"]
-            s10.append(b.section(None, "S10.5", b.t("s10_timeliness"), content=n.timeliness_by_bundle_narrative,
+            s10.append(b.section(None, "", b.t("rc_timeliness"), content=n.timeliness_by_bundle_narrative,
                                  tables=[b.table(["bundle", "near_over", "cases"], [[b.L(x), fmt_pct(p), fmt_int(c)] for x, p, c in zip(no["labels"], no["pct"], no["counts"])])],
                                  charts=[b.chart("near_over_by_bundle_bar", "O25", "bar", ("قرب انتهاء المهلة أو تجاوزها حسب الحزمة", "Near or over deadline by bundle"),
                                                  no["labels"], E(no["labels"]), [("النسبة", "Share", no["pct"])], [TIMELINESS_COLORS["near"]])]))
-        sections.append(b.section(RS.ROOT_CAUSES.value, sid(RS.ROOT_CAUSES), title(RS.ROOT_CAUSES), content=n.root_causes_intro, subsections=s10))
+        built[RS.ROOT_CAUSES] = b.section(RS.ROOT_CAUSES.value, "", title(RS.ROOT_CAUSES), content=n.root_causes_intro, subsections=s10)
 
         focus_narr = {f.service: f for f in n.service_focus_narratives}
         s11 = []
@@ -662,14 +843,25 @@ def assemble_report(
                      [b.t("kpi_within"), fmt_pct(f["within_deadline_pct"])],
                      ["الهاتف" if ar else "Phone", fmt_pct(f["phone_pct"])], ["الدردشة الحية" if ar else "Live chat", fmt_pct(f["livechat_pct"])]]
             body = [fn.overview, fn.why_this_service, fn.sub_class_narrative, fn.bundle_narrative] if fn else []
-            s11.append(b.section(None, f"S11.{i}", b.L(f["service"]), content="\n".join(x for x in body if x),
+            s11.append(b.section(None, "", b.L(f["service"]), content="\n".join(x for x in body if x),
                                  tables=[b.table(["indicator", "value"], facts)], charts=charts))
         if s11:
-            sections.append(b.section(RS.SERVICE_FOCUS.value, sid(RS.SERVICE_FOCUS), title(RS.SERVICE_FOCUS), subsections=s11))
+            built[RS.SERVICE_FOCUS] = b.section(RS.SERVICE_FOCUS.value, "", title(RS.SERVICE_FOCUS), subsections=s11)
 
-    if shown is not None:
-        keep = {str(getattr(x, "value", x)) for x in shown}
-        sections = [x for x in sections if x.get("key") in keep]
+
+    # ── Order, the tenant's list, and the numbering ──────────────────────────
+    keep = {str(getattr(x, "value", x)) for x in shown} if shown is not None else {x.value for x in RS}
+    sections = [built[x] for x in RS if x in built and x.value in keep]
+    number = 0
+    for section in sections:
+        key = RS(section["key"])
+        if key in NUMBERED_SECTIONS:
+            number += 1
+            section["id"] = f"{number:02d}"
+            section["title"] = SECTION_NUMBER[lang].format(n=number, title=section["title"])
+        else:
+            section["id"] = key.value
+        _number_subsections(section)
 
     return {
         "document_name": f"{b.t('doc_title')} — {period.label(lang)}",
@@ -687,6 +879,13 @@ def assemble_report(
         "branding": branding,
         "sections": sections,
     }
+
+
+def _number_subsections(section: dict) -> None:
+    """Number subsections under their section: «01.2», «appendices.1»."""
+    for i, sub in enumerate(section.get("subsections") or [], 1):
+        sub["id"] = f"{section['id']}.{i}"
+        _number_subsections(sub)
 
 
 # ── Static paragraphs ─────────────────────────────────────────────────────────

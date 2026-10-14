@@ -67,21 +67,26 @@ _AR_HEAD = """\
 {root_cause_block_ar}- initiatives: لكل مبادرة عنوان قصير (title) من 3 إلى 8 كلمات، مرتبطة بمرجع محدد من INITIATIVE_SOURCES (bundle_ref = معرّف المرجع) وأفق زمني (immediate | short | medium) مع عدد الحالات التي تعالجها (addresses_cases) مساوياً لعدد حالات المرجع كما ورد.
 - methodology_note: {steps_ar} (استخراج البيانات، التنقية، التصنيف، {roots_step_ar}التدقيق) وسطر جودة التصنيف من CLASSIFICATION_QUALITY (نسب المصدر ومتوسط الثقة وعدد الحالات المراجَعة مراجعة معمّقة وما بقي منها بثقة منخفضة)، مع ذكر فئتي «غير مصنَّف» و«لم يُزوَّد» إن وُجدتا.
 - top_service_short: اسم الخدمة الرئيسية الأعلى مختصراً بحد أقصى 14 حرفاً عربياً لبطاقة المؤشر.
-- friction_points, priority_faqs, event_narratives: فقط مما ورد في السياق (JOURNEY_MAP، VALIDATED_FAQS و FAQ_COVERAGE، EVENTS)؛ الحقول المشروطة تُترك فارغة عند غياب مدخلها.
+- friction_points (ملحق نقاط الاحتكاك)، priority_faqs (الأسئلة الشائعة ذات الأولوية)، event_narratives (ملحق الرصد النوعي): فقط مما ورد في السياق (JOURNEY_MAP، VALIDATED_FAQS و FAQ_COVERAGE، EVENTS)؛ الحقول المشروطة تُترك فارغة عند غياب مدخلها.
 - digital_opportunity_narrative: فقط إذا وُجد FAQ_COVERAGE أو DEFLECTABLE_PCT؛ وإلا فارغ.
 - key_findings و recommendations: من السياق فقط؛ وتُدرج توصيات METRIC_GAPS بصياغتها كما وردت عند الحاجة.
 - closing_statement: خاتمة رسمية تربط النتائج برؤية الجهة الواردة في ENTITY.vision إن وُجدت.
-
-حقول التقرير ذي الأقسام التسعة (القواعد نفسها):
-- contact_type_narrative: توزيع أنواع التواصل الفعلية (ACTUAL_TYPE).
-- reclassification_narrative: التصنيف المسجَّل مقابل التصنيف الفعلي (RECORDED_VS_ACTUAL و RECLASSIFICATION) بصياغة «قابلة لإعادة التصنيف الذكي».
-- out_of_scope_narrative: ما رُصد في OUT_OF_SCOPE_DETECTED (شكاوى أو بلاغات أو ثناء ضمن الحالات المسجلة استفسارات) وأنه يُسلَّم إلى مجال تحليل الشكاوى؛ فارغ إذا كان المجموع صفراً.
-- department_narrative: فقط إذا وُجد DEPARTMENT؛ وإلا فارغ.
-- journey_narrative: تحديات رحلة المتعامل من JOURNEY_MAP.
-- digital_gaps_narrative و gap_root_causes_narrative: فقط إذا وُجد GAP_TABLE؛ وإلا فارغان.
-- digital_transformation_narrative: الأسئلة الشائعة المقترحة (VALIDATED_FAQS) وفرص الإشعارات الاستباقية (NOTIFICATION_OPPORTUNITIES).
-- ai_use_cases_intro و ai_use_cases: حالات استخدام للذكاء الاصطناعي، كل منها مرتبط بمرجع من INITIATIVE_SOURCES (source_ref)، بجهد low | medium | high.
 """
+
+# Retired (BO, 2026-10-14): the instructions for the nine-section report's own fields,
+# whose sections are not in the sample output. Nothing asks for these fields now, so
+# they are out of the prompt; re-add this block to _AR_HEAD to bring them back.
+# _AR_NINE_SECTION_FIELDS = """\
+# حقول التقرير ذي الأقسام التسعة (القواعد نفسها):
+# - contact_type_narrative: توزيع أنواع التواصل الفعلية (ACTUAL_TYPE).
+# - reclassification_narrative: التصنيف المسجَّل مقابل التصنيف الفعلي (RECORDED_VS_ACTUAL و RECLASSIFICATION) بصياغة «قابلة لإعادة التصنيف الذكي».
+# - out_of_scope_narrative: ما رُصد في OUT_OF_SCOPE_DETECTED (شكاوى أو بلاغات أو ثناء ضمن الحالات المسجلة استفسارات) وأنه يُسلَّم إلى مجال تحليل الشكاوى؛ فارغ إذا كان المجموع صفراً.
+# - department_narrative: فقط إذا وُجد DEPARTMENT؛ وإلا فارغ.
+# - journey_narrative: تحديات رحلة المتعامل من JOURNEY_MAP.
+# - digital_gaps_narrative و gap_root_causes_narrative: فقط إذا وُجد GAP_TABLE؛ وإلا فارغان.
+# - digital_transformation_narrative: الأسئلة الشائعة المقترحة (VALIDATED_FAQS) وفرص الإشعارات الاستباقية (NOTIFICATION_OPPORTUNITIES).
+# - ai_use_cases_intro و ai_use_cases: حالات استخدام للذكاء الاصطناعي، كل منها مرتبط بمرجع من INITIATIVE_SOURCES (source_ref)، بجهد low | medium | high.
+# """
 
 _AR_ROOT_ON = """\
 - service_focus_narratives: لكل خدمة في SERVICE_FOCUS: overview (الحجم والحصة وذروة الشهر والالتزام)، why_this_service (سبب الأولوية من واقع بياناتها فقط)، sub_class_narrative، bundle_narrative.
@@ -90,7 +95,7 @@ _AR_ROOT_ON = """\
 """
 
 _AR_ROOT_OFF = """\
-- استخراج الأسباب الجذرية غير مفعّل في هذا التشغيل: اترك فارغة تماماً الحقول service_focus_narratives و root_causes_intro و bundle_distribution_narrative و bundle_by_service_narrative و bundle_narratives و top_root_causes_narrative و timeliness_by_bundle_narrative.
+- أقسام الأسباب الجذرية والحزم وتركيز الخدمات ليست ضمن هذا التقرير: اترك فارغة تماماً الحقول service_focus_narratives و root_causes_intro و bundle_distribution_narrative و bundle_by_service_narrative و bundle_narratives و top_root_causes_narrative و timeliness_by_bundle_narrative.
 """
 
 def narrative_system_prompt(lang: str = "ar", *, root_causes: bool, vocabulary: dict[str, str]) -> str:

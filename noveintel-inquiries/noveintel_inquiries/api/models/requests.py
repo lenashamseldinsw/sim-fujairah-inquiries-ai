@@ -14,13 +14,14 @@ come back in one ``missing_required_columns`` answer:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, field_validator
 
 from .columns import REQUIRED_COLUMNS
 from .entity import EntityInfo
-from .enums import SECTION_IDS, Language, PeriodGranularity, ReportSection
+from .enums import SECTION_TITLES, Language, PeriodGranularity, ReportSection
 from .records import InquiryRecord
 from .reference import History, ReferenceLists
 from .settings import REQUIRED_SETTINGS, TenantSettings
@@ -55,31 +56,49 @@ class AnalysisOptions(BaseModel):
     )
     sections: list[ReportSection] | None = Field(
         default=None,
-        description="The report sections to produce, by key (``executive_summary``) or "
-        "id (``S1``), in any order — the report keeps its own order. Omit for every "
-        "section the run can produce. The cover (S0) is always included. S10 and S11 "
-        "also need root-cause extraction (X8); asked for without it they are left out "
-        "with a ``section_omitted`` warning. A hidden section still feeds the sections "
-        "that depend on it (Definition Sheet §6, decision #6): its analysis runs when a "
-        "shown section needs it and is skipped when none does.",
+        description="The report sections to produce, by name, in any order — the report "
+        "keeps its own order. A name is the section key (``executive_summary``, "
+        "``statistics``, ``service_focus``, ``root_causes``, "
+        "``digital_content_opportunities``, ``improvement_roadmap``, ``conclusion``, "
+        "``appendices``) or its printed title in Arabic or English "
+        "(«الخلاصة والتوصيات», \"Conclusion and recommendations\"). Omit for every "
+        "section the run can produce. The cover is always included. ``service_focus`` "
+        "and ``root_causes`` also need root-cause extraction (X8); asked for without it "
+        "they are left out with a ``section_omitted`` warning. An unknown name is refused.",
     )
 
-    @field_validator("sections", mode="before")
-    @classmethod
-    def _section_ids(cls, value):
-        if value is None:
-            return None
-        by_id = {sid.lower(): section.value for section, sid in SECTION_IDS.items()}
-        out = []
-        for item in value:
-            text = str(item).strip()
-            out.append(by_id.get(text.lower(), text.lower()))
-        return out
     granularity: PeriodGranularity | None = Field(
         default=None,
         description="Granularity to label the period at. Omit to derive it from the "
         "span of the opening dates. Relabels; never filters.",
     )
+
+    @field_validator("sections", mode="before")
+    @classmethod
+    def _section_names(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = [value]
+        by_name: dict[str, str] = {}
+        for section in ReportSection:
+            by_name[_fold(section.value)] = section.value
+            for title in SECTION_TITLES[section].values():
+                by_name[_fold(title)] = section.value
+        out = []
+        for item in value:
+            key = _fold(str(getattr(item, "value", item)))
+            if key not in by_name:
+                known = ", ".join(s.value for s in ReportSection if s is not ReportSection.COVER)
+                raise ValueError(f"Unknown report section {item!r}. Known sections: {known}.")
+            out.append(by_name[key])
+        return out
+
+
+def _fold(text: str) -> str:
+    """Case, spacing, hyphens, underscores and Arabic diacritics do not matter in a name."""
+    text = re.sub(r"[\u064B-\u0652\u0640]", "", text.strip().lower())
+    return re.sub(r"[\s_\-—–]+", " ", text).strip()
 
 
 class GenerateInquiriesReportRequest(BaseModel):

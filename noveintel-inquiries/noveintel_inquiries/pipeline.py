@@ -54,8 +54,8 @@ from .api.models import (
     UmbrellaProposal,
     missing_required_fields,
 )
-from .api.models.enums import SECTION_IDS, ReportSection
-from .api.models.narratives import hidden_fields
+from .api.models.enums import ReportSection
+from .api.models.narratives import SECTION_FIELDS, InquiriesReportNarratives, hidden_fields
 from .config import get_pricing_settings
 from .engine.period import period_from_datetimes
 from .exceptions import MissingInputs, StageFailure, UpstreamFailure
@@ -431,7 +431,7 @@ def _named(stage: str) -> Iterator[None]:
 
 def _run(request: GenerateInquiriesReportRequest, run_id: str, period: Period, workdir: Path,
          branding: dict[str, Any], progress: Callable[..., None] | None) -> _RunOutput:
-    from .analysis.analyse import analyse, guidebook_meta
+    from .analysis.analyse import analyse, guidebook_meta, recurring_patterns
     from .classification.classify import classify_cases, group_umbrellas
     from .core42.tokens import ScopedThreadPoolExecutor
     from .engine.compute import ComputeInputs, Umbrella, compute
@@ -499,129 +499,157 @@ def _run(request: GenerateInquiriesReportRequest, run_id: str, period: Period, w
     shown = _resolve_sections(request.options.sections, settings, warnings)
     needs = _analysis_needed(shown)
 
-    # ── Umbrellas and the qualitative analysis, side by side ──────────────────
-    # The analysis needs the labels and the root causes, never the umbrellas, so the
-    # umbrella grouping (sequential chunks) runs alongside it rather than before it.
+    # ── Stage 3: the qualitative analysis, in the background ──────────────────
+    # Only Sections 04 and 05 and the friction-point appendix use it. Everything else
+    # — umbrella grouping, the figures, and the narrative of the sections that do not
+    # need it — goes ahead without waiting.
     report(0.44, "تحليل رحلة المتعامل وتجميع الحزم", "Stage 3: Analysis and umbrella discovery")
-    with _step(run_id, "Analysis and umbrella discovery"), ScopedThreadPoolExecutor(max_workers=2) as pool:
-        umbrella_job = pool.submit(_staged, "classification", group_umbrellas, cases, classified, tax, settings,
-                                   progress=report)
-        analysis_job = pool.submit(_staged, "analysis", analyse, cases, entity=entity.name_en, vocabulary=vocab,
-                                   faq_catalogue=refs.faq_catalogue, guidebook=refs.guidebook, progress=report,
-                                   journey=needs["journey"], faqs=needs["faqs"], gaps=needs["gaps"])
-        analysis = analysis_job.result()
-        umbrella_job.result()
-    umbrellas = classified.umbrellas
-    for message in analysis.warnings + classified.warnings:
-        warnings.append(BundleWarning(code="partial_analysis", message=message))
-
-    # ── Layer 1b: compute ─────────────────────────────────────────────────────
-    report(0.62, "احتساب المؤشرات", "Stage 4: Computing the figures")
-    with _step(run_id, "Computing"), _named("computing"):
-        frameworks = evaluate_frameworks(cases, settings, set(parsed.log.columns_mapped) - set(parsed.log.columns_present_but_empty))
-        metrics = compute(ComputeInputs(
-            cases=cases, settings=settings, taxonomy=tax, period=period, parse_log=parsed.log, reference=refs,
-            history=request.history, umbrellas=umbrellas,
-            umbrella_set_version=(refs.umbrellas.version if refs.umbrellas else None),
-            frameworks=frameworks, entity_name_ar=entity.name_ar, entity_name_en=entity.name_en,
-        ))
-        metrics["JOURNEY_MAP"] = analysis.frictions
-        metrics["NOTIFICATION_OPPORTUNITIES"] = analysis.notifications
-        metrics["VALIDATED_FAQS"] = [
-            {k: v for k, v in q.items() if k != "keywords"} | {"evidence_case_ids": q["evidence_case_ids"][:20]}
-            for q in analysis.faqs
-        ]
-        metrics["GAP_TABLE"] = analysis.gaps
-        metrics["PATTERNS"] = analysis.patterns
-        if analysis.guidebook:
-            metrics["GUIDEBOOK"] = analysis.guidebook
-        metrics["CLASSIFICATION_QUALITY"]["routed_to_model"] = classified.routed_to_model
-        metrics["CLASSIFICATION_QUALITY"]["model_unavailable"] = classified.model_unavailable
-        snapshot = metrics.pop("_SNAPSHOT")
-
-    sources = _initiative_sources(metrics, umbrellas)
-
-    # ── English availability (Domain 01 ruling) ───────────────────────────────
-    printed = list(metrics["MAIN_SERVICE"]["labels"]) + list(metrics["SUB_CLASS"]["labels"])
-    missing_en = missing_catalogue_english(tax, printed)
-    english_on = False
-    if request.options.include_english:
-        if missing_en:
-            warnings.append(BundleWarning(
-                code="english_export_unavailable",
-                message="The taxonomy has no English name for some services the report prints, so the "
-                        "English report is unavailable (Domain 01 ruling). Add name_en to the catalogue.",
-                detail={"missing_english_names": missing_en[:50]},
-            ))
-        else:
-            english_on = True
-
-    sections_present = [x for x in _sections_present(metrics, settings) if x in shown]
-    shown = [ReportSection.COVER] + sections_present
-    hidden = hidden_fields(shown)
-    ar_loc = Localizer("ar", tax, umbrellas, {})
-    sources_en = [{**x, "name": x["name_en"] or x["name_ar"]} for x in sources]
-
-    # ── Layer 3: the Arabic narrative; each part's translation starts as soon as
-    #    that part is final, while the other part is still being written ────────
-    translation_pool = ScopedThreadPoolExecutor(max_workers=2)
-    translation_jobs: dict[str, Any] = {}
-    english_side: dict[str, Any] = {}
-    side_lock = threading.Lock()
-    labels_job = None
-
-    def english() -> dict[str, Any]:
-        """The English localizer, context and glossary — built once, when first needed."""
-        with side_lock:
-            if not english_side:
-                translations = labels_job.result() if labels_job else {}
-                for u in umbrellas:
-                    if not u.name_en and u.name_ar in translations:
-                        u.name_en = translations[u.name_ar]
-                en_loc = Localizer("en", tax, umbrellas, translations)
-                english_side.update(
-                    translations=translations, loc=en_loc,
-                    context=build_context(
-                        metrics, "en", en_loc, entity_name=entity.name_en, vision=entity.closing_statement,
-                        sections=[SECTION_TITLES[x]["en"] for x in sections_present],
-                        vocabulary=vocab["en"], initiative_sources=sources,
-                    ) if english_on else None,
-                    glossary=_glossary(metrics, tax, umbrellas, translations, entity, period, ar_loc, en_loc)
-                    if english_on else {},
-                )
-            return english_side
-
-    def start_translation(part_outcome) -> None:
-        side = english()
-        report(0.78, "ترجمة التقرير إلى الإنجليزية", "Stage 5: Writing the narrative; translating the finished parts")
-        translation_jobs[part_outcome.part] = translation_pool.submit(
-            _staged, "translation", translate_part, part_outcome.part, part_outcome.data,
-            context=side["context"], glossary=side["glossary"], vocabulary=vocab["en"], sources=sources_en,
-        )
-
-    report(0.68, "كتابة التحليلات السردية", "Stage 5: Writing the narrative")
+    analysis_pool = ScopedThreadPoolExecutor(max_workers=1)
+    translation_pool = ScopedThreadPoolExecutor(max_workers=4)
     try:
-        with _step(run_id, "Arabic narrative and label translation"), ScopedThreadPoolExecutor(max_workers=2) as pool:
-            context_ar = build_context(
-                metrics, "ar", ar_loc, entity_name=entity.name_ar, vision=entity.closing_statement,
-                sections=[SECTION_TITLES[x]["ar"] for x in sections_present],
-                vocabulary=vocab["ar"], initiative_sources=sources,
+        analysis_job = analysis_pool.submit(
+            _staged, "analysis", analyse, cases, entity=entity.name_en, vocabulary=vocab,
+            faq_catalogue=refs.faq_catalogue, guidebook=refs.guidebook, progress=report,
+            journey=needs["journey"], faqs=needs["faqs"], gaps=needs["gaps"],
+        )
+        with _step(run_id, "Umbrella discovery"):
+            _staged("classification", group_umbrellas, cases, classified, tax, settings, progress=report)
+        umbrellas = classified.umbrellas
+
+        # ── Layer 1b: compute — needs the umbrellas, never the analysis ───────
+        report(0.62, "احتساب المؤشرات", "Stage 4: Computing the figures")
+        with _step(run_id, "Computing"), _named("computing"):
+            frameworks = evaluate_frameworks(cases, settings, set(parsed.log.columns_mapped) - set(parsed.log.columns_present_but_empty))
+            metrics = compute(ComputeInputs(
+                cases=cases, settings=settings, taxonomy=tax, period=period, parse_log=parsed.log, reference=refs,
+                history=request.history, umbrellas=umbrellas,
+                umbrella_set_version=(refs.umbrellas.version if refs.umbrellas else None),
+                frameworks=frameworks, entity_name_ar=entity.name_ar, entity_name_en=entity.name_en,
+            ))
+            metrics["PATTERNS"] = recurring_patterns(cases)
+            metrics["CLASSIFICATION_QUALITY"]["routed_to_model"] = classified.routed_to_model
+            metrics["CLASSIFICATION_QUALITY"]["model_unavailable"] = classified.model_unavailable
+            snapshot = metrics.pop("_SNAPSHOT")
+        # The figures without the analysis: frozen from here on, so the early narrative
+        # and its translation read a dict nothing else writes to.
+        metrics_early = metrics
+
+        # ── English availability (Domain 01 ruling) ───────────────────────────
+        printed = list(metrics["MAIN_SERVICE"]["labels"]) + list(metrics["SUB_CLASS"]["labels"])
+        missing_en = missing_catalogue_english(tax, printed)
+        english_on = False
+        if request.options.include_english:
+            if missing_en:
+                warnings.append(BundleWarning(
+                    code="english_export_unavailable",
+                    message="The taxonomy has no English name for some services the report prints, so the "
+                            "English report is unavailable (Domain 01 ruling). Add name_en to the catalogue.",
+                    detail={"missing_english_names": missing_en[:50]},
+                ))
+            else:
+                english_on = True
+
+        sections_present = [x for x in _sections_present(metrics, settings) if x in shown]
+        shown = [ReportSection.COVER] + sections_present
+        hidden = hidden_fields(shown)
+        ar_loc = Localizer("ar", tax, umbrellas, {})
+        root_causes = bool(metrics.get("BUNDLE")) and bool(set(_ROOT_SECTIONS) & set(shown))
+        titles = {lang: [SECTION_TITLES[x][lang] for x in sections_present] for lang in ("ar", "en")}
+
+        # ── Layer 3: the Arabic narrative in three groups, each translated the moment
+        #    it is final. Groups A and B need no analysis and start now; group C
+        #    (Sections 04–05, the conclusion, the friction points) waits for it. ──
+        stages: dict[str, dict[str, Any]] = {"early": {"metrics": metrics_early, "sources": []}}
+        english_side: dict[str, Any] = {}
+        side_lock = threading.Lock()
+        translation_jobs: list[Any] = []
+        labels_job = None
+
+        def english(stage: str) -> dict[str, Any]:
+            """The English localizer, and per stage its context and glossary — built once."""
+            with side_lock:
+                if "loc" not in english_side:
+                    translations = labels_job.result() if labels_job else {}
+                    for u in umbrellas:
+                        if not u.name_en and u.name_ar in translations:
+                            u.name_en = translations[u.name_ar]
+                    english_side.update(translations=translations, loc=Localizer("en", tax, umbrellas, translations))
+                if english_on and stage not in english_side:
+                    m, src, en_loc = stages[stage]["metrics"], stages[stage]["sources"], english_side["loc"]
+                    english_side[stage] = {
+                        "context": _prune_context(build_context(
+                            m, "en", en_loc, entity_name=entity.name_en, vision=entity.closing_statement,
+                            sections=titles["en"], vocabulary=vocab["en"], initiative_sources=src,
+                        ), shown),
+                        "glossary": _glossary(m, tax, umbrellas, english_side["translations"], entity, period, ar_loc, en_loc),
+                        "sources": [{**x, "name": x["name_en"] or x["name_ar"]} for x in src],
+                    }
+                return english_side
+
+        def translator(stage: str):
+            def start(unit) -> None:
+                side = english(stage)[stage]
+                report(0.78, "ترجمة التقرير إلى الإنجليزية", "Stage 5: Writing the narrative; translating the finished parts")
+                translation_jobs.append(translation_pool.submit(
+                    _staged, "translation", translate_part, unit.part, unit.data, context=side["context"],
+                    glossary=side["glossary"], vocabulary=vocab["en"], sources=side["sources"], unit=unit.unit,
+                ))
+            return start if english_on else None
+
+        def arabic_context(stage: str) -> dict[str, Any]:
+            return _prune_context(build_context(
+                stages[stage]["metrics"], "ar", ar_loc, entity_name=entity.name_ar, vision=entity.closing_statement,
+                sections=titles["ar"], vocabulary=vocab["ar"], initiative_sources=stages[stage]["sources"],
+            ), shown)
+
+        late_fields = _LATE_FIELDS
+        early_hidden = {"report": hidden["report"] | late_fields, "sections": set(hidden["sections"])}
+        late_hidden = {"report": set(hidden["report"]) | (_ALL_REPORT_FIELDS - late_fields),
+                       "sections": set(hidden["sections"])}
+
+        report(0.68, "كتابة التحليلات السردية", "Stage 5: Writing the narrative")
+        with _step(run_id, "Arabic narrative"), ScopedThreadPoolExecutor(max_workers=3) as pool:
+            to_translate = _labels_to_translate(metrics, umbrellas, tax, shown)
+            labels_job = pool.submit(_staged, "narratives", translate_labels, to_translate) if english_on and to_translate else None
+            early_job = pool.submit(
+                _staged, "narratives", write_narratives, arabic_context("early"),
+                root_causes=root_causes, vocabulary=vocab["ar"], sources=[], hidden=early_hidden,
+                groups=_EARLY_GROUPS, on_part=translator("early"),
             )
-            labels_job = pool.submit(
-                _staged, "narratives", translate_labels, _labels_to_translate(metrics, umbrellas, tax)
-            ) if english_on else None
-            narrative_job = pool.submit(
-                _staged, "narratives", write_narratives, context_ar,
-                root_causes=bool(metrics.get("BUNDLE")), vocabulary=vocab["ar"],
-                sources=[{**x, "name": x["name_ar"]} for x in sources], hidden=hidden,
-                on_part=start_translation if english_on else None,
+
+            with _step(run_id, "Waiting for the analysis"):
+                analysis = analysis_job.result()
+            for message in analysis.warnings + classified.warnings:
+                warnings.append(BundleWarning(code="partial_analysis", message=message))
+            # The full figures: a new dict, so the early narrative's never changes under it.
+            metrics = {
+                **metrics_early,
+                "JOURNEY_MAP": analysis.frictions,
+                "NOTIFICATION_OPPORTUNITIES": analysis.notifications,
+                "VALIDATED_FAQS": [
+                    {k: v for k, v in q.items() if k != "keywords"} | {"evidence_case_ids": q["evidence_case_ids"][:20]}
+                    for q in analysis.faqs
+                ],
+                "GAP_TABLE": analysis.gaps,
+                "PATTERNS": analysis.patterns,
+                **({"GUIDEBOOK": analysis.guidebook} if analysis.guidebook else {}),
+            }
+            sources = _initiative_sources(metrics, umbrellas)
+            stages["late"] = {"metrics": metrics, "sources": sources}
+            late_job = pool.submit(
+                _staged, "narratives", write_narratives, arabic_context("late"),
+                root_causes=root_causes, vocabulary=vocab["ar"],
+                sources=[{**x, "name": x["name_ar"]} for x in sources], hidden=late_hidden,
+                on_part=translator("late"),
             )
-            outcome_ar = narrative_job.result()
-            side = english()
-        en_loc = side["loc"]
+            early, late = early_job.result(), late_job.result()
+        outcome_ar = combine(early.units + late.units)
+        en_loc = english("late")["loc"]
     except BaseException:
+        analysis_pool.shutdown(wait=False, cancel_futures=True)
         translation_pool.shutdown(wait=False, cancel_futures=True)
         raise
+    analysis_pool.shutdown(wait=False)
 
     if outcome_ar.narratives is None:
         translation_pool.shutdown(wait=False, cancel_futures=True)
@@ -690,8 +718,9 @@ def _run(request: GenerateInquiriesReportRequest, run_id: str, period: Period, w
 
             if english_on:
                 with _step(run_id, "Waiting for the English translation"):
-                    parts = {part: job.result() for part, job in translation_jobs.items()}
-                outcome_en = combine(parts) if len(parts) == 2 else None
+                    translated = [job.result() for job in translation_jobs]
+                # Complete only when every Arabic unit came back translated.
+                outcome_en = combine(translated) if len(translated) == len(outcome_ar.units) else None
                 if outcome_en is None or outcome_en.narratives is None:
                     warnings.append(BundleWarning(
                         code="english_export_unavailable",
@@ -722,9 +751,10 @@ def _run(request: GenerateInquiriesReportRequest, run_id: str, period: Period, w
                     "confirmation; send the confirmed set back as reference_lists.umbrellas next period.",
             detail={"umbrellas": [u.name_ar for u in new_umbrellas]},
         ))
-    if not refs.guidebook:
-        warnings.append(BundleWarning(code="section_omitted", message="No service guidebook was provided, so the S5 digital-gap table is omitted.",
-                                      detail={"section": "S5.1", "input": "reference_lists.guidebook"}))
+    # Retired with the guidebook digital-gap analysis (BO, 2026-10-14):
+    # if not refs.guidebook:
+    #     warnings.append(BundleWarning(code="section_omitted", message="No service guidebook was provided, so the S5 digital-gap table is omitted.",
+    #                                   detail={"section": "S5.1", "input": "reference_lists.guidebook"}))
     not_computable = [i for i in frameworks if i["status"] == "not_computable"]
     if not_computable:
         warnings.append(BundleWarning(
@@ -858,43 +888,73 @@ def _initiative_sources(metrics: dict[str, Any], umbrellas) -> list[dict[str, An
     return sources
 
 
-def _labels_to_translate(metrics: dict[str, Any], umbrellas, tax) -> list[str]:
+def _labels_to_translate(metrics: dict[str, Any], umbrellas, tax, shown=None) -> list[str]:
+    """AI-generated or recorded labels the English report prints — only for shown sections."""
+    shown = set(shown) if shown is not None else set(ReportSection)
     labels: list[str] = []
-    if metrics.get("ROOT_CAUSE_TOP"):
+    if metrics.get("ROOT_CAUSE_TOP") and ReportSection.ROOT_CAUSES in shown:
         labels += metrics["ROOT_CAUSE_TOP"]["labels"]
         for block in metrics["ROOT_CAUSE_TOP"]["per_bundle"].values():
             labels += block["labels"]
-    labels += [u.name_ar for u in umbrellas if not u.name_en]
-    for key in ("DEPARTMENT", "SEVERITY"):
-        if metrics.get(key):
-            labels += metrics[key]["labels"]
-    for event in metrics.get("EVENTS", []):
-        labels.append(event["cluster"])
-    if metrics.get("RECORDED_VS_TRUE", {}).get("by_tag"):
+    # Umbrella names appear wherever bundles do: Sections 02 and 03, the Section 04
+    # self-service share, the roadmap's sources and the executive summary's motives.
+    if shown & {ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS, ReportSection.EXECUTIVE_SUMMARY,
+                ReportSection.DIGITAL_CONTENT_OPPORTUNITIES, ReportSection.IMPROVEMENT_ROADMAP}:
+        labels += [u.name_ar for u in umbrellas if not u.name_en]
+    # Event clusters name the appendix's observations and the roadmap's event sources.
+    if shown & {ReportSection.APPENDICES, ReportSection.IMPROVEMENT_ROADMAP}:
+        for event in metrics.get("EVENTS", []):
+            labels.append(event["cluster"])
+    if ReportSection.STATISTICS in shown and metrics.get("RECORDED_VS_TRUE", {}).get("by_tag"):
         labels += [x["tag"] for x in metrics["RECORDED_VS_TRUE"]["by_tag"]]
+    # Retired with the Fujairah subsections of the old classification map:
+    # for key in ("DEPARTMENT", "SEVERITY"):
+    #     if metrics.get(key):
+    #         labels += metrics[key]["labels"]
     catalogue = set(tax.main_names) | set(tax.sub_names)
     return [x for x in labels if x and x not in catalogue and re.search(r"[؀-ۿ]", x)]
 
 
-_ROOT_SECTIONS = (ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS)
+_ROOT_SECTIONS = (ReportSection.SERVICE_FOCUS, ReportSection.ROOT_CAUSES)
 
-# What each section needs from the qualitative analysis — directly, or through the
-# sections it is built from (Definition Sheet §6 relations: S1 ← S3, S4, S5;
-# S5 → S6, S7, S8, S9; S6 → S8). The guidebook gaps are drawn from the journey's
-# frictions, so a section needing gaps needs the journey too.
+_ALL_REPORT_FIELDS = frozenset(InquiriesReportNarratives.model_fields)
+
+# The narrative's three groups. Every field is written from the same figures and none
+# reads another field's text, so the groups are independent calls; they exist so the
+# calls (and their translations) run side by side.
+#   A — the descriptive sections: cover tile, executive summary, Section 01, the
+#       methodology and observations appendices.
+#   B — Sections 02 and 03 (X8): service focus and root causes.
+#   C — written once the analysis is in: Sections 04 and 05 and the friction-point
+#       appendix, which use it, and the conclusion, kept with the roadmap so the
+#       recommendations and the initiatives are written together.
+_EARLY_GROUPS: list[set[str]] = [
+    {f for s in (ReportSection.COVER, ReportSection.EXECUTIVE_SUMMARY, ReportSection.STATISTICS)
+     for f in SECTION_FIELDS[s].get("report", ())} | {"methodology_note", "event_narratives"},
+    {f for s in (ReportSection.SERVICE_FOCUS, ReportSection.ROOT_CAUSES) for f in SECTION_FIELDS[s].get("report", ())},
+]
+_LATE_FIELDS: frozenset[str] = frozenset(
+    {f for s in (ReportSection.DIGITAL_CONTENT_OPPORTUNITIES, ReportSection.IMPROVEMENT_ROADMAP, ReportSection.CONCLUSION)
+     for f in SECTION_FIELDS[s].get("report", ())} | {"friction_points"}
+)
+
+# What each section needs from the qualitative analysis (the model calls of stage 3).
+# Only these three sections draw on it; every other section is engine figures and
+# prose, so it depends on no other section. The guidebook gap analysis is retired
+# with the digital-gap section, so nothing asks for it.
 _SECTION_NEEDS: dict[ReportSection, set[str]] = {
-    ReportSection.EXECUTIVE_SUMMARY: {"journey", "gaps"},
-    ReportSection.CUSTOMER_JOURNEY: {"journey"},
-    ReportSection.DIGITAL_GAPS: {"journey", "gaps", "faqs"},
-    ReportSection.DIGITAL_TRANSFORMATION: {"journey", "gaps", "faqs"},
-    ReportSection.AI_USE_CASES: {"journey", "gaps"},
-    ReportSection.IMPROVEMENT_ROADMAP: {"journey", "gaps", "faqs"},
-    ReportSection.CONCLUSION: {"journey", "gaps"},
+    ReportSection.DIGITAL_CONTENT_OPPORTUNITIES: {"faqs"},        # priority FAQs
+    ReportSection.IMPROVEMENT_ROADMAP: {"journey", "faqs"},       # initiatives cite frictions, notifications, FAQs
+    ReportSection.APPENDICES: {"journey"},                        # the journey friction points
+    # Retired (BO, 2026-10-14) — with their Definition Sheet relations:
+    # EXECUTIVE_SUMMARY: {"journey", "gaps"}, CONCLUSION: {"journey", "gaps"},
+    # CUSTOMER_JOURNEY: {"journey"}, DIGITAL_GAPS: {"journey", "gaps", "faqs"},
+    # DIGITAL_TRANSFORMATION: {"journey", "gaps", "faqs"}, AI_USE_CASES: {"journey", "gaps"},
 }
 
 
 def _resolve_sections(requested, settings, warnings: list[BundleWarning]) -> list[ReportSection]:
-    """The tenant's section list, in report order; the cover always; S10–S11 only with X8."""
+    """The tenant's section list, in report order; the cover always; Sections 02–03 only with X8."""
     wanted = set(requested) if requested else set(ReportSection)
     wanted.add(ReportSection.COVER)
     if not settings.root_cause_extraction:
@@ -903,10 +963,37 @@ def _resolve_sections(requested, settings, warnings: list[BundleWarning]) -> lis
             warnings.append(BundleWarning(
                 code="section_omitted",
                 message="Root-cause sections were requested but root-cause extraction (X8) is off, so they are left out.",
-                detail={"sections": [SECTION_IDS[s] for s in asked], "input": "settings.root_cause_extraction"},
+                detail={"sections": [s.value for s in asked], "input": "settings.root_cause_extraction"},
             ))
         wanted -= set(_ROOT_SECTIONS)
     return [s for s in ReportSection if s in wanted]
+
+
+# Narrative context keys read only by particular sections. A key is dropped when none
+# of its readers is shown, so the prompt does not carry data no shown section uses.
+# An empty reader set means a retired section's data: always dropped. Keys not listed
+# are kept: the KPI block and the figures every section may cite.
+_CONTEXT_READERS: dict[str, set[ReportSection]] = {
+    # Read by the root-cause instructions, which are given whenever Section 02 or 03 is shown.
+    "ROOT_CAUSE_TOP": {ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS},
+    "BUNDLE_BY_SERVICE": {ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS},
+    "NEAR_OVER_BY_BUNDLE": {ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS},
+    "SERVICE_FOCUS": {ReportSection.SERVICE_FOCUS},
+    "INITIATIVE_SOURCES": {ReportSection.IMPROVEMENT_ROADMAP},
+    "JOURNEY_MAP": {ReportSection.IMPROVEMENT_ROADMAP, ReportSection.APPENDICES},
+    "NOTIFICATION_OPPORTUNITIES": {ReportSection.IMPROVEMENT_ROADMAP},
+    "VALIDATED_FAQS": {ReportSection.DIGITAL_CONTENT_OPPORTUNITIES, ReportSection.IMPROVEMENT_ROADMAP},
+    "FAQ_COVERAGE": {ReportSection.DIGITAL_CONTENT_OPPORTUNITIES},
+    "EVENTS": {ReportSection.APPENDICES, ReportSection.STATISTICS},
+    # Retired sections' data (BO, 2026-10-14).
+    "ACTUAL_TYPE": set(), "RECORDED_VS_ACTUAL": set(), "SUB_CLASS_BY_TYPE": set(),
+    "OUT_OF_SCOPE_DETECTED": set(), "DEPARTMENT": set(), "SEVERITY": set(), "GAP_TABLE": set(),
+}
+
+
+def _prune_context(context: dict[str, Any], shown: list[ReportSection]) -> dict[str, Any]:
+    visible = set(shown)
+    return {k: v for k, v in context.items() if k not in _CONTEXT_READERS or _CONTEXT_READERS[k] & visible}
 
 
 def _analysis_needed(shown: list[ReportSection]) -> dict[str, bool]:
@@ -917,10 +1004,11 @@ def _analysis_needed(shown: list[ReportSection]) -> dict[str, bool]:
 
 
 def _sections_present(metrics: dict[str, Any], settings) -> list[ReportSection]:
-    present = [s for s in ReportSection if s not in (ReportSection.COVER, ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS)]
-    if metrics.get("BUNDLE"):
-        present += [ReportSection.ROOT_CAUSES, ReportSection.SERVICE_FOCUS]
-    return present
+    """The sections this run can produce, in report order (Sections 02–03 need bundles)."""
+    return [
+        s for s in ReportSection
+        if s is not ReportSection.COVER and (s not in _ROOT_SECTIONS or metrics.get("BUNDLE"))
+    ]
 
 
 def _labels_document(run_id, cases, tax, settings, umbrellas, refs) -> dict[str, Any]:

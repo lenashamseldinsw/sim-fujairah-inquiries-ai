@@ -188,26 +188,53 @@ recommendation in the report, never a zero.
 documented NoveAI palette. Send the logo as `logo_base64`.
 
 **`include_english=false`** skips the English translation and document. The narrative
-is written once, in Arabic, as two parts; each part's English translation starts the
-moment that part is final, while the other is still being written, and the Arabic
-documents are built while the translations finish. The translation uses the English
+is written once, in Arabic, in three groups side by side; each group's English
+translation starts the moment that group is final, while the others are still being
+written, and the Arabic documents are built while the translations finish. The translation uses the English
 names the taxonomy and the run already hold, so it needs English names in the taxonomy.
 
-**`sections`** chooses the report's sections (Module 06's "which of S0–S11 show"), by
-key or id — `["S1", "S2", "S3", "improvement_roadmap", "S9"]`. Omit it for every
-section the run can produce; the report keeps its own order and the cover (S0) is
-always included. A hidden section's narrative is not written or translated, and its
-analysis is skipped when no shown section needs it; when one does — the roadmap draws on
-the journey and the guidebook gaps — the analysis still runs (Definition Sheet §6,
-decision #6). S10 and S11 also need `settings.root_cause_extraction`; asked for without
-it they are left out with a `section_omitted` warning. An unknown section is a `422`.
+**`sections`** chooses the report's sections (Module 06's "which sections show") by
+name: the section key or its printed title in Arabic or English, in any order — case,
+spacing, hyphens and Arabic diacritics do not matter. Ids such as `S1` are not accepted.
 
-| Section | Needs from the analysis |
+```json
+"sections": ["executive_summary", "statistics", "Root causes and their link to services",
+             "فرص المحتوى الرقمي الموجَّه", "improvement_roadmap", "conclusion", "appendices"]
+```
+
+| Key | Title |
 |---|---|
-| S1 executive summary · S7 AI use cases · S9 conclusion | journey frictions, guidebook gaps |
-| S4 customer journey | journey frictions |
-| S5 digital gaps · S6 digital transformation · S8 roadmap | journey frictions, guidebook gaps, FAQs |
-| S0, S2, S3, S10, S11 | nothing — engine figures only |
+| `executive_summary` | الملخص التنفيذي · Executive summary |
+| `statistics` | الإحصاءات العامة ولوحة المؤشرات · General statistics and indicator dashboard |
+| `service_focus` | تركيز الخدمات ذات الأولوية · Priority service focus |
+| `root_causes` | الأسباب الجذرية وارتباطها بالخدمات · Root causes and their link to services |
+| `digital_content_opportunities` | فرص المحتوى الرقمي الموجَّه · Targeted digital-content opportunities |
+| `improvement_roadmap` | خارطة الطريق التحسينية المقترحة · Proposed improvement roadmap |
+| `conclusion` | الخلاصة والتوصيات · Conclusion and recommendations |
+| `appendices` | الملاحق · Appendices |
+
+Omit it for every section the run can produce. The report keeps its own order, the cover
+is always included, and Sections 01–05 are numbered among those shown. `service_focus`
+and `root_causes` also need `settings.root_cause_extraction`; asked for without it they
+are left out with a `section_omitted` warning. An unknown name — including a retired
+section such as `customer_journey`, `digital_gaps` or `ai_use_cases` — is a `422`.
+
+A hidden section costs nothing in the narrative: its fields are left out of the writing
+and translation tools (as is any field whose input is absent), the data only it reads is
+left out of the prompt, its AI-generated labels are not translated, and the root-cause
+instructions are given only when `service_focus` or `root_causes` is shown. Each section
+depends on no other; only three draw on the qualitative analysis, which runs only when
+one of them is shown:
+
+| Section | Analysis it needs |
+|---|---|
+| `digital_content_opportunities` | FAQs (one call per service with enough cases) |
+| `improvement_roadmap` | journey frictions and notifications, FAQs — its initiatives cite them |
+| `appendices` | journey frictions — the friction-point appendix |
+| every other section | none — engine figures only |
+
+The guidebook gap analysis is retired with the digital-gap section; a guidebook, when
+sent, still marks proposed FAQs as already published and is listed in the methodology.
 
 ### Response — `202`
 

@@ -290,20 +290,23 @@ class TestPartsAndSections:
 
         class Watch(FakeGateway):
             def create(self, **kwargs):
-                seen.append((kwargs["tools"][0]["name"], kwargs["messages"][-1]["content"]))
+                seen.append((kwargs["tools"][0]["name"], set(kwargs["tools"][0]["input_schema"]["properties"])))
                 return super().create(**kwargs)
 
         install(monkeypatch, Watch())
-        shown = [s for s in ReportSection if s not in (ReportSection.CUSTOMER_JOURNEY, ReportSection.AI_USE_CASES)]
+        shown = [s for s in ReportSection if s not in (ReportSection.APPENDICES,)]
         context = {"KPI": {"total_cases": 40}, "JOURNEY_MAP": [{"id": "F1"}], "INITIATIVE_SOURCES": [{"id": "F1", "cases": 3}]}
         outcome = write_narratives(context, root_causes=False, vocabulary={}, sources=[{"id": "F1", "cases": 3, "name": "x"}],
                                    hidden=hidden_fields(shown))
         report, sections = outcome.narratives.report, outcome.narratives.sections
-        assert report.friction_points == [] and sections.journey_narrative == ""
-        assert sections.ai_use_cases == [] and sections.ai_use_cases_intro == ""
+        assert report.friction_points == [] and report.methodology_note == ""
+        assert sections.ai_use_cases == [] and sections.journey_narrative == ""  # retired: never written
         assert report.executive_summary and report.initiatives
-        prompt = next(c for name, c in seen if name == "write_section_narratives")
-        assert "اتركها فارغة" in prompt and "journey_narrative" in prompt.split("اتركها فارغة")[1]
+        # Hidden fields are not in the tool at all, so the model spends nothing on them.
+        report_tool = next(props for name, props in seen if name == "write_report_narratives")
+        assert not {"friction_points", "methodology_note", "event_narratives"} & report_tool
+        assert "executive_summary" in report_tool
+        assert [name for name, _ in seen] == ["write_report_narratives"]  # the retired part makes no call
 
     def test_a_part_with_every_section_hidden_makes_no_call(self, monkeypatch):
         from noveintel_inquiries.api.models.enums import ReportSection
@@ -318,3 +321,44 @@ class TestPartsAndSections:
                                    hidden=hidden_fields(shown))
         assert outcome.narratives is not None
         assert gateway.calls.count("write_section_narratives") == 0
+
+    def test_a_translation_sends_and_asks_for_only_the_written_fields(self, monkeypatch):
+        from noveintel_inquiries.narratives.writer import translate_part
+
+        from .fakes import FakeGateway, install
+
+        seen = []
+
+        class Watch(FakeGateway):
+            def create(self, **kwargs):
+                seen.append((set(kwargs["tools"][0]["input_schema"]["properties"]), kwargs["messages"][-1]["content"]))
+                return super().create(**kwargs)
+
+        install(monkeypatch, Watch())
+        arabic = _sections(journey_narrative="رحلة المتعامل", digital_gaps_narrative="")
+        outcome = translate_part("sections", arabic, context={"KPI": {}}, glossary={}, vocabulary={}, sources=[])
+        assert outcome.data["journey_narrative"] and outcome.data["digital_gaps_narrative"] == ""
+        props, content = seen[0]
+        assert props == {"journey_narrative"} and "digital_gaps_narrative" not in content
+        assert len(seen) == 1 and not outcome.incomplete
+
+    def test_a_field_without_input_is_not_asked_for_and_not_reported_missing(self, monkeypatch):
+        from noveintel_inquiries.narratives.writer import write_narratives
+
+        from .fakes import FakeGateway, install
+
+        seen = []
+
+        class Watch(FakeGateway):
+            def create(self, **kwargs):
+                seen.append((kwargs["tools"][0]["name"], set(kwargs["tools"][0]["input_schema"]["properties"])))
+                return super().create(**kwargs)
+
+        install(monkeypatch, Watch())
+        # No DEPARTMENT in the context: the department narrative has no input.
+        outcome = write_narratives({"KPI": {"total_cases": 40}}, root_causes=False, vocabulary={}, sources=[])
+        sections_tool = next(props for name, props in seen if name == "write_section_narratives")
+        assert "department_narrative" not in sections_tool
+        assert "department_narrative" not in outcome.incomplete
+        assert outcome.narratives.sections.department_narrative == ""
+        assert [name for name, _ in seen].count("write_section_narratives") == 1

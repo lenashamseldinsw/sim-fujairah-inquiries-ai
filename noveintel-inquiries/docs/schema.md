@@ -136,10 +136,10 @@ boolean in a text column is stringified; a dict or list is rejected.
 | X5 | `llm_threshold` | 0.75 | Rule-chain confidence below this → the model. |
 | X6 | `review_threshold` | 0.65 | Below this, or still breaking a codebook rule → the deep AI review. Still below after it → flagged `low_confidence`, counted with its best labels. ≤ X5; ADPF ran X5 = X6 = 0.90. |
 | X7 | `digital_channel_definition` | `all_non_phone` | Or `live_chat_and_self_service`. `digital_channels` overrides with an explicit list. |
-| X8 | `root_cause_extraction` | `false` | Root causes, umbrellas, S10–S11. |
+| X8 | `root_cause_extraction` | `false` | Root causes, umbrellas, Sections 02–03. |
 | X8a | `umbrella_count_range` | `"6–10"` | The discovery step's target. |
 | X9 | `agent_level_reporting` | `false` | Per-owner figures, queues excluded, never ranked. Owner names reach the workbook only when on. |
-| X10 | `focus_services_count` | 2 | S11 (1–5). |
+| X10 | `focus_services_count` | 2 | Section 02 (1–5). |
 | X11 | `working_calendar` | `"Sun–Thu 07:30–15:30"` | Working-time maths; `public_holidays` adds dates. |
 | X12 | `comparison_basis` | `previous_period` | Or `same_period_last_year` — which `history` snapshot is read. |
 | — | `frameworks` | the X3 framework | Registry selections with targets — see below. |
@@ -220,7 +220,7 @@ the contents and chart accents. The within / near / over colours `#2E8B6B` / `#C
 | `narratives` | `{ ar, en? }` — `ReportNarratives`: `report` (29 fields) and `sections`. |
 | `classification` | `ClassificationSummary` — below. |
 | `charts` | `ChartSpec[]` — select by `key`. |
-| `report` | `{ ar, en? }` — S0–S11 as data. |
+| `report` | `{ ar, en? }` — the report's sections as data. |
 | `documents` | `RunDocuments`. |
 | `snapshot` | `PeriodSnapshot` — store it; send it back as `history`. |
 | `usage` | `RunUsage`. |
@@ -301,32 +301,39 @@ member_root_causes }` for the Domain Admin's confirmation.
 `friction_points[]`, `top_service_short`. Conditional fields are empty when their input
 is absent. `addresses_cases` is the referenced item's engine count.
 
-`sections` is `SectionNarratives`: `contact_type_narrative`,
+`sections` is `SectionNarratives`, the retired sections' prose — kept in the contract,
+always empty now: `contact_type_narrative`,
 `reclassification_narrative`, `out_of_scope_narrative`, `department_narrative`,
 `journey_narrative`, `digital_gaps_narrative`, `gap_root_causes_narrative`,
 `digital_transformation_narrative`, `ai_use_cases_intro`, `ai_use_cases[]` (`title`,
 `function`, `source_ref`, `effort`, `impact_cases`).
 
-### `report` — S0–S11 as data
+### `report` — the sample output's sections as data
+
+The report follows the structure of the ADPF Q2 2026 sample output, which the BO
+confirmed as the report's sections (2026-10-14). The Definition Sheet's other sections
+— the customer-journey section, the guidebook digital-gap analysis, the
+digital-transformation plan and the AI use cases, and the Fujairah subsections of its
+classification map — are retired; their code is commented out, not deleted.
 
 `{ document_name, language, rtl, entity, period, cover, metadata, sections[] }`. `cover`
-is S0 (`tiles` O1–O6, both totals labelled — R7). Each section has `id` (S1…S11), `key`
+has `id` `cover` (`tiles` O1–O6, both totals labelled — R7). Each section has `id`, `key`
 (`ReportSection`), `title`, and any of `content`, `bullets`, `tables` (`columns`, `rows`),
 `charts`, `notes`, `subsections`.
 
-| Id | `key` | Present |
-|---|---|---|
-| S1 | `executive_summary` | always |
-| S2 | `methodology` | always — sources, parse log, method with X5/X6 and counts, fields from the confirmed schema, quality line (R1) |
-| S3 | `classification_map` | always; subsections by available input |
-| S4 | `customer_journey` | always (a note when no friction was found) |
-| S5 | `digital_gaps` | always; the gap table needs the guidebook |
-| S6 | `digital_transformation` | always |
-| S7 | `ai_use_cases` | always; the comparison with `history` |
-| S8 | `improvement_roadmap` | always |
-| S9 | `conclusion` | always |
-| S10 | `root_causes` | X8 on |
-| S11 | `service_focus` | X8 on |
+| Id | `key` | Title (AR · EN) | Present |
+|---|---|---|---|
+| `executive_summary` | `executive_summary` | الملخص التنفيذي · Executive summary | always; the comparison with `history` as a subsection |
+| `01` | `statistics` | الإحصاءات العامة ولوحة المؤشرات · General statistics and indicator dashboard | always — monthly, main services, inquiries vs transactions, channels, recorded vs true, timeliness with the framework table |
+| `02` | `service_focus` | تركيز الخدمات ذات الأولوية · Priority service focus | X8 on |
+| `03` | `root_causes` | الأسباب الجذرية وارتباطها بالخدمات · Root causes and their link to services | X8 on |
+| `04` | `digital_content_opportunities` | فرص المحتوى الرقمي الموجَّه · Targeted digital-content opportunities | always; FAQ coverage needs the FAQ catalogue, the self-service share needs X8 |
+| `05` | `improvement_roadmap` | خارطة الطريق التحسينية المقترحة · Proposed improvement roadmap | always; one subsection per horizon |
+| `conclusion` | `conclusion` | الخلاصة والتوصيات · Conclusion and recommendations | always |
+| `appendices` | `appendices` | الملاحق · Appendices | always — methodology (sources, parse log, method, fields, quality — R1), qualitative observations (events), journey friction points |
+
+Sections 01–05 are numbered among those shown («القسم 01 — …», "Section 01 — …"), so
+hiding one leaves no gap. Subsection ids follow their section (`01.2`, `appendices.1`).
 
 ### `charts` — `ChartSpec[]`
 

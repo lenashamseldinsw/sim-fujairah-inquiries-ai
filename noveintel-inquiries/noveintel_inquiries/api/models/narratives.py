@@ -150,42 +150,47 @@ class ReportNarratives(BaseModel):
     sections: SectionNarratives
 
 
-# Which report section prints each narrative field. A field of a section the tenant
-# hid is neither asked for nor kept, and is not translated. The part is named because
-# both parts are written by separate calls.
+# Which report section prints each narrative field. A field of a section not shown is
+# neither asked for nor kept, and is not translated — nor is a field that belongs to no
+# current section. The 29 report fields map onto the sample output's sections one for
+# one; the nine-section ``SectionNarratives`` fields belonged to the retired sections,
+# so that part is no longer written at all (its mappings are kept below, commented).
 SECTION_FIELDS: dict[ReportSection, dict[str, tuple[str, ...]]] = {
     ReportSection.COVER: {"report": ("top_service_short",)},
     ReportSection.EXECUTIVE_SUMMARY: {"report": ("intro_statement", "executive_summary", "comparative_analysis")},
-    ReportSection.METHODOLOGY: {"report": ("methodology_note",)},
-    ReportSection.CLASSIFICATION_MAP: {
+    ReportSection.STATISTICS: {
         "report": ("statistics_intro", "monthly_narrative", "main_service_narrative", "sub_service_narrative",
                    "transactions_ratio_narrative", "channel_narrative", "recorded_vs_true_narrative",
-                   "timeliness_narrative", "event_narratives"),
-        "sections": ("contact_type_narrative", "reclassification_narrative", "out_of_scope_narrative",
-                     "department_narrative"),
+                   "timeliness_narrative"),
+        # Retired with the Fujairah subsections the sample's Section 01 does not have:
+        # "sections": ("contact_type_narrative", "reclassification_narrative", "out_of_scope_narrative",
+        #              "department_narrative"),
     },
-    ReportSection.CUSTOMER_JOURNEY: {"report": ("friction_points",), "sections": ("journey_narrative",)},
-    ReportSection.DIGITAL_GAPS: {
-        "report": ("digital_opportunity_narrative", "priority_faqs"),
-        "sections": ("digital_gaps_narrative", "gap_root_causes_narrative"),
-    },
-    ReportSection.DIGITAL_TRANSFORMATION: {"sections": ("digital_transformation_narrative",)},
-    ReportSection.AI_USE_CASES: {"sections": ("ai_use_cases_intro", "ai_use_cases")},
-    ReportSection.IMPROVEMENT_ROADMAP: {"report": ("roadmap_intro", "initiatives")},
-    ReportSection.CONCLUSION: {"report": ("key_findings", "recommendations", "closing_statement")},
+    ReportSection.SERVICE_FOCUS: {"report": ("service_focus_narratives",)},
     ReportSection.ROOT_CAUSES: {
         "report": ("root_causes_intro", "bundle_distribution_narrative", "bundle_by_service_narrative",
                    "bundle_narratives", "top_root_causes_narrative", "timeliness_by_bundle_narrative"),
     },
-    ReportSection.SERVICE_FOCUS: {"report": ("service_focus_narratives",)},
+    ReportSection.DIGITAL_CONTENT_OPPORTUNITIES: {"report": ("digital_opportunity_narrative", "priority_faqs")},
+    ReportSection.IMPROVEMENT_ROADMAP: {"report": ("roadmap_intro", "initiatives")},
+    ReportSection.CONCLUSION: {"report": ("key_findings", "recommendations", "closing_statement")},
+    ReportSection.APPENDICES: {"report": ("methodology_note", "event_narratives", "friction_points")},
+    # Retired sections (BO, 2026-10-14):
+    # CUSTOMER_JOURNEY:       {"sections": ("journey_narrative",)}
+    # DIGITAL_GAPS:           {"sections": ("digital_gaps_narrative", "gap_root_causes_narrative")}
+    # DIGITAL_TRANSFORMATION: {"sections": ("digital_transformation_narrative",)}
+    # AI_USE_CASES:           {"sections": ("ai_use_cases_intro", "ai_use_cases")}
 }
 
 
 def hidden_fields(shown: list[ReportSection] | set[ReportSection]) -> dict[str, set[str]]:
-    """The narrative fields of the sections not shown, per part."""
-    hidden: dict[str, set[str]] = {"report": set(), "sections": set()}
+    """Per part, every narrative field that no shown section prints."""
+    printed: dict[str, set[str]] = {"report": set(), "sections": set()}
     for section, parts in SECTION_FIELDS.items():
-        if section not in shown:
+        if section in shown:
             for part, fields in parts.items():
-                hidden[part].update(fields)
-    return hidden
+                printed[part].update(fields)
+    return {
+        "report": set(InquiriesReportNarratives.model_fields) - printed["report"],
+        "sections": set(SectionNarratives.model_fields) - printed["sections"],
+    }

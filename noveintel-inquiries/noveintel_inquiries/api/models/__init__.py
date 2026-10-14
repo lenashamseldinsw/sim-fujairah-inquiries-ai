@@ -30,7 +30,7 @@ from .entity import (
     BrandColors,
     EntityInfo,
 )
-from .enums import SECTION_IDS, JobStatus, Language, PeriodGranularity, ReportSection
+from .enums import NUMBERED_SECTIONS, SECTION_TITLES, JobStatus, Language, PeriodGranularity, ReportSection
 from .jobs import JobAccepted, JobError, JobState
 from .narratives import (
     AiUseCase,
@@ -97,7 +97,8 @@ __all__ = [
     "NOVEAI_MAGENTA",
     "NOVEAI_NAVY",
     "REQUIRED_COLUMNS",
-    "SECTION_IDS",
+    "NUMBERED_SECTIONS",
+    "SECTION_TITLES",
     "SENSITIVE_COLUMNS",
     "STATUS_COLORS",
     "TIMELINESS_COLORS",

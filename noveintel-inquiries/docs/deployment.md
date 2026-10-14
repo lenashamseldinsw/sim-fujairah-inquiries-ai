@@ -75,21 +75,25 @@ export, and it shuts down idle workers. That is why it is not supported.
 
 Classification dominates a large run: about four cases in five go to the model, in
 batches of 20, `LLM_MAX_CONCURRENCY` (default 5) at a time; the uncertain ones get a
-deep review in batches of 5 with reasoning switched on. Three steps overlap: umbrella
-discovery runs beside the analysis; the Arabic narrative runs beside the label
-translation; and each narrative part's English translation starts as soon as that part
-is written, while the other part and the Arabic documents are still in progress.
-Measured against Core42 (`gpt-5.1`), a 40-case run with root causes on:
+deep review in batches of 5 with reasoning switched on. After classification the
+analysis (journey, FAQs) runs in the background; umbrella grouping, the figures and the
+narrative of every section that does not use the analysis go ahead without it. The
+narrative is three parallel calls — the descriptive sections, the root-cause sections,
+and (once the analysis is in) Sections 04–05 with the conclusion and friction points —
+and each is translated the moment it is final. Measured against Core42 (`gpt-5.1`), a
+40-case run with root causes on and the sample output's sections:
 
 | Step | Cost |
 |---|---|
 | Classification | ≈ 50 s per 120 cases routed to the model; the deep review adds ≈ 20–30 s per 25 cases it re-reads (five batches of 5 at once, medium reasoning) |
-| Analysis (journey, FAQs, gaps) ‖ umbrella discovery (X8) | 40–75 s for both; umbrellas ≈ 1 min per 350 distinct root causes, sequential |
-| Arabic narrative ‖ label translation | 2.5–4 min, independent of volume |
-| English translation still running after the Arabic is done | ≈ 1.5 min, independent of volume |
+| Umbrella discovery (X8) | ≈ 1 min per 350 distinct root causes, sequential; ≈ 12 s at 40 cases |
+| Analysis (journey, FAQs), in the background | 30–40 s at 40 cases; the first two narrative groups are written meanwhile |
+| Arabic narrative, three groups | ≈ 70 s including the wait for the analysis, independent of volume |
+| English translation still running after the Arabic | ≈ 20 s |
 
-A 40-case run took 5 minutes (9 before the part-by-part translation; the writing time
-itself varies by a minute or two between runs). So a 1,000-case export finishes well
+Two 40-case runs took 133 s and 135 s (410 s with the narrative as one call, 529 s
+before any overlap). The three groups send the figures three times, so the narrative's
+input tokens are about 2.3 times what one call used; the output is unchanged. So a 1,000-case export finishes well
 inside the default hour, but a quarter like ADPF Q2 2026 (10,630 cases, root-cause extraction on, ≈ 5,800 distinct causes) needs about
 two hours: set `NOVEINQ_JOB_MAX_RUNTIME_SEC=9000` and `functionTimeout` to `02:45:00` on
 a Premium or Dedicated plan. Frozen labels from an earlier pass skip classification

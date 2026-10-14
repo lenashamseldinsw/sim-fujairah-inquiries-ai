@@ -2,7 +2,7 @@
 
 A headless FastAPI service that turns a period's customer-inquiry cases into an analysed
 report. It implements the Business Owner's *Inquiries Analytics* handoff (spec v1.2):
-the Domain Definition Sheet's universal columns, context fields and S0–S11 report, the
+the Domain Definition Sheet's universal columns, context fields and its report, the
 Data Mapping's engine contract, the Full Report Prompt's classifier and narrative
 prompts, the classification and root-cause codebooks, the TAMM framework registry, and
 the Platformisation Requirements R1–R12.
@@ -65,7 +65,7 @@ uv run pytest                                                # 365 tests, no net
   "reference_lists": { "taxonomy": "adpf_codebook_v1" },
   "history":   { "previous_period": { "label_ar": "الربع الأول 2026", "total_cases": 11799, "within_deadline_pct": 98.8 } },
   "entity":    { "name_ar": "صندوق أبوظبي للتقاعد", "name_en": "Abu Dhabi Pension Fund" },
-  "options":   { "include_english": true, "sections": ["S1", "S2", "S3", "S8", "S9"] }
+  "options":   { "include_english": true, "sections": ["executive_summary", "statistics", "improvement_roadmap", "conclusion"] }
 }
 ```
 
@@ -113,21 +113,23 @@ lists every column, setting, reference list, engine key and bundle field.
 | Bundle field | Holds |
 |---|---|
 | `metrics` | The engine output — every Data Mapping §4 key: `KPI`, `MONTHLY`, `CHANNEL`, `CASE_TYPE_RECORDED`, `MAIN_SERVICE`, `SUB_CLASS`, `TIMELINESS`, `RECORDED_VS_TRUE`, `OUT_OF_SCOPE_DETECTED`, `CLASSIFICATION_QUALITY`, `EVENTS`, (X8) `BUNDLE`, `ROOT_CAUSE_TOP`, `BUNDLE_BY_SERVICE`, `SERVICE_FOCUS`, `NEAR_OVER_BY_BUNDLE`, `DEFLECTABLE_PCT`, (conditional) `INQ_PER_100_TX`, `FAQ_COVERAGE`, `AGENT`, `COMPARISON`; the Fujairah-native `RECORDED_VS_ACTUAL`, `RECLASSIFICATION`, `ACTUAL_TYPE`, `SUB_CLASS_BY_TYPE`, `SLA`, `SEVERITY`, `CLOSED`, `DEPARTMENT`, `JOURNEY_MAP`, `GAP_TABLE`, `VALIDATED_FAQS`, `NOTIFICATION_OPPORTUNITIES`, `PATTERNS`; `FRAMEWORKS`, `PARSE_LOG`, `METRIC_GAPS`, `DATA_NOTES` |
-| `narratives` | Per language: the 29 `InquiriesReportNarratives` fields and the nine-section `SectionNarratives` |
+| `narratives` | Per language: the 29 `InquiriesReportNarratives` fields (and `SectionNarratives`, the retired sections' prose, now always empty) |
 | `classification` | Taxonomy, thresholds, provenance split, mean confidence, `deep_review` (cases reviewed, still low-confidence, duplicates reused), the umbrellas (new ones flagged for confirmation) |
-| `report` | S0–S11 as data, per language — what the Word documents are drawn from; only the sections in `options.sections` when it is sent |
+| `report` | The report's sections as data, per language — what the Word documents are drawn from; only the sections in `options.sections` when it is sent |
 | `charts` | Renderer-agnostic specs with Data Mapping §6 identities and Builder output ids (O1–O26) |
 | `documents` | Word AR/EN, report JSON AR/EN, the companion workbook, and per-case `labels` JSON |
 | `snapshot` | This run's comparable figures, for the next run's `history` |
 | `warnings` | `low_confidence_after_review`, `umbrellas_pending_confirmation`, `narrative_unverified_figures`, `section_omitted`, `metric_gap`, `english_export_unavailable`, … |
 
-The report is the Definition Sheet's nine Fujairah sections — S0 cover · S1 executive
-summary · S2 methodology (generated from run data, R1) · S3 classification map (with
-the ADPF statistics: monthly, services, channels, timeliness and the framework table,
-recorded vs true, transactions, out-of-scope detections, severity, departments) · S4
-journey frictions · S5 digital gaps · S6 digital transformation · S7 AI use cases · S8
-roadmap · S9 conclusion — plus, with root-cause extraction, **S10 root causes & bundles**
-and **S11 service focus**.
+The report has the sections of the ADPF Q2 2026 sample output, which the BO confirmed
+(2026-10-14): the executive summary · **Section 01** general statistics and indicator
+dashboard · **02** priority service focus and **03** root causes (with root-cause
+extraction) · **04** targeted digital-content opportunities · **05** the improvement
+roadmap by horizon · the conclusion · the appendices (methodology generated from run
+data — R1, qualitative observations, journey friction points). Tenants choose sections
+by name (`options.sections`). The Definition Sheet's other sections — customer journey,
+guidebook digital gaps, digital transformation, AI use cases — are retired, their code
+commented out.
 
 ---
 
@@ -144,7 +146,7 @@ noveintel_inquiries/
 │                          rootcause (R1–R7), umbrellas (discovery), classify (routing)
 ├── analysis/              S4–S6 qualitative items, tied to case groups the engine counts
 ├── narratives/            LAYER 3 — prompts (Full Report Prompt §1–2), rules, context, writer
-├── report/                assemble (S0–S11), labels (static text), word, workbook
+├── report/                assemble (the report's sections), labels (static text), word, workbook
 ├── resources/             taxonomy_adpf_codebook_v1.json — the codebook preset
 ├── core42/                the Core42 gateway integration
 ├── reporting/             sword_word_builder
@@ -181,9 +183,10 @@ discovery then clusters the distinct causes (by id, in chunks), reusing the carr
 first, while the qualitative analysis runs beside it; counts are the engine's.
 
 **Narratives.** The Full Report Prompt's Arabic system prompt, near verbatim, with its
-hard rules and the tenant vocabulary. There is no English writing prompt: one
-translation call per narrative part takes that part's finished Arabic — started the
-moment the part is final, while the other part is still being written — and returns English,
+hard rules and the tenant vocabulary. There is no English writing prompt: the
+narrative is written in three groups side by side, and one translation call per group
+takes that group's finished Arabic — started the moment it is final, while the others
+are still being written — and returns English,
 with a glossary of the English names the report already prints (taxonomy, umbrellas,
 frictions, channels, entity, period) so the prose matches the tables. Fixed headings and
 taxonomy names are never sent for translation; the English wording rules and figure

@@ -321,6 +321,30 @@ def _gaps(client, frictions: list[dict], gb: Guidebook, entity: str, vocabulary,
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
+def _patterns(groups, total: int) -> list[dict]:
+    return [
+        {
+            "id": f"P{i + 1}",
+            "main_service": g.main_service,
+            "sub_classification": g.sub_classification,
+            "case_count": g.size,
+            "pct": pct(g.size, total),
+            "dominant_contact_type": Counter(c.contact_type for c in g.cases).most_common(1)[0][0] if g.cases else None,
+        }
+        for i, g in enumerate(groups[:10])
+    ]
+
+
+def recurring_patterns(cases: list[Case]) -> list[dict]:
+    """The ten largest service × sub-classification groups — deterministic, no model.
+
+    Available before the analysis runs, so narrative groups that do not need the
+    analysis can start without waiting for it.
+    """
+    labelled = [c for c in cases if c.main_service and c.sub_classification]
+    return _patterns(build_groups(labelled), len(cases))
+
+
 def analyse(
     cases: list[Case],
     *,
@@ -342,17 +366,7 @@ def analyse(
     groups = build_groups(labelled)
     total = len(cases)
 
-    result.patterns = [
-        {
-            "id": f"P{i + 1}",
-            "main_service": g.main_service,
-            "sub_classification": g.sub_classification,
-            "case_count": g.size,
-            "pct": pct(g.size, total),
-            "dominant_contact_type": Counter(c.contact_type for c in g.cases).most_common(1)[0][0] if g.cases else None,
-        }
-        for i, g in enumerate(groups[:10])
-    ]
+    result.patterns = _patterns(groups, total)
 
     services = Counter(c.main_service for c in labelled if c.main_service)
     faq_services = [s for s, n in services.most_common(FAQ_SERVICES) if n >= 10] if faqs else []
@@ -385,12 +399,15 @@ def analyse(
 
     if guidebook:
         result.guidebook = guidebook_meta(guidebook)
-        if result.frictions and gaps:
-            if progress:
-                progress(0.6, "تحليل الفجوات مقابل دليل الخدمات", "Stage 3: Guidebook gap analysis")
-            try:
-                result.gaps = _gaps(client, result.frictions, guidebook, entity, vocabulary, total)
-            except Exception as exc:
-                result.warnings.append(f"Gap analysis failed: {type(exc).__name__}")
-                logger.warning("Gap analysis failed: %s", exc)
+        # Retired with the digital-gap section (BO, 2026-10-14): the guidebook gap analysis.
+        # The guidebook still marks proposed FAQs as already published, and is listed in
+        # the methodology's sources.
+        # if result.frictions and gaps:
+        #     if progress:
+        #         progress(0.6, "تحليل الفجوات مقابل دليل الخدمات", "Stage 3: Guidebook gap analysis")
+        #     try:
+        #         result.gaps = _gaps(client, result.frictions, guidebook, entity, vocabulary, total)
+        #     except Exception as exc:
+        #         result.warnings.append(f"Gap analysis failed: {type(exc).__name__}")
+        #         logger.warning("Gap analysis failed: %s", exc)
     return result

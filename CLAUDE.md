@@ -46,7 +46,7 @@ Field Atlas. Fujairah Pulse is the reference build; ADPF is the second configura
 `analysis/` names the qualitative items S4–S6 table (frictions, notification
 opportunities, FAQs, guidebook gaps); the model assigns whole **case groups** to each
 item and the engine sums them, so no count comes from a model (R6). `report/` places
-everything into S0–S11 (`assemble`), renders Word (`word`) and the companion workbook
+everything into the report's sections (`assemble`), renders Word (`word`) and the companion workbook
 (`workbook`). `pipeline.py` wires it and owns failure classification.
 
 ### Invariants worth knowing before editing
@@ -85,17 +85,28 @@ everything into S0–S11 (`assemble`), renders Word (`word`) and the companion w
   sent for translation; AI-generated labels (root causes, umbrella names) go through
   `narratives/translate.py`. English is withheld when the taxonomy lacks English names
   (Domain 01 ruling).
-- **Overlaps in `pipeline._run`**: umbrella discovery runs beside the analysis (the
-  analysis never reads umbrellas); the Arabic narrative runs beside the label
-  translation; and `write_narratives(on_part=…)` hands each finished Arabic part to its
-  English translation while the other part is still being written. Progress is
-  monotonic across those threads.
-- **Tenants choose sections** (`options.sections`, Module 06). The Definition Sheet's
-  S0–S9 are the default set — the journey, digital-gap and AI use-case sections are
-  required by it, not Fujairah extras. `api/models/narratives.SECTION_FIELDS` maps each
-  narrative field to its section; `pipeline._SECTION_NEEDS` maps each section to the
-  analysis it needs (directly or through §6 relations). A hidden section's analysis
-  still runs if a shown one needs it (decision #6).
+- **Overlaps in `pipeline._run`**: the analysis runs in the background from stage 3;
+  umbrella discovery, `compute` (which needs the umbrellas, never the analysis) and the
+  narrative of the sections that do not use the analysis go ahead without it. The
+  narrative is three independent calls (`_EARLY_GROUPS` A and B, then `_LATE_FIELDS`
+  once the analysis is in — Sections 04–05, the conclusion, the friction points), and
+  `write_narratives(on_part=…)` hands each finished group to its English translation.
+  The early groups read `metrics_early`, a dict nothing writes to afterwards; the full
+  figures are a new dict. Progress is monotonic across the threads.
+- **The report is the sample output's structure** (BO, 2026-10-14): executive summary,
+  Sections 01–05 (statistics, service focus, root causes, digital-content opportunities,
+  roadmap), conclusion, appendices. `api/models/enums.ReportSection` is the list;
+  `SECTION_TITLES` the printed names, which a request may use. The Definition Sheet's
+  other sections (customer journey, guidebook gaps, digital transformation, AI use
+  cases, the Fujairah classification-map subsections) are commented out, not deleted —
+  in `assemble`, `pipeline`, `analysis` and `narratives/prompts`.
+- **Tenants choose sections by name** (`options.sections`). Sections do not depend on
+  each other: `pipeline._SECTION_NEEDS` lists the only three that need the qualitative
+  analysis (Section 04 → FAQs, Section 05 → journey + FAQs, appendices → journey). The
+  narrative tools carry only the fields asked for (shown section, input present);
+  `pipeline._CONTEXT_READERS` drops prompt data only hidden or retired sections read.
+  Umbrella discovery is not section-gated: with X8 on it always runs, because D8 is a
+  label the platform stores.
 - **Branding:** no `brand` → NoveAI Navy `#201853` / Magenta `#7E2362` (Prerequisites
   §5); the within / near / over colours are locked (`entity.TIMELINESS_COLORS`).
 - **Thread pools are `core42.tokens.ScopedThreadPoolExecutor`**, never a bare
@@ -113,7 +124,7 @@ reviewed labels — re-measure before changing them, and keep any new example re
 
 ### Testing
 
-`cd noveintel-inquiries && uv run pytest` — 383 tests, no network. `tests/fakes.py`
+`cd noveintel-inquiries && uv run pytest` — 394 tests, no network. `tests/fakes.py`
 answers every model call by tool name; `tests/fixtures/adpf_q2_2026_labels.json.gz` is
 the labelled ADPF master (labels and structured columns only), against which
 `tests/test_engine.py` reproduces the Full Report Prompt's worked example exactly.

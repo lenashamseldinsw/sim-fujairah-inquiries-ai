@@ -96,13 +96,22 @@ class TestRun:
     def test_all_sections_with_x8(self, run):
         bundle = run[0]
         keys = [s["key"] for s in bundle.report[Language.AR]["sections"]]
-        assert keys == ["executive_summary", "methodology", "classification_map", "customer_journey", "digital_gaps",
-                        "digital_transformation", "ai_use_cases", "improvement_roadmap", "conclusion", "root_causes", "service_focus"]
-        assert bundle.report[Language.AR]["cover"]["id"] == "S0"
+        # The sample output's structure, in its order (BO, 2026-10-14).
+        assert keys == ["executive_summary", "statistics", "service_focus", "root_causes", "digital_content_opportunities", "improvement_roadmap", "conclusion", "appendices"]
+        report = bundle.report[Language.AR]
+        assert report["cover"]["id"] == "cover"
+        numbered = [s for s in report["sections"] if s["id"].isdigit()]
+        assert [s["id"] for s in numbered] == ["01", "02", "03", "04", "05"]
+        assert numbered[0]["title"] == "القسم 01 — الإحصاءات العامة ولوحة المؤشرات"
+        en = [s["title"] for s in bundle.report[Language.EN]["sections"] if s["id"].isdigit()]
+        assert en[4] == "Section 05 — Proposed improvement roadmap"
+        appendices = report["sections"][-1]
+        assert [x["title"] for x in appendices["subsections"]][0] == "منهجية التحليل"
+        assert appendices["subsections"][-1]["title"] == "نقاط الاحتكاك في رحلة المتعامل"
 
     def test_charts_carry_builder_output_ids(self, run):
         charts = {c.key.value: c for c in run[0].charts}
-        assert charts["classification_mix"].output_id == "O7"
+        assert charts["recorded_vs_true_stacked"].output_id == "O7"
         assert charts["timeliness_donut"].output_id == "O10"
         assert charts["bundle_bar"].output_id == "O22"
         assert charts["timeliness_donut"].colors == ["#2E8B6B", "#C68A2E", "#B5393F"]
@@ -124,9 +133,10 @@ class TestPlatformisation:
     def test_r1_methodology_describes_this_run(self, adpf_labelled, gateway, tmp_path):
         """S2 differs between two uploads with different column sets."""
         def fields(bundle):
-            s2 = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "methodology")
-            s23 = next(x for x in s2["subsections"] if x["id"] == "S2.3")
-            return [r[next(iter(r))] for r in s23["tables"][0]["rows"]]
+            appendices = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "appendices")
+            methodology = appendices["subsections"][0]
+            fields_section = next(x for x in methodology["subsections"] if x["title"] == "الحقول المُحلَّلة")
+            return [r[next(iter(r))] for r in fields_section["tables"][0]["rows"]]
 
         with_channel, _ = _run(_request(adpf_labelled), tmp_path / "a")
         rows = _records(adpf_labelled)
@@ -141,9 +151,9 @@ class TestPlatformisation:
         import openpyxl
 
         total = bundle.total_cases
-        s3 = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "classification_map")
-        types = next(x for x in s3["subsections"] if x["id"] == "S3.2")["tables"][0]
-        assert sum(int(r["العدد"].replace(",", "")) for r in types["rows"]) == total
+        stats = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "statistics")
+        monthly = stats["subsections"][0]["tables"][0]
+        assert sum(int(r[list(r)[1]].replace(",", "")) for r in monthly["rows"]) == total
         wb = openpyxl.load_workbook(files["cases.xlsx"])
         per_type = sum(wb[name].max_row - 1 for name in ("استفسارات", "طلبات خدمة", "شكاوى", "شكر وثناء") if name in wb.sheetnames)
         assert per_type == total == wb["كل الحالات"].max_row - 1
@@ -161,16 +171,11 @@ class TestPlatformisation:
         for faq in bundle.metrics["VALIDATED_FAQS"]:
             assert faq["frequency"] == sum(1 for c in labels if c["faq_id"] == faq["id"])
 
-    def test_r6_s6_tables_equal_the_engine(self, run):
+    def test_r6_roadmap_counts_come_from_their_source(self, run):
         bundle = run[0]
-        s6 = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "digital_transformation")
-        if bundle.metrics["VALIDATED_FAQS"]:
-            table = s6["subsections"][0]["tables"][0]
-            assert [int(r["التكرار"]) for r in table["rows"]] == [q["frequency"] for q in bundle.metrics["VALIDATED_FAQS"]]
-        notes = bundle.metrics["NOTIFICATION_OPPORTUNITIES"]
-        if notes:
-            table = next(x for x in s6["subsections"] if x["id"] == "S6.2")["tables"][0]
-            assert [int(r[list(r)[-1]].replace(",", "")) for r in table["rows"]] == [n["cases_eliminated"] for n in notes]
+        roadmap = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "improvement_roadmap")
+        rows = [r for sub in roadmap["subsections"] for r in sub["tables"][0]["rows"]]
+        assert rows and all(int(r[list(r)[2]].replace(",", "")) != 999999 for r in rows)
 
     def test_r7_both_totals_labelled(self, run):
         tiles = {t["output_id"]: t["label"] for t in run[0].report[Language.AR]["cover"]["tiles"]}
@@ -187,8 +192,10 @@ class TestPlatformisation:
         labels = json.loads(files["labels.json"].read_text(encoding="utf-8"))["cases"]
         assert all(c["label_provenance"] for c in labels)
 
-    def test_r12_recorded_vs_actual(self, run):
-        assert any(c.key.value == "classification_mix" for c in run[0].charts)
+    def test_r12_recorded_vs_true(self, run):
+        assert any(c.key.value == "recorded_vs_true_stacked" for c in run[0].charts)
+        # The Fujairah contact-type chart went with the retired subsection.
+        assert not any(c.key.value == "classification_mix" for c in run[0].charts)
 
 
 class TestWarningsAndRules:
@@ -216,14 +223,10 @@ class TestWarningsAndRules:
         warning = next(w for w in bundle.warnings if w.code == "narrative_unverified_figures")
         assert "98765" in warning.detail["figures"]
 
-    def test_no_guidebook_omits_the_gap_table_with_a_note(self, adpf_labelled, gateway, tmp_path):
-        request = _request(adpf_labelled)
-        request.reference_lists.guidebook = None
-        bundle, _ = _run(request, tmp_path)
-        assert bundle.metrics["GAP_TABLE"] == []
-        assert any(w.code == "section_omitted" for w in bundle.warnings)
-        s5 = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "digital_gaps")
-        assert s5.get("notes")
+    def test_the_guidebook_gap_analysis_is_retired(self, adpf_labelled, gateway, tmp_path):
+        bundle, _ = _run(_request(adpf_labelled), tmp_path)  # a guidebook is sent
+        assert "assess_guidebook" not in gateway.calls and bundle.metrics["GAP_TABLE"] == []
+        assert not any(w.code == "section_omitted" for w in bundle.warnings)
 
     def test_x8_off_has_no_root_cause_sections(self, adpf_labelled, gateway, tmp_path):
         request = _request(adpf_labelled)
@@ -277,14 +280,22 @@ class TestEnglishByTranslation:
 
         class Watch(FakeGateway):
             def create(self, **kwargs):
-                stages.append((kwargs["tools"][0]["name"], kwargs.get("stage"), "arabic" in kwargs["messages"][-1]["content"]))
+                stages.append((kwargs["tools"][0]["name"], kwargs.get("stage"), "arabic" in kwargs["messages"][-1]["content"],
+                               frozenset(kwargs["tools"][0]["input_schema"]["properties"])))
                 return super().create(**kwargs)
 
         install(monkeypatch, Watch())
         bundle, _ = _run(_request(adpf_labelled), tmp_path)
-        writes = sorted(s[1:] for s in stages if s[0].startswith("write_"))
-        # Two Arabic writes and two translations of them — no English writing prompt.
-        assert writes == [("narratives", False), ("narratives", False), ("translation", True), ("translation", True)]
+        writes = [s for s in stages if s[0].startswith("write_")]
+        arabic = [s[3] for s in writes if s[1] == "narratives"]
+        english = [s[3] for s in writes if s[1] == "translation"]
+        # Three Arabic groups, each translated on its own — no English writing prompt, and
+        # the retired sections' part is neither written nor translated.
+        assert len(arabic) == 3 and all(s[0] == "write_report_narratives" for s in writes)
+        assert not any(s[2] for s in writes if s[1] == "narratives") and all(s[2] for s in writes if s[1] == "translation")
+        # The groups split the fields: no field written twice, none lost.
+        assert sum(len(f) for f in arabic) == len(set().union(*arabic))
+        assert sorted(map(sorted, english)) == sorted(map(sorted, arabic))
         assert Language.EN in bundle.documents.report
         assert bundle.narratives[Language.EN].report.executive_summary.startswith("English text")
 
@@ -326,42 +337,134 @@ class TestSectionSelection:
     def _keys(self, bundle, lang=Language.AR):
         return [s["key"] for s in bundle.report[lang]["sections"]]
 
-    def test_every_section_by_default(self, adpf_labelled, gateway, tmp_path):
+    def test_every_sample_section_by_default_and_no_retired_one(self, adpf_labelled, gateway, tmp_path):
         bundle, _ = _run(_request(adpf_labelled), tmp_path)
-        keys = self._keys(bundle)
-        for key in ("executive_summary", "customer_journey", "digital_gaps", "ai_use_cases", "root_causes"):
-            assert key in keys
+        assert self._keys(bundle) == ["executive_summary", "statistics", "service_focus", "root_causes", "digital_content_opportunities", "improvement_roadmap", "conclusion", "appendices"]
+        assert "write_section_narratives" not in gateway.calls  # the retired sections' prose is not written
 
-    def test_hidden_sections_are_left_out_in_both_languages(self, adpf_labelled, gateway, tmp_path):
-        request = _request(adpf_labelled, options={"include_english": True,
-                                                   "sections": ["S1", "S2", "S3", "improvement_roadmap", "S9", "S10"]})
-        bundle, _ = _run(request, tmp_path)
-        expected = ["executive_summary", "methodology", "classification_map", "improvement_roadmap", "conclusion", "root_causes"]
-        assert self._keys(bundle) == expected and self._keys(bundle, Language.EN) == expected
-        report = bundle.narratives[Language.AR].report
-        assert report.friction_points == [] and report.service_focus_narratives == []
-        assert bundle.narratives[Language.AR].sections.ai_use_cases == []
-        # The roadmap still draws on the journey and the gaps (decision #6), so they ran.
-        assert bundle.metrics["JOURNEY_MAP"]
+    def test_sections_are_named_by_key_or_title_in_either_language(self):
+        from noveintel_inquiries.api.models.requests import AnalysisOptions
 
-    def test_analysis_no_shown_section_needs_is_skipped(self, adpf_labelled, gateway, tmp_path):
-        request = _request(adpf_labelled, options={"sections": ["S2", "S3"]})
-        bundle, _ = _run(request, tmp_path)
-        assert not {"map_journey", "propose_faqs", "assess_guidebook"} & set(gateway.calls)
-        assert bundle.metrics["JOURNEY_MAP"] == [] and bundle.metrics["VALIDATED_FAQS"] == []
+        options = AnalysisOptions(sections=["Executive summary", "الخلاصة والتوصيات", "root_causes",
+                                            "فرص المحتوى الرقمي الموجه", "Section 05" if False else "improvement roadmap"])
+        assert [x.value for x in options.sections] == [
+            "executive_summary", "conclusion", "root_causes", "digital_content_opportunities", "improvement_roadmap"]
 
-    def test_root_cause_sections_without_x8_are_omitted_with_a_warning(self, adpf_labelled, gateway, tmp_path):
-        request = _request(adpf_labelled, options={"sections": ["S1", "S10", "S11"]})
-        request.settings.root_cause_extraction = False
-        bundle, _ = _run(request, tmp_path)
-        assert self._keys(bundle) == ["executive_summary"]
-        warning = next(w for w in bundle.warnings if w.code == "section_omitted" and "sections" in (w.detail or {}))
-        assert warning.detail["sections"] == ["S10", "S11"]
-
-    def test_unknown_section_is_refused(self):
+    @pytest.mark.parametrize("name", ["S1", "S12", "customer_journey", "ai_use_cases", "digital_gaps"])
+    def test_ids_and_retired_sections_are_refused(self, name):
         from pydantic import ValidationError
 
         from noveintel_inquiries.api.models.requests import AnalysisOptions
 
-        with pytest.raises(ValidationError):
-            AnalysisOptions(sections=["S12"])
+        with pytest.raises(ValidationError, match="Unknown report section"):
+            AnalysisOptions(sections=[name])
+
+    def test_hidden_sections_are_left_out_and_renumbered_in_both_languages(self, adpf_labelled, gateway, tmp_path):
+        request = _request(adpf_labelled, options={"include_english": True,
+                                                   "sections": ["executive_summary", "statistics", "root_causes",
+                                                                "improvement_roadmap", "conclusion"]})
+        bundle, _ = _run(request, tmp_path)
+        expected = ["executive_summary", "statistics", "root_causes", "improvement_roadmap", "conclusion"]
+        assert self._keys(bundle) == expected and self._keys(bundle, Language.EN) == expected
+        ids = [s["id"] for s in bundle.report[Language.AR]["sections"]]
+        assert ids == ["executive_summary", "01", "02", "03", "conclusion"]
+        report = bundle.narratives[Language.AR].report
+        assert report.friction_points == [] and report.service_focus_narratives == [] and report.priority_faqs == []
+        # The roadmap draws on the journey and the FAQs, so they ran.
+        assert bundle.metrics["JOURNEY_MAP"] and {"map_journey", "propose_faqs"} <= set(gateway.calls)
+
+    def test_sections_without_analysis_make_no_analysis_call(self, adpf_labelled, gateway, tmp_path):
+        request = _request(adpf_labelled, options={"sections": ["executive_summary", "statistics", "conclusion"]})
+        bundle, _ = _run(request, tmp_path)
+        assert not {"map_journey", "propose_faqs", "assess_guidebook"} & set(gateway.calls)
+        assert bundle.metrics["JOURNEY_MAP"] == [] and bundle.metrics["VALIDATED_FAQS"] == []
+
+    @pytest.mark.parametrize("section,calls", [
+        ("appendices", {"map_journey"}),
+        ("digital_content_opportunities", {"propose_faqs"}),
+    ])
+    def test_each_dependency_runs_only_its_own_analysis(self, adpf_labelled, gateway, tmp_path, section, calls):
+        request = _request(adpf_labelled, options={"sections": ["statistics", section]})
+        _run(request, tmp_path)
+        assert {"map_journey", "propose_faqs", "assess_guidebook"} & set(gateway.calls) == calls
+
+    def test_root_cause_sections_without_x8_are_omitted_with_a_warning(self, adpf_labelled, gateway, tmp_path):
+        request = _request(adpf_labelled, options={"sections": ["executive_summary", "root_causes", "service_focus"]})
+        request.settings.root_cause_extraction = False
+        bundle, _ = _run(request, tmp_path)
+        assert self._keys(bundle) == ["executive_summary"]
+        warning = next(w for w in bundle.warnings if w.code == "section_omitted" and "sections" in (w.detail or {}))
+        assert warning.detail["sections"] == ["service_focus", "root_causes"]
+
+    def test_hidden_root_cause_sections_cost_no_root_cause_tokens(self, adpf_labelled, monkeypatch, tmp_path):
+        from .fakes import FakeGateway, install
+
+        sent = []
+
+        class Watch(FakeGateway):
+            def create(self, **kwargs):
+                sent.append((kwargs["tools"][0]["name"], kwargs.get("system") or "", kwargs["messages"][-1]["content"]))
+                return super().create(**kwargs)
+
+        install(monkeypatch, Watch())
+        request = _request(adpf_labelled, options={"include_english": True,
+                                                   "sections": ["executive_summary", "statistics", "improvement_roadmap", "conclusion"]})
+        bundle, _ = _run(request, tmp_path)
+        writes = [x for x in sent if x[0] == "write_report_narratives" and '"arabic"' not in x[2]]
+        assert writes and all("ROOT_CAUSE_TOP" not in content and "SERVICE_FOCUS" not in content for _, _, content in writes)
+        assert all("ROOT_CAUSE_TOP" not in system for _, system, _ in writes)
+        translated = [x for x in sent if x[0] == "translate_labels"]
+        root_causes = set(bundle.metrics["ROOT_CAUSE_TOP"]["labels"])
+        assert all(not any(rc in content for rc in root_causes) for _, _, content in translated)
+        assert bundle.metrics["JOURNEY_MAP"] and "map_journey" in {x[0] for x in sent}
+
+    def test_statistics_only_makes_one_writing_call(self, adpf_labelled, gateway, tmp_path):
+        request = _request(adpf_labelled, options={"include_english": False, "sections": ["statistics"]})
+        _run(request, tmp_path)
+        assert not {"map_journey", "propose_faqs", "assess_guidebook", "translate_labels"} & set(gateway.calls)
+        assert gateway.calls.count("write_report_narratives") == 1
+        assert gateway.calls.count("write_section_narratives") == 0
+
+
+class TestNarrativeOverlap:
+    def test_the_groups_that_need_no_analysis_start_before_it_finishes(self, adpf_labelled, monkeypatch, tmp_path):
+        import threading
+
+        from .fakes import FakeGateway, install
+
+        summary_started = threading.Event()
+
+        class Slow(FakeGateway):
+            def create(self, **kwargs):
+                props = kwargs["tools"][0]["input_schema"].get("properties", {})
+                if kwargs.get("stage") == "narratives" and "executive_summary" in props:
+                    summary_started.set()
+                return super().create(**kwargs)
+
+            def _map_journey(self, user, tool, system):
+                # The journey analysis finishes only after the executive summary was asked
+                # for: if the early groups waited for the analysis, this would time out.
+                assert summary_started.wait(10), "the early narrative waited for the analysis"
+                return super()._map_journey(user, tool, system)
+
+        install(monkeypatch, Slow())
+        bundle, _ = _run(_request(adpf_labelled), tmp_path)
+        assert bundle.narratives[Language.AR].report.executive_summary
+        assert bundle.narratives[Language.AR].report.initiatives  # group C, after the analysis
+
+    def test_group_c_reads_the_analysis(self, adpf_labelled, monkeypatch, tmp_path):
+        from .fakes import FakeGateway, install
+
+        contexts = {}
+
+        class Watch(FakeGateway):
+            def create(self, **kwargs):
+                props = kwargs["tools"][0]["input_schema"].get("properties", {})
+                if kwargs.get("stage") == "narratives":
+                    contexts["initiatives" in props] = kwargs["messages"][-1]["content"]
+                return super().create(**kwargs)
+
+        install(monkeypatch, Watch())
+        _run(_request(adpf_labelled), tmp_path)
+        assert "JOURNEY_MAP" in contexts[True] and "INITIATIVE_SOURCES" in contexts[True]
+        assert "INITIATIVE_SOURCES" not in contexts[False]

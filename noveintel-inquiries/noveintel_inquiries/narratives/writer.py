@@ -53,6 +53,7 @@ _ROOT_FIELDS = (
 
 class NarrativeOutcome(BaseModel):
     narratives: ReportNarratives | None = None
+    units: list["PartOutcome"] = []
     unverified: list[str] = []
     incomplete: list[str] = []
     banned_hits: list[str] = []
@@ -76,14 +77,19 @@ def _inline_refs(schema: dict) -> dict:
     return walk(schema)
 
 
-def _tool(name: str, model: type[BaseModel], must_write: list[str] | None = None) -> dict:
+def _tool(name: str, model: type[BaseModel], must_write: list[str] | None = None,
+          only: list[str] | None = None) -> dict:
     """The structured-output tool. Fields whose input is present may not be empty.
 
     Without this an all-empty answer is schema-valid, and a reasoning model sometimes
-    returns exactly that in a few seconds instead of writing the report.
+    returns exactly that in a few seconds instead of writing the report. ``only``
+    limits the tool to the fields being asked for: a field of a hidden section is not
+    in the schema at all, so the model spends no tokens on it.
     """
     schema = _inline_refs(model.model_json_schema())
-    schema["required"] = list(model.model_fields)
+    if only is not None:
+        schema["properties"] = {k: v for k, v in schema["properties"].items() if k in only}
+    schema["required"] = list(schema["properties"])
     for field in must_write or []:
         prop = schema["properties"].get(field, {})
         if prop.get("type") == "string":
@@ -329,7 +335,7 @@ def postprocess(report: dict, sections: dict, context: dict, lang: str,
 
 
 def _call(client: Core42Client, system: str, context: dict, tool: dict, note: str | None = None,
-          stage: str = "narratives") -> dict:
+          stage: str = "narratives", retry: bool | None = None) -> dict:
     content = json.dumps(context, ensure_ascii=False, default=str)
     if note:
         content = f"{note}\n\n{content}"
@@ -343,7 +349,7 @@ def _call(client: Core42Client, system: str, context: dict, tool: dict, note: st
             data = block.input or {}
             logger.info(
                 "Narrative %s: %d/%d fields filled, stop=%s%s.", tool["name"], _filled(data), len(data),
-                getattr(message, "stop_reason", "?"), " (retry)" if note else "",
+                getattr(message, "stop_reason", "?"), " (retry)" if (note if retry is None else retry) else "",
             )
             return data
     raise ValueError("The narrative model returned no structured output.")
@@ -392,16 +398,14 @@ def _empty_part(part: str) -> dict:
     return data
 
 
-def _leave_empty(lang: str, fields: list[str]) -> str:
-    if lang == "ar":
-        return "الحقول التالية لأقسام غير مطلوبة في هذا التقرير؛ اتركها فارغة: " + "، ".join(fields)
-    return "These fields belong to sections not in this report; leave them empty: " + ", ".join(fields)
-
-
 class PartOutcome(BaseModel):
-    """One narrative part, final and cleaned — or why not."""
+    """One unit of the narrative — a part, or a group of a part's fields — final and
+    cleaned, or why not. ``fields`` are the fields this unit wrote; ``None`` means all
+    of the part's fields (the unit is the whole part)."""
 
     part: str
+    unit: str = ""
+    fields: list[str] | None = None
     data: dict | None = None
     unverified: list[str] = []
     incomplete: list[str] = []
@@ -410,8 +414,11 @@ class PartOutcome(BaseModel):
     error: str | None = None
 
 
+NarrativeOutcome.model_rebuild()
+
+
 def _rounds(call: Callable[[str | None], dict], *, lang: str, model: type[BaseModel], required: list[str],
-            context: dict, label: str) -> tuple[dict | None, list[str], str | None]:
+            asked: list[str], context: dict, label: str) -> tuple[dict | None, list[str], str | None]:
     """First draft, a retry if it came back empty, a corrective retry for figures.
 
     A retry replaces a draft only when it is at least as complete — a correction must
@@ -427,15 +434,19 @@ def _rounds(call: Callable[[str | None], dict], *, lang: str, model: type[BaseMo
 
     attempt.error = None  # type: ignore[attr-defined]
 
+    # Only the fields asked for count: a hidden section's field is not in the tool.
+    def missing(answer: dict) -> list[str]:
+        return [f for f in asked if f not in answer]
+
     def quality(answer: dict | None) -> tuple[int, int]:
-        return (-len(_missing(answer, model)), _filled(answer)) if answer else (-999, 0)
+        return (-len(missing(answer)), _filled(answer)) if answer else (-999, 0)
 
     def unwritten(answer: dict | None) -> list[str]:
         return [f for f in required if (answer or {}).get(f) in (None, "", [])]
 
     draft = attempt(None)
     gaps = unwritten(draft)
-    if draft is None or _missing(draft, model) or len(gaps) > len(required) // 3:
+    if draft is None or missing(draft) or len(gaps) > len(required) // 3:
         retry = attempt(_empty_note(lang, gaps or required))
         if retry and quality(retry) > quality(draft):
             draft = retry
@@ -462,14 +473,19 @@ def write_narratives(
     vocabulary: dict[str, str],
     sources: list[dict],
     hidden: dict[str, set[str]] | None = None,
+    groups: list[set[str]] | None = None,
     on_part: Callable[[PartOutcome], None] | None = None,
     client: Core42Client | None = None,
 ) -> NarrativeOutcome:
-    """Write the Arabic narrative: both parts in parallel, each with its own rounds.
+    """Write the Arabic narrative: every unit in parallel, each with its own rounds.
 
-    Each part is cleaned and handed to ``on_part`` the moment it is final, so the
-    caller can start translating it while the other part is still being written.
-    Fields of hidden sections are not asked for and come back empty. Never raises.
+    A unit is a part, or — with ``groups`` — a group of the report part's fields
+    written by its own call. The fields share one context and one system prompt and
+    none reads another's text, so splitting them changes no dependency; it only lets
+    the calls run side by side. Each unit is cleaned and handed to ``on_part`` the
+    moment it is final, so its translation can start while the others are still
+    being written. Fields of hidden sections are not asked for and come back empty.
+    Never raises.
     """
     client = client or Core42Client()
     hidden = hidden or {"report": set(), "sections": set()}
@@ -477,35 +493,57 @@ def write_narratives(
     names = {"report": "write_report_narratives", "sections": "write_section_narratives"}
     source_map = {s["id"]: s for s in sources}
 
-    def one(part: str) -> PartOutcome:
-        model = _EMPTY[part]
-        required = [f for f in must_write(context, model) if f not in hidden[part]]
-        if not required:
-            outcome = PartOutcome(part=part, data=_empty_part(part))
+    # Asked for: the fields of shown sections whose input is present. A hidden
+    # section's field, or a conditional field without input (a department narrative
+    # with no department column), is left out of the tool: it is neither written nor
+    # paid for, and its absence from the answer is not a reason to retry.
+    required = {part: [f for f in must_write(context, model) if f not in hidden[part]] for part, model in _EMPTY.items()}
+    units: list[tuple[str, str, list[str]]] = []
+    for part in _EMPTY:
+        if part == "report" and groups:
+            covered: set[str] = set()
+            for i, group in enumerate(groups, 1):
+                fields = [f for f in required[part] if f in group]
+                covered |= set(fields)
+                if fields:
+                    units.append((part, f"{part}.{i}", fields))
+            rest = [f for f in required[part] if f not in covered]
+            if rest:
+                units.append((part, f"{part}.rest", rest))
         else:
-            tool = _tool(names[part], model, required)
-            skip = sorted(hidden[part])
-            preface = "\n\n".join(x for x in (_write_these("ar", required), _leave_empty("ar", skip) if skip else "") if x)
+            units.append((part, part, required[part]))
+
+    def one(part: str, unit: str, fields: list[str]) -> PartOutcome:
+        model = _EMPTY[part]
+        not_asked = set(model.model_fields) - set(fields)
+        if not fields:
+            outcome = PartOutcome(part=part, unit=unit, fields=[], data=_empty_part(part))
+        else:
+            tool = _tool(names[part], model, fields, only=fields)
+            preface = _write_these("ar", fields)
 
             def call(note: str | None) -> dict:
-                return _call(client, system, context, tool, "\n\n".join(x for x in (preface, note) if x))
+                return _call(client, system, context, tool, "\n\n".join(x for x in (preface, note) if x),
+                             retry=note is not None)
 
-            draft, offenders, error = _rounds(call, lang="ar", model=model, required=required, context=context, label=f"ar/{part}")
+            draft, offenders, error = _rounds(call, lang="ar", model=model, required=fields, asked=fields,
+                                              context=context, label=f"ar/{unit}")
             if draft is None:
-                outcome = PartOutcome(part=part, error=error)
+                outcome = PartOutcome(part=part, unit=unit, fields=fields, error=error)
             else:
-                outcome = _finish(part, draft, offenders, context, "ar", vocabulary, source_map, hidden[part])
+                outcome = _finish(part, draft, offenders, context, "ar", vocabulary, source_map, not_asked)
+                outcome.unit, outcome.fields = unit, fields
         if outcome.data is not None and on_part:
             try:
                 on_part(outcome)
             except Exception as exc:  # the caller's hook must not cost the Arabic report
-                logger.warning("on_part hook failed for %s: %s", part, exc)
+                logger.warning("on_part hook failed for %s: %s", unit, exc)
         return outcome
 
-    with ScopedThreadPoolExecutor(max_workers=2) as pool:
-        futures = {part: pool.submit(one, part) for part in _EMPTY}
-        parts = {part: future.result() for part, future in futures.items()}
-    return combine(parts)
+    with ScopedThreadPoolExecutor(max_workers=max(2, len(units))) as pool:
+        futures = [pool.submit(one, *u) for u in units]
+        outcomes = [future.result() for future in futures]
+    return combine(outcomes)
 
 
 def _finish(part: str, draft: dict, offenders: list[str], context: dict, lang: str,
@@ -522,20 +560,31 @@ def _finish(part: str, draft: dict, offenders: list[str], context: dict, lang: s
         return PartOutcome(part=part, error=f"{type(exc).__name__}: {str(exc)[:300]}")
 
 
-def combine(parts: dict[str, PartOutcome]) -> NarrativeOutcome:
-    """Two finished parts into one narrative outcome."""
-    failed = [p for p in parts.values() if p.data is None]
+def combine(units: list[PartOutcome] | dict[str, PartOutcome]) -> NarrativeOutcome:
+    """Finished units into one narrative outcome.
+
+    Each part starts empty and takes, from every unit of that part, the fields that unit
+    wrote — so units of one part, even from separate calls, never overwrite each other.
+    """
+    units = list(units.values()) if isinstance(units, dict) else list(units)
+    failed = [u for u in units if u.data is None]
     if failed:
-        return NarrativeOutcome(error="; ".join(f"{p.part}: {p.error}" for p in failed))
+        return NarrativeOutcome(error="; ".join(f"{u.unit or u.part}: {u.error}" for u in failed), units=units)
+    merged = {part: _empty_part(part) for part in _EMPTY}
+    for u in units:
+        fields = u.fields if u.fields is not None else list(_EMPTY[u.part].model_fields)
+        for field in fields:
+            merged[u.part][field] = u.data[field]
     return NarrativeOutcome(
         narratives=ReportNarratives(
-            report=InquiriesReportNarratives.model_validate(parts["report"].data),
-            sections=SectionNarratives.model_validate(parts["sections"].data),
+            report=InquiriesReportNarratives.model_validate(merged["report"]),
+            sections=SectionNarratives.model_validate(merged["sections"]),
         ),
-        unverified=sorted(set(parts["report"].unverified + parts["sections"].unverified)),
-        incomplete=parts["report"].incomplete + parts["sections"].incomplete,
-        banned_hits=sorted(set(parts["report"].banned_hits + parts["sections"].banned_hits)),
-        dropped_initiatives=parts["report"].dropped + parts["sections"].dropped,
+        units=units,
+        unverified=sorted({f for u in units for f in u.unverified}),
+        incomplete=[f for u in units for f in u.incomplete],
+        banned_hits=sorted({h for u in units for h in u.banned_hits}),
+        dropped_initiatives=sum(u.dropped for u in units),
     )
 
 
@@ -550,9 +599,10 @@ def translate_part(
     glossary: dict[str, str],
     vocabulary: dict[str, str],
     sources: list[dict],
+    unit: str = "",
     client: Core42Client | None = None,
 ) -> PartOutcome:
-    """Translate one finished Arabic part into English. Never raises.
+    """Translate one finished Arabic unit into English. Never raises.
 
     Only the fields the Arabic carries are asked for. A field left untranslated is
     asked for again; a figure the English carries that the engine output does not is
@@ -564,20 +614,25 @@ def translate_part(
     model = _EMPTY[part]
     written = [f for f in model.model_fields if arabic.get(f) not in (None, "", [])]
     if not written:
-        return PartOutcome(part=part, data=_empty_part(part))
+        return PartOutcome(part=part, unit=unit or part, fields=[], data=_empty_part(part))
     system = translation_system_prompt(vocabulary)
     names = {"report": "write_report_narratives", "sections": "write_section_narratives"}
-    tool = _tool(names[part], model, written)
-    payload = {"glossary": _glossary_for(arabic, glossary), "arabic": arabic}
+    # Only the fields the Arabic carries are sent and asked for.
+    tool = _tool(names[part], model, written, only=written)
+    source = {f: arabic[f] for f in written}
+    payload = {"glossary": _glossary_for(source, glossary), "arabic": source}
 
     def call(note: str | None) -> dict:
         return _call(client, system, payload, tool, note, "translation")
 
-    draft, offenders, error = _rounds(call, lang="en", model=model, required=written, context=context, label=f"en/{part}")
+    draft, offenders, error = _rounds(call, lang="en", model=model, required=written, asked=written,
+                                      context=context, label=f"en/{unit or part}")
     if draft is None:
-        return PartOutcome(part=part, error=error or "translation failed")
+        return PartOutcome(part=part, unit=unit or part, fields=written, error=error or "translation failed")
     hidden = {f for f in model.model_fields if f not in written}
-    return _finish(part, draft, offenders, context, "en", vocabulary, {s["id"]: s for s in sources}, hidden)
+    outcome = _finish(part, draft, offenders, context, "en", vocabulary, {s["id"]: s for s in sources}, hidden)
+    outcome.unit, outcome.fields = unit or part, written
+    return outcome
 
 
 def translate_narratives(
