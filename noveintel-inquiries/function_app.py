@@ -50,7 +50,7 @@ import os
 import azure.functions as func
 
 from noveintel_inquiries.api.app import app as fastapi_app
-from noveintel_inquiries.api.models import GenerateInquiriesReportRequest
+from noveintel_inquiries.models import GenerateInquiriesReportRequest
 from noveintel_inquiries.config import get_job_settings
 from noveintel_inquiries.jobs import (
     JobStoreError,
@@ -60,7 +60,7 @@ from noveintel_inquiries.jobs import (
     execute_job,
     fail_job,
 )
-from noveintel_inquiries.api.models.jobs import JobError
+from noveintel_inquiries.models.jobs import JobError
 from noveintel_inquiries.storage import create_document_store
 
 logger = logging.getLogger(__name__)

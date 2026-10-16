@@ -12,7 +12,7 @@ failures from.
 """
 from __future__ import annotations
 
-__all__ = ["MissingInputs", "StageFailure", "UpstreamFailure"]
+__all__ = ["MissingInputs", "RunAbandoned", "StageFailure", "UpstreamFailure"]
 
 
 class StageFailure(Exception):
@@ -69,7 +69,17 @@ class MissingInputs(ValueError):
     code = "missing_required_columns"
 
     def __init__(self, missing: list) -> None:
-        from .api.models.requests import missing_fields_message
+        from .models.requests import missing_fields_message
 
         super().__init__(missing_fields_message(missing))
         self.missing = missing
+
+
+class RunAbandoned(Exception):
+    """Raised into a run's thread when nobody is waiting for it any more.
+
+    The job runner raises it from the next progress report once a run passes its
+    ceiling; the pipeline lets it through untouched. Defined here, not in
+    ``jobs/runner.py``, so the pipeline can name it without importing the job layer —
+    which imports the pipeline.
+    """

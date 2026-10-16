@@ -102,6 +102,22 @@ entirely.
 The 230-second limit on HTTP responses does not apply here: the API answers
 immediately and the work runs in the queue worker.
 
+#### Several instances share one gateway
+
+`LLM_MAX_CONCURRENCY` caps model calls in flight **per worker process**, but Core42
+meters the key, so the gateway sees the sum: instances × `FUNCTIONS_WORKER_PROCESS_COUNT`
+(default 1) × `LLM_MAX_CONCURRENCY`, across both services if they share a key. Two things
+keep that sum in check:
+
+* **The cap adapts** (`LLM_ADAPTIVE_CONCURRENCY`, on by default). A 429 halves a
+  process's cap, at most once per 10 s, and each round of clean calls raises it by one
+  back to `LLM_MAX_CONCURRENCY`. Instances under one quota back off together without
+  talking to each other; an instance that never sees a 429 runs at the full cap.
+* **Cap the instance count.** Adapting slows instances down but does not stop more from
+  starting. Set the Function App's maximum scale-out limit (the *Scale out* blade;
+  the site property `functionAppScaleLimit`) so that the sum above stays within the
+  concurrency Core42 grants the key.
+
 ### App settings
 
 **Required**
@@ -132,6 +148,7 @@ immediately and the work runs in the queue worker.
 | `NOVEINQ_MAX_RECORDS` | `100000` | Larger exports are refused up front |
 | `LLM_DEEP_REASONING_EFFORT` | `medium` | How hard the deep review reasons (`none` · `minimal` · `low` · `medium` · `high` · `xhigh`). gpt-5.1 does not reason without it |
 | `LLM_MAX_CONCURRENCY` | `5` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
+| `LLM_ADAPTIVE_CONCURRENCY` | `true` | Halve the in-flight cap on a 429 and grow it back on clean calls; `false` keeps it fixed. See *Several instances share one gateway* |
 | `NOVEINQ_LOG_LEVEL` | `INFO` | |
 
 A setting declared but left blank means its default, as if it were not there — a

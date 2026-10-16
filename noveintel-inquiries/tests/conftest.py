@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from noveintel_inquiries.api.models import EntityInfo, GenerateInquiriesReportRequest
+from noveintel_inquiries.models import EntityInfo, GenerateInquiriesReportRequest
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 PROJECT_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

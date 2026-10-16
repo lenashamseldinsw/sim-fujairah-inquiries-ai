@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from noveintel_inquiries.api.models import InquiryRecord, TenantSettings
+from noveintel_inquiries.models import InquiryRecord, TenantSettings
 from noveintel_inquiries.classification.classify import classify_cases, group_umbrellas
 from noveintel_inquiries.classification.rootcause import check_root_cause
 from noveintel_inquiries.classification.rules import classify_by_rules

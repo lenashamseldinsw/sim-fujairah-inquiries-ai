@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from ...engine.text import fold_header
+from ..engine.text import fold_header
 
 __all__ = [
     "ColumnKind",

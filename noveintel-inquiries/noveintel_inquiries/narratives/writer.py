@@ -26,7 +26,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, ValidationError
 
-from ..api.models.narratives import (
+from ..models.narratives import (
     InquiriesReportNarratives,
     ReportNarratives,
     SectionNarratives,
@@ -489,7 +489,6 @@ def write_narratives(
     """
     client = client or Core42Client()
     hidden = hidden or {"report": set(), "sections": set()}
-    system = narrative_system_prompt("ar", root_causes=root_causes, vocabulary=vocabulary)
     names = {"report": "write_report_narratives", "sections": "write_section_narratives"}
     source_map = {s["id"]: s for s in sources}
 
@@ -498,6 +497,8 @@ def write_narratives(
     # with no department column), is left out of the tool: it is neither written nor
     # paid for, and its absence from the answer is not a reason to retry.
     required = {part: [f for f in must_write(context, model) if f not in hidden[part]] for part, model in _EMPTY.items()}
+    system = narrative_system_prompt("ar", root_causes=root_causes, vocabulary=vocabulary,
+                                     section_fields=bool(required["sections"]))
     units: list[tuple[str, str, list[str]]] = []
     for part in _EMPTY:
         if part == "report" and groups:

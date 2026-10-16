@@ -33,6 +33,7 @@ from typing import Awaitable, Callable
 
 from ..api.models.enums import JobStatus
 from ..api.models.jobs import JobError, JobState
+from ..exceptions import RunAbandoned
 from .base import JobNotFound, JobStore
 
 __all__ = ["JobRunner", "ProgressReporter", "RunAbandoned", "runtime_exceeded"]
@@ -44,10 +45,6 @@ logger = logging.getLogger(__name__)
 # closer together than this are dropped. Stage boundaries are seconds to minutes
 # apart, so nothing a caller would see is lost.
 _MIN_PROGRESS_INTERVAL_SEC = 0.5
-
-
-class RunAbandoned(Exception):
-    """Raised into a run's thread when nobody is waiting for it any more."""
 
 
 def runtime_exceeded(max_runtime_sec: float) -> JobError:

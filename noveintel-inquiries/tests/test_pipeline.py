@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from noveintel_inquiries.api.models import GenerateInquiriesReportRequest, Language
+from noveintel_inquiries.models import GenerateInquiriesReportRequest, Language
 from noveintel_inquiries.exceptions import MissingInputs
 from noveintel_inquiries.pipeline import generate_report, validate_records
 from noveintel_inquiries.storage import LocalDirectoryStore
@@ -314,7 +314,7 @@ class TestEnglishByTranslation:
         assert any(w.code == "english_export_unavailable" for w in bundle.warnings)
 
     def test_the_glossary_carries_the_names_the_report_prints(self):
-        from noveintel_inquiries.api.models import EntityInfo, Period
+        from noveintel_inquiries.models import EntityInfo, Period
         from noveintel_inquiries.engine.compute import Umbrella
         from noveintel_inquiries.engine.localize import Localizer
         from noveintel_inquiries.engine.taxonomy import load_taxonomy
@@ -343,7 +343,7 @@ class TestSectionSelection:
         assert "write_section_narratives" not in gateway.calls  # the retired sections' prose is not written
 
     def test_sections_are_named_by_key_or_title_in_either_language(self):
-        from noveintel_inquiries.api.models.requests import AnalysisOptions
+        from noveintel_inquiries.models.requests import AnalysisOptions
 
         options = AnalysisOptions(sections=["Executive summary", "الخلاصة والتوصيات", "root_causes",
                                             "فرص المحتوى الرقمي الموجه", "Section 05" if False else "improvement roadmap"])
@@ -354,7 +354,7 @@ class TestSectionSelection:
     def test_ids_and_retired_sections_are_refused(self, name):
         from pydantic import ValidationError
 
-        from noveintel_inquiries.api.models.requests import AnalysisOptions
+        from noveintel_inquiries.models.requests import AnalysisOptions
 
         with pytest.raises(ValidationError, match="Unknown report section"):
             AnalysisOptions(sections=[name])

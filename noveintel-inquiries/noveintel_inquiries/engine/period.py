@@ -15,8 +15,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Iterable, Sequence
 
-from ..api.models.enums import PeriodGranularity
-from ..api.models.period import Period
+from ..models.enums import PeriodGranularity
+from ..models.period import Period
 
 __all__ = ["derive_granularity", "parse_dates", "resolve_period"]
 

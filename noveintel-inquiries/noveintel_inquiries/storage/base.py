@@ -19,9 +19,9 @@ from __future__ import annotations
 import re
 from typing import Protocol, runtime_checkable
 
-from ..api.models.documents import DOCX_CONTENT_TYPE, DocumentRef
-from ..api.models.entity import EntityInfo
-from ..api.models.period import Period
+from ..models.documents import DOCX_CONTENT_TYPE, DocumentRef
+from ..models.entity import EntityInfo
+from ..models.period import Period
 
 __all__ = [
     "DOCX_CONTENT_TYPE",

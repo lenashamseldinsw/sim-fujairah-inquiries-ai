@@ -22,7 +22,7 @@ from concurrent.futures import as_completed
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ..api.models.reference import FaqEntry, Guidebook
+from ..models.reference import FaqEntry, Guidebook
 from ..core42 import CHAT_MODEL, Core42Client
 from ..core42.tokens import ScopedThreadPoolExecutor
 from ..engine.compute import faq_keywords, pct
@@ -399,15 +399,15 @@ def analyse(
 
     if guidebook:
         result.guidebook = guidebook_meta(guidebook)
-        # Retired with the digital-gap section (BO, 2026-10-14): the guidebook gap analysis.
-        # The guidebook still marks proposed FAQs as already published, and is listed in
-        # the methodology's sources.
-        # if result.frictions and gaps:
-        #     if progress:
-        #         progress(0.6, "تحليل الفجوات مقابل دليل الخدمات", "Stage 3: Guidebook gap analysis")
-        #     try:
-        #         result.gaps = _gaps(client, result.frictions, guidebook, entity, vocabulary, total)
-        #     except Exception as exc:
-        #         result.warnings.append(f"Gap analysis failed: {type(exc).__name__}")
-        #         logger.warning("Gap analysis failed: %s", exc)
+        # The guidebook gap analysis feeds only the digital-gap section, which is disabled
+        # (BO, 2026-10-14), so a run asks for it with gaps=False. The guidebook still marks
+        # proposed FAQs as already published, and is listed in the methodology's sources.
+        if result.frictions and gaps:
+            if progress:
+                progress(0.6, "تحليل الفجوات مقابل دليل الخدمات", "Stage 3: Guidebook gap analysis")
+            try:
+                result.gaps = _gaps(client, result.frictions, guidebook, entity, vocabulary, total)
+            except Exception as exc:
+                result.warnings.append(f"Gap analysis failed: {type(exc).__name__}")
+                logger.warning("Gap analysis failed: %s", exc)
     return result

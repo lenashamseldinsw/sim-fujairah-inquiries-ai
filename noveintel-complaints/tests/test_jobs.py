@@ -473,7 +473,7 @@ class TestRunCeilingAndCodes:
     async def test_an_abandoned_run_stops_at_its_next_progress_report(self, tmp_path):
         """A timed-out coroutine cannot stop the thread the stages run on; the
         progress callback is how that thread learns nobody is waiting."""
-        from noveintel_complaints.jobs.runner import RunAbandoned
+        from noveintel_complaints.exceptions import RunAbandoned
 
         store = LocalJobStore(tmp_path)
         await store.create(queued())

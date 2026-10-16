@@ -4,7 +4,7 @@ not, and the status colours locked whatever the brand.
 """
 from __future__ import annotations
 
-from noveintel_inquiries.api.models import TIMELINESS_COLORS, EntityInfo
+from noveintel_inquiries.models import TIMELINESS_COLORS, EntityInfo
 from noveintel_inquiries.report.assemble import categorical_palette
 from noveintel_inquiries.report.word import DEFAULT_THEME, Theme, theme_of
 

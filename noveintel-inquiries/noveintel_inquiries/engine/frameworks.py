@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Callable
 
-from ..api.models.settings import FrameworkId, TenantSettings, WorkingCalendar
+from ..models.settings import FrameworkId, TenantSettings, WorkingCalendar
 from .parse import Case
 from .text import fold_text
 

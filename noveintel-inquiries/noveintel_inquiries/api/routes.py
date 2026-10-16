@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, status
 
-from ..api.models.enums import JobStatus
+from ..models.enums import JobStatus
 from ..config import get_pricing_settings, get_settings, get_storage_settings
 from ..jobs import JobNotFound, JobStoreError, save_request
 from ..exceptions import MissingInputs
@@ -36,7 +36,7 @@ from .deps import (
     require_api_key,
 )
 from .errors import ApiError, ErrorResponse, missing_inputs_error
-from .models import JobAccepted, JobState, GenerateInquiriesReportRequest
+from ..models import JobAccepted, JobState, GenerateInquiriesReportRequest
 
 __all__ = ["router"]
 

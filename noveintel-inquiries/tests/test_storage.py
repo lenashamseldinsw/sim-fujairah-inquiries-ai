@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from noveintel_inquiries.api.models import PeriodGranularity
-from noveintel_inquiries.api.models.period import Period
+from noveintel_inquiries.models import PeriodGranularity
+from noveintel_inquiries.models.period import Period
 from noveintel_inquiries.storage import LocalDirectoryStore, StorageError, build_key, slugify
 
 

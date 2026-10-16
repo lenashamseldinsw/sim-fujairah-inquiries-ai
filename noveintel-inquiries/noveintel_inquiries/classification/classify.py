@@ -29,7 +29,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable
 
-from ..api.models.settings import TenantSettings
+from ..models.settings import TenantSettings
 from ..core42 import Core42Client
 from ..engine.compute import Umbrella
 from ..engine.parse import Case

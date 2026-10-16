@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from noveintel_inquiries.api.models import InquiriesReportNarratives, SectionNarratives
+from noveintel_inquiries.models import InquiriesReportNarratives, SectionNarratives
 from noveintel_inquiries.engine.wording import apply_vocabulary, clean_list_item, replace_banned
 from noveintel_inquiries.narratives.prompts import narrative_system_prompt, translation_system_prompt
 from noveintel_inquiries.narratives.rules import style_block
@@ -208,7 +208,7 @@ class TestRequiredText:
 
 class TestTranslation:
     def _arabic(self):
-        from noveintel_inquiries.api.models import ReportNarratives
+        from noveintel_inquiries.models import ReportNarratives
 
         report = _report(executive_summary="جرى تحليل 40 حالة في الإقرار السنوي.",
                          key_findings=["نتيجة 12%"], closing_statement="ختام",
@@ -280,8 +280,8 @@ class TestPartsAndSections:
         assert outcome.narratives is not None
 
     def test_hidden_sections_are_not_asked_for_and_come_back_empty(self, monkeypatch):
-        from noveintel_inquiries.api.models.enums import ReportSection
-        from noveintel_inquiries.api.models.narratives import hidden_fields
+        from noveintel_inquiries.models.enums import ReportSection
+        from noveintel_inquiries.sections import hidden_fields
         from noveintel_inquiries.narratives.writer import write_narratives
 
         from .fakes import FakeGateway, install
@@ -309,8 +309,8 @@ class TestPartsAndSections:
         assert [name for name, _ in seen] == ["write_report_narratives"]  # the retired part makes no call
 
     def test_a_part_with_every_section_hidden_makes_no_call(self, monkeypatch):
-        from noveintel_inquiries.api.models.enums import ReportSection
-        from noveintel_inquiries.api.models.narratives import hidden_fields
+        from noveintel_inquiries.models.enums import ReportSection
+        from noveintel_inquiries.sections import hidden_fields
         from noveintel_inquiries.narratives.writer import write_narratives
 
         from .fakes import install

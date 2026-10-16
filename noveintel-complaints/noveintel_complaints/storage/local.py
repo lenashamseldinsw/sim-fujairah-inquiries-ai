@@ -57,7 +57,7 @@ class LocalDirectoryStore:
         container: str = "reports",
         public_base_url: str | None = None,
     ) -> None:
-        # Absolute from the outset. The default root is relative ("storage"), and a
+        # Absolute from the outset. The default root is relative (".data/storage"), and a
         # relative path has no ``file:`` URI — so leaving it as given would make every
         # reference fail on the default configuration. Resolved once here rather than
         # per call, so a later chdir cannot move the store out from under a run.

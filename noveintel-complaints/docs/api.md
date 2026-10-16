@@ -375,7 +375,7 @@ the object is still in storage under its `key`.
 For local testing, serving the folder is enough:
 
 ```bash
-python -m http.server 10000 -d storage
+python -m http.server 10000 -d .data/storage
 ```
 
 Keys are laid out widest-first, so prefix listings are the useful ones:

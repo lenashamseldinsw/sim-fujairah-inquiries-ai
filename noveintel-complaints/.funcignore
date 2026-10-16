@@ -20,11 +20,11 @@ bundle.json
 openapi.json
 out/
 
-# The local document store's contents. Anchored: unanchored, this would also exclude
-# the storage *package* — noveintel_complaints/storage/ — and the app would not import.
+# The local document and job stores' contents (.data/), and the pre-.data/ defaults.
+# Anchored: unanchored, /storage/ and /jobs/ would also exclude the noveintel_complaints/storage/
+# and noveintel_complaints/jobs/ packages, and the app would not import.
+/.data/
 /storage/
-# The local job store's mirror files. Anchored for the same reason: noveintel_complaints/jobs/ is a
-# package the app cannot start without.
 /jobs/
 
 .pytest_cache/

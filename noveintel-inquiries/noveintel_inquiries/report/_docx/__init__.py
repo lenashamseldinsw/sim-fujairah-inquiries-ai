@@ -1,6 +1,10 @@
 """
-sword-word-builder
-==================
+sword-word-builder, vendored
+============================
+Only ``report/word.py`` renders with it. Vendored rather than depended on because the
+service must be deployable on its own, without the Streamlit repository it came from;
+the examples below use the library's own import name.
+
 A general-purpose Python library for building Word (.docx) documents with
 native charts, tables, RTL/LTR text support, and full styling customization.
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from ..api.models.jobs import JobState
+from ..models.jobs import JobState
 
 __all__ = ["JobNotFound", "JobStore", "JobStoreError"]
 

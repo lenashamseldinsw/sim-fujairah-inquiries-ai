@@ -15,8 +15,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from ..api.models.enums import JobStatus
-from ..api.models.jobs import JobError, JobState
+from ..models.enums import JobStatus
+from ..models.jobs import JobError, JobState
 from ..config import get_job_settings
 from ..exceptions import StageFailure
 from ..pipeline import generate_report

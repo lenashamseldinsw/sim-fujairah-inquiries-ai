@@ -246,7 +246,7 @@ CI build. Use `scripts/smoke.py` for that, deliberately.
 ## Testing
 
 ```bash
-uv run pytest              # 241 tests, no gateway and no network needed
+uv run pytest              # 250 tests, no gateway and no network needed
 ```
 
 The engine, the contract, the error envelope, storage and the job layer are all real.

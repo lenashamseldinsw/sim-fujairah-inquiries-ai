@@ -39,7 +39,7 @@ Field Atlas. Fujairah Pulse is the reference build; ADPF is the second configura
 
 | Layer | Package | Rule |
 |---|---|---|
-| 1 Parser + engine | `engine/` (`parse`, `compute`, `frameworks`, `taxonomy`, `redact`, `wording`, `localize`) | Computes **every** number, on frozen labels. Pure. |
+| 1 Parser + engine | `engine/` (`parse`, `compute`, `frameworks`, `taxonomy`, `redact`, `wording`, `localize`) | Computes **every** number, on frozen labels. Pure; builds on `models/`, never on `api/`. |
 | 2 Classifier | `classification/` (`rules`, `model`, `rootcause`, `umbrellas`, `classify`) | Creates labels — never a number about the population. |
 | 3 Narrative writer | `narratives/` (`prompts`, `rules`, `context`, `writer`) | Writes prose only, from the engine's numbers. |
 
@@ -74,7 +74,7 @@ everything into the report's sections (`assemble`), renders Word (`word`) and th
   checked against the context with one corrective retry (a retry never replaces a more
   complete draft), banned words replaced, vocabulary applied, lists cleaned,
   conditional fields emptied, initiative counts taken from their reference.
-- **Required inputs are decided in one place**, `api/models/requests.py::
+- **Required inputs are decided in one place**, `models/requests.py::
   missing_required_fields`: columns U1–U4 + U9, settings X2–X4, the taxonomy. The
   route and the library path both refuse with "The following input field(s) were
   missing or unmapped: …".
@@ -85,26 +85,36 @@ everything into the report's sections (`assemble`), renders Word (`word`) and th
   sent for translation; AI-generated labels (root causes, umbrella names) go through
   `narratives/translate.py`. English is withheld when the taxonomy lacks English names
   (Domain 01 ruling).
-- **Overlaps in `pipeline._run`**: the analysis runs in the background from stage 3;
-  umbrella discovery, `compute` (which needs the umbrellas, never the analysis) and the
-  narrative of the sections that do not use the analysis go ahead without it. The
-  narrative is three independent calls (`_EARLY_GROUPS` A and B, then `_LATE_FIELDS`
-  once the analysis is in — Sections 04–05, the conclusion, the friction points), and
+- **Overlaps in `pipeline._run`**, which reads as the list of stages; each stage is a
+  method of `pipeline._Run`, the run's state, and `_English` holds the translation
+  side. The analysis runs in the background from stage 3; umbrella discovery, `compute`
+  (which needs the umbrellas, never the analysis) and the narrative of the sections that
+  do not use the analysis go ahead without it. The narrative is three independent calls
+  (`sections.EARLY_GROUPS` A and B, then `LATE_GROUP` C once the analysis is in —
+  Sections 04–05, the conclusion, the friction points), and
   `write_narratives(on_part=…)` hands each finished group to its English translation.
   The early groups read `metrics_early`, a dict nothing writes to afterwards; the full
   figures are a new dict. Progress is monotonic across the threads.
 - **The report is the sample output's structure** (BO, 2026-10-14): executive summary,
   Sections 01–05 (statistics, service focus, root causes, digital-content opportunities,
-  roadmap), conclusion, appendices. `api/models/enums.ReportSection` is the list;
-  `SECTION_TITLES` the printed names, which a request may use. The Definition Sheet's
-  other sections (customer journey, guidebook gaps, digital transformation, AI use
-  cases, the Fujairah classification-map subsections) are commented out, not deleted —
-  in `assemble`, `pipeline`, `analysis` and `narratives/prompts`.
+  roadmap), conclusion, appendices. `models/enums.ReportSection` is what a tenant may
+  ask for; `SECTION_TITLES` the printed names, which a request may use.
+- **`sections.py` is the section registry** — one `Section` per section: title,
+  numbering, X8, the analysis items it needs, its narrative fields and which call
+  writes them, the context keys only it reads. The pipeline, the writer's split and
+  `report/assemble.BUILDERS` (one builder per section) all read it. Adding a section is
+  an entry, a builder and its prompt lines; `tests/test_sections.py` fails when one is
+  missing or when the enabled entries and `ReportSection` disagree. The Definition
+  Sheet's other sections (the Fujairah classification-map subsections, customer
+  journey, guidebook gaps, digital transformation, AI use cases) are entries with
+  `enabled=False`: real code, never shown and not exercised by any test. Bringing one
+  back is `enabled=True` plus its key in `ReportSection` — and a test for it first.
 - **Tenants choose sections by name** (`options.sections`). Sections do not depend on
-  each other: `pipeline._SECTION_NEEDS` lists the only three that need the qualitative
-  analysis (Section 04 → FAQs, Section 05 → journey + FAQs, appendices → journey). The
-  narrative tools carry only the fields asked for (shown section, input present);
-  `pipeline._CONTEXT_READERS` drops prompt data only hidden or retired sections read.
+  each other: a section's `analysis` lists what it needs from the qualitative analysis
+  (Section 04 → FAQs, Section 05 → journey + FAQs, appendices → journey), and only
+  those items run. The narrative tools carry only the fields asked for (shown section,
+  input present); a section's `reads` lets `sections.prune_context` drop prompt data
+  only hidden or disabled sections read.
   Umbrella discovery is not section-gated: with X8 on it always runs, because D8 is a
   label the platform stores.
 - **Branding:** no `brand` → NoveAI Navy `#201853` / Magenta `#7E2362` (Prerequisites
@@ -124,7 +134,7 @@ reviewed labels — re-measure before changing them, and keep any new example re
 
 ### Testing
 
-`cd noveintel-inquiries && uv run pytest` — 394 tests, no network. `tests/fakes.py`
+`cd noveintel-inquiries && uv run pytest` — 413 tests, no network. `tests/fakes.py`
 answers every model call by tool name; `tests/fixtures/adpf_q2_2026_labels.json.gz` is
 the labelled ADPF master (labels and structured columns only), against which
 `tests/test_engine.py` reproduces the Full Report Prompt's worked example exactly.
@@ -192,7 +202,7 @@ Both services call Core42, an OpenAI-compatible gateway, through `<package>/core
 tool choice, no temperature for reasoning models, a JSON-mode fallback when a gateway
 rejects tools), `json_repair` (think blocks, fences, prose, trailing commas,
 truncation — logged), `retry` (the only retry layer; 10 s floor for 429s),
-`concurrency` (one process-wide in-flight cap around the network call only) and
+`concurrency` (one process-wide in-flight cap around the network call only, AIMD on 429s) and
 `tokens` (per-stage, per-run accounting). Call sites name a **tier** (`CHAT_MODEL`,
 `FAST_MODEL`), never a deployment. Settings are cached: restart after editing `.env`.
 
@@ -214,3 +224,4 @@ truncation — logged), `retry` (the only retry layer; 10 s floor for 429s),
 - A change shared by both services (the Core42 layer, the job layer, storage) → change
   both in the same commit; the copies must not diverge.
 - Never commit a `.env`, a key, a tenant export or run output.
+| `LLM_ADAPTIVE_CONCURRENCY` | Default `true`: a 429 halves that cap (once per 10 s) and clean calls grow it back, so instances sharing a key back off together. |

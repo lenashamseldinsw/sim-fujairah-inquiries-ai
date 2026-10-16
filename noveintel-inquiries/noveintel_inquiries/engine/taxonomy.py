@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from ..api.models.reference import Taxonomy
+from ..models.reference import Taxonomy
 from .text import clean_label, fold_header, fold_text
 
 __all__ = ["TaxonomyIndex", "load_taxonomy", "PRESETS"]

@@ -48,7 +48,7 @@ uv run uvicorn noveintel_inquiries.api.app:app --reload    # http://localhost:80
 uv run python scripts/make_fixtures.py path/to/export.xlsx --out fixtures/   # an export → request bodies
 curl -s -X POST localhost:8000/v1/inquiries/validate -H 'content-type: application/json' -d @fixtures/happy.json | jq
 uv run python scripts/smoke.py fixtures/happy.json           # a real run: spends money, takes minutes
-uv run pytest                                                # 365 tests, no network
+uv run pytest                                                # 413 tests, no network
 ```
 
 ---
@@ -127,9 +127,10 @@ dashboard · **02** priority service focus and **03** root causes (with root-cau
 extraction) · **04** targeted digital-content opportunities · **05** the improvement
 roadmap by horizon · the conclusion · the appendices (methodology generated from run
 data — R1, qualitative observations, journey friction points). Tenants choose sections
-by name (`options.sections`). The Definition Sheet's other sections — customer journey,
-guidebook digital gaps, digital transformation, AI use cases — are retired, their code
-commented out.
+by name (`options.sections`). The Definition Sheet's other sections — the Fujairah
+classification-map subsections, customer journey, guidebook digital gaps, digital
+transformation, AI use cases — are retired: disabled entries in `sections.py`, kept as
+code but never shown.
 
 ---
 
@@ -137,22 +138,24 @@ commented out.
 
 ```
 noveintel_inquiries/
-├── pipeline.py            entry points: validate_records, generate_report; the wiring
-├── api/                   app, routes, errors + models/ (the contract: columns, records,
-│                          settings, reference lists, narratives, bundle)
+├── pipeline.py            entry points: validate_records, generate_report; the run's stages
+├── sections.py            the section registry: what each section needs, prints and reads
+├── models/                the contract: columns, records, settings, reference lists,
+│                          narratives, bundle. Every layer builds on it
+├── api/                   app, routes, deps, errors — the HTTP layer
 ├── engine/                LAYER 1 — parse (ingest rules, redaction), compute (every key),
 │                          frameworks (TAMM registry, working time), taxonomy, wording, localize
 ├── classification/        LAYER 2 — rules (codebook), model (batched tool calls),
 │                          rootcause (R1–R7), umbrellas (discovery), classify (routing)
 ├── analysis/              S4–S6 qualitative items, tied to case groups the engine counts
 ├── narratives/            LAYER 3 — prompts (Full Report Prompt §1–2), rules, context, writer
-├── report/                assemble (the report's sections), labels (static text), word, workbook
+├── report/                assemble (the report's sections), labels (static text), word, workbook;
+│                          _docx/ — the vendored sword_word_builder that word renders with
 ├── resources/             taxonomy_adpf_codebook_v1.json — the codebook preset
 ├── core42/                the Core42 gateway integration
-├── reporting/             sword_word_builder
 ├── jobs/  storage/        the async job layer and document stores
 fixtures/                  example request bodies; the Fujairah guidebook and catalogue
-tests/                     365 tests; tests/fakes.py answers every model call locally
+tests/                     413 tests; tests/fakes.py answers every model call locally
 ```
 
 ---

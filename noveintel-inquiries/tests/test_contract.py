@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from noveintel_inquiries.api.models import (
+from noveintel_inquiries.models import (
     COLUMNS,
     LABEL_COLUMNS,
     NOVEAI_MAGENTA,
@@ -22,7 +22,7 @@ from noveintel_inquiries.api.models import (
     missing_required_fields,
     resolve_header,
 )
-from noveintel_inquiries.api.models.columns import HeaderMatch
+from noveintel_inquiries.models.columns import HeaderMatch
 
 
 def _variants(spelling: str) -> list[str]:

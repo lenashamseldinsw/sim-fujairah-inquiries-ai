@@ -39,8 +39,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from ..api.models.enums import JobStatus
-from ..api.models.jobs import JobError, JobState
+from ..models.enums import JobStatus
+from ..models.jobs import JobError, JobState
 from .base import JobNotFound, JobStoreError
 
 __all__ = ["TableStorageJobStore"]

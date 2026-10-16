@@ -73,20 +73,20 @@ _AR_HEAD = """\
 - closing_statement: خاتمة رسمية تربط النتائج برؤية الجهة الواردة في ENTITY.vision إن وُجدت.
 """
 
-# Retired (BO, 2026-10-14): the instructions for the nine-section report's own fields,
-# whose sections are not in the sample output. Nothing asks for these fields now, so
-# they are out of the prompt; re-add this block to _AR_HEAD to bring them back.
-# _AR_NINE_SECTION_FIELDS = """\
-# حقول التقرير ذي الأقسام التسعة (القواعد نفسها):
-# - contact_type_narrative: توزيع أنواع التواصل الفعلية (ACTUAL_TYPE).
-# - reclassification_narrative: التصنيف المسجَّل مقابل التصنيف الفعلي (RECORDED_VS_ACTUAL و RECLASSIFICATION) بصياغة «قابلة لإعادة التصنيف الذكي».
-# - out_of_scope_narrative: ما رُصد في OUT_OF_SCOPE_DETECTED (شكاوى أو بلاغات أو ثناء ضمن الحالات المسجلة استفسارات) وأنه يُسلَّم إلى مجال تحليل الشكاوى؛ فارغ إذا كان المجموع صفراً.
-# - department_narrative: فقط إذا وُجد DEPARTMENT؛ وإلا فارغ.
-# - journey_narrative: تحديات رحلة المتعامل من JOURNEY_MAP.
-# - digital_gaps_narrative و gap_root_causes_narrative: فقط إذا وُجد GAP_TABLE؛ وإلا فارغان.
-# - digital_transformation_narrative: الأسئلة الشائعة المقترحة (VALIDATED_FAQS) وفرص الإشعارات الاستباقية (NOTIFICATION_OPPORTUNITIES).
-# - ai_use_cases_intro و ai_use_cases: حالات استخدام للذكاء الاصطناعي، كل منها مرتبط بمرجع من INITIATIVE_SOURCES (source_ref)، بجهد low | medium | high.
-# """
+# The instructions for the retired sections' own fields (the ``sections`` part). Those
+# sections are disabled (``sections.SECTIONS``), so this block is added only when one
+# of their fields is asked for — never in a run today.
+_AR_NINE_SECTION_FIELDS = """\
+حقول التقرير ذي الأقسام التسعة (القواعد نفسها):
+- contact_type_narrative: توزيع أنواع التواصل الفعلية (ACTUAL_TYPE).
+- reclassification_narrative: التصنيف المسجَّل مقابل التصنيف الفعلي (RECORDED_VS_ACTUAL و RECLASSIFICATION) بصياغة «قابلة لإعادة التصنيف الذكي».
+- out_of_scope_narrative: ما رُصد في OUT_OF_SCOPE_DETECTED (شكاوى أو بلاغات أو ثناء ضمن الحالات المسجلة استفسارات) وأنه يُسلَّم إلى مجال تحليل الشكاوى؛ فارغ إذا كان المجموع صفراً.
+- department_narrative: فقط إذا وُجد DEPARTMENT؛ وإلا فارغ.
+- journey_narrative: تحديات رحلة المتعامل من JOURNEY_MAP.
+- digital_gaps_narrative و gap_root_causes_narrative: فقط إذا وُجد GAP_TABLE؛ وإلا فارغان.
+- digital_transformation_narrative: الأسئلة الشائعة المقترحة (VALIDATED_FAQS) وفرص الإشعارات الاستباقية (NOTIFICATION_OPPORTUNITIES).
+- ai_use_cases_intro و ai_use_cases: حالات استخدام للذكاء الاصطناعي، كل منها مرتبط بمرجع من INITIATIVE_SOURCES (source_ref)، بجهد low | medium | high.
+"""
 
 _AR_ROOT_ON = """\
 - service_focus_narratives: لكل خدمة في SERVICE_FOCUS: overview (الحجم والحصة وذروة الشهر والالتزام)، why_this_service (سبب الأولوية من واقع بياناتها فقط)، sub_class_narrative، bundle_narrative.
@@ -98,8 +98,12 @@ _AR_ROOT_OFF = """\
 - أقسام الأسباب الجذرية والحزم وتركيز الخدمات ليست ضمن هذا التقرير: اترك فارغة تماماً الحقول service_focus_narratives و root_causes_intro و bundle_distribution_narrative و bundle_by_service_narrative و bundle_narratives و top_root_causes_narrative و timeliness_by_bundle_narrative.
 """
 
-def narrative_system_prompt(lang: str = "ar", *, root_causes: bool, vocabulary: dict[str, str]) -> str:
-    """The narrative writer's system prompt. Arabic only: English is a translation of it."""
+def narrative_system_prompt(lang: str = "ar", *, root_causes: bool, vocabulary: dict[str, str],
+                            section_fields: bool = False) -> str:
+    """The narrative writer's system prompt. Arabic only: English is a translation of it.
+
+    ``section_fields`` adds the instructions for the retired sections' fields, for a run
+    that asks for one."""
     if lang != "ar":
         raise ValueError("The narrative is written in Arabic; the English report is translated from it.")
     text = _AR_HEAD.format(
@@ -111,7 +115,7 @@ def narrative_system_prompt(lang: str = "ar", *, root_causes: bool, vocabulary: 
         roots_step_ar="الجذور والحزم، " if root_causes else "",
         steps_ar="خمس خطوات" if root_causes else "أربع خطوات",
     )
-    parts = [text, HARD_RULES["ar"]]
+    parts = [text + (_AR_NINE_SECTION_FIELDS if section_fields else ""), HARD_RULES["ar"]]
     vocab = vocabulary_lines(vocabulary, "ar")
     if vocab:
         parts.append(vocab)

@@ -22,9 +22,9 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Iterable
 
-from ..api.models.period import Period
-from ..api.models.reference import History, PeriodSnapshot, ReferenceLists
-from ..api.models.settings import ComparisonBasis, DigitalChannelDefinition, TenantSettings
+from ..models.period import Period
+from ..models.reference import History, PeriodSnapshot, ReferenceLists
+from ..models.settings import ComparisonBasis, DigitalChannelDefinition, TenantSettings
 from .parse import Case, ParseLog
 from .taxonomy import TaxonomyIndex
 from .text import clean_label, count_hits, fold_text
@@ -817,7 +817,7 @@ def _gaps(inputs: ComputeInputs, out: dict[str, Any], has) -> tuple[list[dict[st
         if ind.get("status") == "not_computable" and ind.get("recommendation_ar"):
             metric.append({"key": f"framework:{ind['key']}", "ar": ind["recommendation_ar"], "en": ind["recommendation_en"]})
     notes: list[dict[str, str]] = []
-    from ..api.models.columns import COLUMN_BY_NAME
+    from ..models.columns import COLUMN_BY_NAME
 
     for column in inputs.parse_log.columns_present_but_empty:
         spec = COLUMN_BY_NAME[column]

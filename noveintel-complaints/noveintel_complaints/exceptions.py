@@ -12,7 +12,7 @@ failures from.
 """
 from __future__ import annotations
 
-__all__ = ["StageFailure", "UpstreamFailure"]
+__all__ = ["RunAbandoned", "StageFailure", "UpstreamFailure"]
 
 
 class StageFailure(Exception):
@@ -56,3 +56,13 @@ class UpstreamFailure(StageFailure):
             "This is usually an outage or rate limiting at the gateway rather than a "
             "problem with the records; retrying later is safe.",
         )
+
+
+class RunAbandoned(Exception):
+    """Raised into a run's thread when nobody is waiting for it any more.
+
+    The job runner raises it from the next progress report once a run passes its
+    ceiling; the pipeline lets it through untouched. Defined here, not in
+    ``jobs/runner.py``, so the pipeline can name it without importing the job layer —
+    which imports the pipeline.
+    """

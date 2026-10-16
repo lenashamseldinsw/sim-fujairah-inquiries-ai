@@ -115,6 +115,9 @@ class Core42Settings:
     # 5 threads and Stage 6 to 7-9, so without a cap the gateway sees far more
     # concurrency than it tolerates and answers with 429s.
     max_concurrency: int = 5
+    # Halve the cap on a 429 and grow it back one step per clean round, so several
+    # instances sharing one gateway quota back off together (see concurrency.py).
+    adaptive_concurrency: bool = True
 
     max_retries: int = 2
     retry_delay: float = 2.0
@@ -192,6 +195,7 @@ def get_settings() -> Core42Settings:
         output_token_headroom=_env_float("LLM_OUTPUT_TOKEN_HEADROOM", 1.5, env),
         timeout=_env_float("LLM_TIMEOUT", 240.0, env),
         max_concurrency=_env_int("LLM_MAX_CONCURRENCY", 5, env),
+        adaptive_concurrency=_env("LLM_ADAPTIVE_CONCURRENCY", "true", env).strip().lower() not in ("0", "false", "no", "off"),
         max_retries=_env_int("LLM_MAX_RETRIES", 2, env),
         retry_delay=_env_float("LLM_RETRY_DELAY", 2.0, env),
         temperature=_env_float("LLM_TEMPERATURE", 0.2, env),

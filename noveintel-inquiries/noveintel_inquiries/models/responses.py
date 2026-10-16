@@ -10,7 +10,7 @@ creates numbers, the narrative writer creates neither.
 
 ``metrics`` is the engine output — every key of Data Mapping §4 — and is the ground
 truth the prose is checked against. ``narratives`` is the prose, per language.
-``report`` is both assembled into the S0–S11 report the Word documents were drawn
+``report`` is both languages of the assembled report the Word documents were drawn
 from. ``documents`` carries references, not content: artefacts go to storage and a
 storage failure is a warning, never a lost run.
 """

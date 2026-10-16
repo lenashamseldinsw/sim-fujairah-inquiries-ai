@@ -1,9 +1,11 @@
 """
 NoveIntelligence — Customer Inquiries Analytics API.
 
-``models/`` is the typed contract on both sides of a run; the routes that serve it sit
-alongside in ``app.py``, ``routes.py``, ``deps.py`` and ``errors.py``. The pipeline
-itself lives at ``noveintel_inquiries.pipeline``.
+The routes sit in ``app.py``, ``routes.py``, ``deps.py`` and ``errors.py``. The
+typed contract they serve is ``noveintel_inquiries.models`` — a package of its own,
+not part of this one, because the engine, the job layer and storage are built on it
+and none of them is the web layer. The pipeline lives at
+``noveintel_inquiries.pipeline``.
 
 This module re-exports the models and nothing more. Importing it must not require
 FastAPI — the contract is useful to a caller building a request who will never run the
@@ -11,7 +13,7 @@ service, so the web layer stays behind ``noveintel_inquiries.api.app``.
 """
 from __future__ import annotations
 
-from .models import (
+from ..models import (
     NOVEAI_MAGENTA,
     NOVEAI_NAVY,
     STATUS_COLORS,

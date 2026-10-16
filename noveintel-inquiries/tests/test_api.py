@@ -25,7 +25,7 @@ from noveintel_inquiries.api.deps import (
     get_document_store,
     get_job_runner,
 )
-from noveintel_inquiries.api.models import JobError, JobStatus
+from noveintel_inquiries.models import JobError, JobStatus
 from noveintel_inquiries.config import ApiSettings
 from noveintel_inquiries.jobs import LocalJobStore
 from noveintel_inquiries.storage import LocalDirectoryStore
@@ -337,15 +337,30 @@ class TestPackageBoundaries:
         )
         assert result.returncode == 0, result.stderr
 
+    def test_the_engine_imports_without_the_api_package(self):
+        """Layer 1 is built on the contract, never on the HTTP layer."""
+        import subprocess
+        import sys
+
+        code = (
+            "import sys;"
+            "sys.modules['noveintel_inquiries.api'] = None;"
+            "import noveintel_inquiries.engine.compute, noveintel_inquiries.engine.parse,"
+            " noveintel_inquiries.engine.frameworks, noveintel_inquiries.engine.taxonomy,"
+            " noveintel_inquiries.pipeline"
+        )
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+
     def test_the_contract_imports_without_fastapi_or_pandas(self):
-        """``api.models`` must be usable by a caller who will never run the service."""
+        """``models`` must be usable by a caller who will never run the service."""
         import subprocess
         import sys
 
         code = (
             "import sys;"
             "sys.modules['fastapi'] = None; sys.modules['pandas'] = None;"
-            "import noveintel_inquiries.api.models as m;"
+            "import noveintel_inquiries.models as m;"
             "assert m.EntityInfo(name_ar='a', name_en='b')"
         )
         assert subprocess.run([sys.executable, "-c", code]).returncode == 0

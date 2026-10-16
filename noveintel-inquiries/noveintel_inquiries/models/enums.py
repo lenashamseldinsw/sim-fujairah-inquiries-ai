@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-__all__ = ["JobStatus", "Language", "PeriodGranularity", "ReportSection", "NUMBERED_SECTIONS", "SECTION_TITLES"]
+__all__ = ["JobStatus", "Language", "PeriodGranularity", "ReportSection", "SECTION_TITLES"]
 
 
 class Language(StrEnum):
@@ -44,10 +44,13 @@ class ReportSection(StrEnum):
     The five numbered sections (01–05) are numbered at render time among those shown,
     so hiding one does not leave a gap. Match on these values, never on position.
 
-    Sections of the Definition Sheet's nine-section template that the sample does not
-    have — the customer-journey section (its friction points are an appendix here),
-    the guidebook digital-gap analysis, the digital-transformation plan and the AI use
-    cases — are retired for now; their code is commented out, not deleted.
+    These are the sections a tenant can ask for — the enabled entries of
+    ``sections.SECTIONS``, which says everything else about each one. The Definition
+    Sheet sections the sample does not have — the classification map's Fujairah
+    subsections, the customer-journey section (its friction points are an appendix
+    here), the guidebook digital-gap analysis, the digital-transformation plan and the
+    AI use cases — are disabled entries there: built and tested, never shown. Enabling
+    one adds its key here.
     """
 
     COVER = "cover"
@@ -59,13 +62,6 @@ class ReportSection(StrEnum):
     IMPROVEMENT_ROADMAP = "improvement_roadmap"                      # Section 05
     CONCLUSION = "conclusion"
     APPENDICES = "appendices"   # methodology · qualitative observations · journey friction points
-    # Retired with the Definition Sheet's template (BO, 2026-10-14):
-    # METHODOLOGY = "methodology"                  — now the first appendix
-    # CLASSIFICATION_MAP = "classification_map"    — now STATISTICS
-    # CUSTOMER_JOURNEY = "customer_journey"        — friction points now an appendix
-    # DIGITAL_GAPS = "digital_gaps"                — its digital-content part is Section 04
-    # DIGITAL_TRANSFORMATION = "digital_transformation"
-    # AI_USE_CASES = "ai_use_cases"
 
 
 # Each section's title as the report prints it — the sample output's wording. A request
@@ -81,16 +77,6 @@ SECTION_TITLES: dict[ReportSection, dict[str, str]] = {
     ReportSection.CONCLUSION: {"ar": "الخلاصة والتوصيات", "en": "Conclusion and recommendations"},
     ReportSection.APPENDICES: {"ar": "الملاحق", "en": "Appendices"},
 }
-
-# The five numbered sections, in order. Numbered 01, 02, … among those shown.
-NUMBERED_SECTIONS: tuple[ReportSection, ...] = (
-    ReportSection.STATISTICS,
-    ReportSection.SERVICE_FOCUS,
-    ReportSection.ROOT_CAUSES,
-    ReportSection.DIGITAL_CONTENT_OPPORTUNITIES,
-    ReportSection.IMPROVEMENT_ROADMAP,
-)
-
 
 class JobStatus(StrEnum):
     """Where an analysis job has got to.

@@ -13,8 +13,8 @@ from collections import defaultdict
 
 import pytest
 
-from noveintel_inquiries.api.models import InquiryRecord, ReferenceLists, TenantSettings, TransactionRow
-from noveintel_inquiries.api.models.columns import COLUMNS, LABEL_COLUMNS, SENSITIVE_COLUMNS
+from noveintel_inquiries.models import InquiryRecord, ReferenceLists, TenantSettings, TransactionRow
+from noveintel_inquiries.models.columns import COLUMNS, LABEL_COLUMNS, SENSITIVE_COLUMNS
 from noveintel_inquiries.classification.labels import UmbrellaRegistry, apply_frozen
 from noveintel_inquiries.engine.compute import ComputeInputs, compute, pct
 from noveintel_inquiries.engine.frameworks import evaluate_frameworks

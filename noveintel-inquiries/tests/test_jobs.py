@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from noveintel_inquiries.api.models import JobState, JobStatus
+from noveintel_inquiries.models import JobState, JobStatus
 from noveintel_inquiries.jobs import JobNotFound, JobRunner, LocalJobStore
 
 
@@ -299,7 +299,7 @@ class TestQueueWorker:
         # Valid JSON that is not a valid request: the run fails before any stage.
         await save_request(files, "job1", '{"records": []}')
 
-        from noveintel_inquiries.api import models
+        from noveintel_inquiries import models
         request_type = next(
             getattr(models, n) for n in dir(models) if n.startswith("Generate")
         )
@@ -312,7 +312,7 @@ class TestQueueWorker:
     async def test_the_request_survives_when_the_failure_cannot_be_recorded(self, tmp_path):
         """If the job store is unreachable the queue redelivers, and the retry needs
         the request — so it is deleted only after the outcome is safely written."""
-        from noveintel_inquiries.api.models.jobs import JobError
+        from noveintel_inquiries.models.jobs import JobError
         from noveintel_inquiries.jobs import JobStoreError, fail_job, load_request, save_request
         from noveintel_inquiries.storage import LocalDirectoryStore
 
@@ -332,7 +332,7 @@ class TestQueueWorker:
 
     async def test_fail_job_records_a_poison_queue_outcome(self, tmp_path):
         """A message that exhausted its deliveries names a job someone is polling."""
-        from noveintel_inquiries.api.models.jobs import JobError
+        from noveintel_inquiries.models.jobs import JobError
         from noveintel_inquiries.jobs import LocalJobStore, fail_job
 
         store = LocalJobStore(tmp_path)
@@ -473,7 +473,7 @@ class TestRunCeilingAndCodes:
     async def test_an_abandoned_run_stops_at_its_next_progress_report(self, tmp_path):
         """A timed-out coroutine cannot stop the thread the stages run on; the
         progress callback is how that thread learns nobody is waiting."""
-        from noveintel_inquiries.jobs.runner import RunAbandoned
+        from noveintel_inquiries.exceptions import RunAbandoned
 
         store = LocalJobStore(tmp_path)
         await store.create(queued())

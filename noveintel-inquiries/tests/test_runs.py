@@ -182,7 +182,7 @@ class TestArabicOutput:
 
 class TestRuntimeCeiling:
     def test_an_abandoned_run_stops_at_the_next_progress_report(self, analysis_request, gateway):
-        from noveintel_inquiries.jobs.runner import RunAbandoned
+        from noveintel_inquiries.exceptions import RunAbandoned
 
         def progress(fraction, message_ar, message_en):
             if message_en.startswith("Stage 2"):

@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..api.models.columns import COLUMN_BY_NAME
+from ..models.columns import COLUMN_BY_NAME
 from ..engine.parse import Case
 from ..engine.wording import CONTACT_TYPES, PROVENANCE, TIMELINESS_LABELS
 

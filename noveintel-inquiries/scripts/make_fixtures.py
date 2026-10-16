@@ -33,7 +33,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from noveintel_inquiries.api.models import (  # noqa: E402
+from noveintel_inquiries.models import (  # noqa: E402
     REQUIRED_COLUMNS,
     GenerateInquiriesReportRequest,
     canonical_key,

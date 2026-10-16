@@ -314,7 +314,8 @@ The report follows the structure of the ADPF Q2 2026 sample output, which the BO
 confirmed as the report's sections (2026-10-14). The Definition Sheet's other sections
 — the customer-journey section, the guidebook digital-gap analysis, the
 digital-transformation plan and the AI use cases, and the Fujairah subsections of its
-classification map — are retired; their code is commented out, not deleted.
+classification map — are retired: disabled in the service's section registry, so no
+run produces them, and absent from `ReportSection`, so no request can ask for them.
 
 `{ document_name, language, rtl, entity, period, cover, metadata, sections[] }`. `cover`
 has `id` `cover` (`tiles` O1–O6, both totals labelled — R7). Each section has `id`, `key`

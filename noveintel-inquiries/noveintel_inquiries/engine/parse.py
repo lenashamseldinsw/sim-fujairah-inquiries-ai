@@ -27,9 +27,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from ..api.models.columns import COLUMNS, COLUMN_BY_NAME, LABEL_COLUMNS
-from ..api.models.records import InquiryRecord
-from ..api.models.settings import CaseTypeScope, RecordedType, TenantSettings
+from ..models.columns import COLUMNS, COLUMN_BY_NAME, LABEL_COLUMNS
+from ..models.records import InquiryRecord
+from ..models.settings import CaseTypeScope, RecordedType, TenantSettings
 from .redact import redact
 from .text import clean_label, fold_text
 

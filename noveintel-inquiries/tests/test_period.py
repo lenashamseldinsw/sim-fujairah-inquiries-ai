@@ -11,7 +11,7 @@ from datetime import date
 
 import pytest
 
-from noveintel_inquiries.api.models import PeriodGranularity
+from noveintel_inquiries.models import PeriodGranularity
 from noveintel_inquiries.engine import derive_granularity, parse_dates, resolve_period
 from noveintel_inquiries.engine.parse import parse_datetimes
 

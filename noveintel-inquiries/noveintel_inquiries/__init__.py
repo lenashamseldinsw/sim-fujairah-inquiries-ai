@@ -15,7 +15,7 @@ Turns a period's customer-inquiry cases into an analysed report, in three layers
 
 ``analysis/`` finds the qualitative items the nine-section report tables — journey
 frictions, FAQ candidates, notification opportunities, guidebook gaps — and the
-engine counts them. ``report/`` assembles S0–S11 and renders the Word reports and the
+engine counts them. ``report/`` assembles the shown sections and renders the Word reports and the
 companion workbook.
 
     from noveintel_inquiries import generate_report, validate_records
@@ -37,7 +37,7 @@ __all__ = ["generate_report", "new_run_id", "validate_records"]
 
 
 def __getattr__(name: str) -> Any:
-    # Lazy, so importing the contract (``api.models``) never pulls in pandas or the
+    # Lazy, so importing the contract (``models``) never pulls in pandas or the
     # pipeline — a caller building a request needs neither.
     if name in __all__:
         from . import pipeline

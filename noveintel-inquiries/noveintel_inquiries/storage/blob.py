@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 from typing import Any
 
-from ..api.models.documents import DocumentRef
+from ..models.documents import DocumentRef
 from .base import StorageError
 
 __all__ = ["BlobDocumentStore"]

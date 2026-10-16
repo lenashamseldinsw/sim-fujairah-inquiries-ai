@@ -15,8 +15,12 @@ secrets.toml
 # ── Run output and job records ───────────────────────────────────────────────
 # Everything a run produces is customer data: the reports, the per-case
 # workbook, the report JSON, the stored requests and the job records holding
-# full results. Anchored, so the storage/ and jobs/ *packages* inside the module
-# stay tracked — the same trap .funcignore has to avoid.
+# full results. The local backends write it all under .data/ (NOVE*_STORAGE_DIR,
+# NOVE*_JOB_DIR), so one rule covers it. /storage/ and /jobs/ were the defaults
+# before; they stay listed so an older checkout's output is still never committed.
+# Both are anchored, so the storage/ and jobs/ *packages* inside the module stay
+# tracked.
+/.data/
 /storage/
 /jobs/
 /runs/

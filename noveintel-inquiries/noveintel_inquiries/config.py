@@ -229,7 +229,7 @@ class StorageSettings(_EnvSettings):
         ),
     )
     dir: Path = Field(
-        default=Path("storage"),
+        default=Path(".data/storage"),
         description=(
             "Root of the filesystem store, relative to the working directory unless "
             "absolute. Only the 'local' backend reads this."
@@ -349,7 +349,7 @@ class JobSettings(_EnvSettings):
         ),
     )
     dir: Path = Field(
-        default=Path("jobs"),
+        default=Path(".data/jobs"),
         description=(
             "Directory the local backend mirrors job state into, relative to the "
             "working directory unless absolute."

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 
-from ..api.models.documents import JSON_CONTENT_TYPE
+from ..models.documents import JSON_CONTENT_TYPE
 from ..storage import DocumentStore, StorageError
 from .base import JobStoreError
 

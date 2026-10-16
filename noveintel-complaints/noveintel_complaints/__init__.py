@@ -15,7 +15,7 @@ Excel workbook.
 
     validate_records(request)        # cheap: stage 1 only, no model call
 
-    bundle = await generate_report(request, store=LocalDirectoryStore("storage"))
+    bundle = await generate_report(request, store=LocalDirectoryStore(".data/storage"))
 
     bundle.metrics                   # the figures the stages computed
     bundle.report["ar"]              # the report as data

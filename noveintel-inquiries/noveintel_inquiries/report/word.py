@@ -18,8 +18,8 @@ import json
 import re
 from pathlib import Path
 
-from ..api.models.entity import NOVEAI_MAGENTA, NOVEAI_NAVY
-from ..reporting.sword_word_builder import (
+from ..models.entity import NOVEAI_MAGENTA, NOVEAI_NAVY
+from ._docx import (
     ChartStyle,
     CoverPage,
     DocumentConfig,
