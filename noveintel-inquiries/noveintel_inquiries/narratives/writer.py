@@ -31,7 +31,7 @@ from ..models.narratives import (
     ReportNarratives,
     SectionNarratives,
 )
-from ..core42 import CHAT_MODEL, Core42Client
+from ..core42 import CHAT_MODEL, Core42Client, tool_input
 from ..core42.tokens import ScopedThreadPoolExecutor
 from ..engine.text import to_western_digits
 from ..engine.wording import apply_vocabulary, clean_list_item, replace_banned
@@ -114,7 +114,7 @@ def must_write(context: dict, model: type[BaseModel]) -> list[str]:
             absent.add("transactions_ratio_narrative")
         if "FAQ_COVERAGE" not in context and "DEFLECTABLE_PCT" not in context:
             absent.add("digital_opportunity_narrative")
-        if "FAQ_COVERAGE" not in context and "VALIDATED_FAQS" not in context:
+        if "VALIDATED_FAQS" not in context:
             absent.add("priority_faqs")
         if "EVENTS" not in context:
             absent.add("event_narratives")
@@ -265,7 +265,7 @@ def postprocess_part(part: str, data: dict, context: dict, lang: str, vocabulary
             report["transactions_ratio_narrative"] = ""
         if "FAQ_COVERAGE" not in context and "DEFLECTABLE_PCT" not in context:
             report["digital_opportunity_narrative"] = ""
-        if "FAQ_COVERAGE" not in context and "VALIDATED_FAQS" not in context:
+        if "VALIDATED_FAQS" not in context:
             report["priority_faqs"] = []
         if "EVENTS" not in context:
             report["event_narratives"] = []
@@ -344,15 +344,14 @@ def _call(client: Core42Client, system: str, context: dict, tool: dict, note: st
         tool_choice={"type": "any"}, stage=stage,
         messages=[{"role": "user", "content": content}],
     )
-    for block in message.content:
-        if getattr(block, "type", "") == "tool_use":
-            data = block.input or {}
-            logger.info(
-                "Narrative %s: %d/%d fields filled, stop=%s%s.", tool["name"], _filled(data), len(data),
-                getattr(message, "stop_reason", "?"), " (retry)" if (note if retry is None else retry) else "",
-            )
-            return data
-    raise ValueError("The narrative model returned no structured output.")
+    data = tool_input(message)  # fields split across several tool calls are merged
+    if data is None:
+        raise ValueError("The narrative model returned no structured output.")
+    logger.info(
+        "Narrative %s: %d/%d fields filled, stop=%s%s.", tool["name"], _filled(data), len(data),
+        getattr(message, "stop_reason", "?"), " (retry)" if (note if retry is None else retry) else "",
+    )
+    return data
 
 
 def _filled(data: dict) -> int:

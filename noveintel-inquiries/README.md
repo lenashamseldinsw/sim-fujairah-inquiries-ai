@@ -112,7 +112,7 @@ lists every column, setting, reference list, engine key and bundle field.
 
 | Bundle field | Holds |
 |---|---|
-| `metrics` | The engine output — every Data Mapping §4 key: `KPI`, `MONTHLY`, `CHANNEL`, `CASE_TYPE_RECORDED`, `MAIN_SERVICE`, `SUB_CLASS`, `TIMELINESS`, `RECORDED_VS_TRUE`, `OUT_OF_SCOPE_DETECTED`, `CLASSIFICATION_QUALITY`, `EVENTS`, (X8) `BUNDLE`, `ROOT_CAUSE_TOP`, `BUNDLE_BY_SERVICE`, `SERVICE_FOCUS`, `NEAR_OVER_BY_BUNDLE`, `DEFLECTABLE_PCT`, (conditional) `INQ_PER_100_TX`, `FAQ_COVERAGE`, `AGENT`, `COMPARISON`; the Fujairah-native `RECORDED_VS_ACTUAL`, `RECLASSIFICATION`, `ACTUAL_TYPE`, `SUB_CLASS_BY_TYPE`, `SLA`, `SEVERITY`, `CLOSED`, `DEPARTMENT`, `JOURNEY_MAP`, `GAP_TABLE`, `VALIDATED_FAQS`, `NOTIFICATION_OPPORTUNITIES`, `PATTERNS`; `FRAMEWORKS`, `PARSE_LOG`, `METRIC_GAPS`, `DATA_NOTES` |
+| `metrics` | The engine output — every Data Mapping §4 key: `KPI`, `MONTHLY`, `CHANNEL`, `CASE_TYPE_RECORDED`, `MAIN_SERVICE`, `SUB_CLASS`, `TIMELINESS`, `RECORDED_VS_TRUE`, `OUT_OF_SCOPE_DETECTED`, `CLASSIFICATION_QUALITY`, `EVENTS`, (X8) `BUNDLE`, `ROOT_CAUSE_TOP`, `BUNDLE_BY_SERVICE`, `SERVICE_FOCUS`, `NEAR_OVER_BY_BUNDLE`, `DEFLECTABLE_PCT`, (conditional) `INQ_PER_100_TX`, `FAQ_COVERAGE`, `FAQ_CATALOGUE_VOLUME`, `AGENT`, `COMPARISON`; the Fujairah-native `RECORDED_VS_ACTUAL`, `RECLASSIFICATION`, `ACTUAL_TYPE`, `SUB_CLASS_BY_TYPE`, `SLA`, `SEVERITY`, `CLOSED`, `DEPARTMENT`, `JOURNEY_MAP`, `GAP_TABLE`, `VALIDATED_FAQS`, `NOTIFICATION_OPPORTUNITIES`, `PATTERNS`; `FRAMEWORKS`, `PARSE_LOG`, `METRIC_GAPS`, `DATA_NOTES` |
 | `narratives` | Per language: the 29 `InquiriesReportNarratives` fields (and `SectionNarratives`, the retired sections' prose, now always empty) |
 | `classification` | Taxonomy, thresholds, provenance split, mean confidence, `deep_review` (cases reviewed, still low-confidence, duplicates reused), the umbrellas (new ones flagged for confirmation) |
 | `report` | The report's sections as data, per language — what the Word documents are drawn from; only the sections in `options.sections` when it is sent |
@@ -147,7 +147,8 @@ noveintel_inquiries/
 │                          frameworks (TAMM registry, working time), taxonomy, wording, localize
 ├── classification/        LAYER 2 — rules (codebook), model (batched tool calls),
 │                          rootcause (R1–R7), umbrellas (discovery), classify (routing)
-├── analysis/              S4–S6 qualitative items, tied to case groups the engine counts
+├── analysis/              S4–S6 qualitative items, tied to case groups the engine counts;
+│                          faqs — Section 04's questions and coverage (embeddings + judge)
 ├── narratives/            LAYER 3 — prompts (Full Report Prompt §1–2), rules, context, writer
 ├── report/                assemble (the report's sections), labels (static text), word, workbook;
 │                          _docx/ — the vendored sword_word_builder that word renders with
@@ -155,7 +156,7 @@ noveintel_inquiries/
 ├── core42/                the Core42 gateway integration
 ├── jobs/  storage/        the async job layer and document stores
 fixtures/                  example request bodies; the Fujairah guidebook and catalogue
-tests/                     413 tests; tests/fakes.py answers every model call locally
+tests/                     445 tests; tests/fakes.py answers every model call locally
 ```
 
 ---
@@ -171,9 +172,9 @@ review, not a person:
 | Provenance | Meaning |
 |---|---|
 | «آلي - موثوق» (`auto`) | Settled quickly: the keyword rules (the codebook's §4 signals and its service-request test) were confident, or the case repeats another case's description and its labels were copied |
-| «نموذج» (`llm`) | Below X5: the model's first pass, with the classifier prompt, the taxonomy and its signals, the edge cases and the reviewed examples most similar to the batch |
+| «نموذج» (`llm`) | Below X5: the model's first pass — batches of 40, with the classifier prompt, the taxonomy and its signals, the edge cases and up to 20 reviewed examples most similar to the batch. The model answers in a short schema (batch-local ids, sub-classification codes, a short reason naming the decisive fact in the reply, no `evidence`), mapped back to full labels in code: on 500 reviewed Q2 cases this cut classification cost 45% with accuracy unchanged |
 | «آلي - مُصحّح» (`auto_corrected`) | A codebook rule corrected the label in code |
-| «يدوي - مُراجع» (`deep_review`) | Below X6, or still breaking a rule: re-analysed with reasoning switched on (`LLM_DEEP_REASONING_EFFORT`, default medium — gpt-5.1 does not reason unless asked), in smaller batches (5) with more examples (6 per case), told to weigh the two likeliest services before deciding |
+| «يدوي - مُراجع» (`deep_review`) | Below X6, or still breaking a rule: re-analysed with reasoning switched on (`LLM_DEEP_REASONING_EFFORT`, default low — gpt-5.1 does not reason unless asked), in smaller batches (10) with more examples (6 per case), told to weigh the two likeliest services before deciding |
 
 A case still below X6 after the deep review is flagged `low_confidence`, counted with
 its best labels, and listed in `classification.deep_review` — nothing waits for a person.
@@ -184,6 +185,19 @@ codebook; R1 case specifics are struck out in code, R1-length, R2 and R3 breache
 sent back once, and a cause still breaking a rule goes to the deep review. Umbrella
 discovery then clusters the distinct causes (by id, in chunks), reusing the carried set
 first, while the qualitative analysis runs beside it; counts are the engine's.
+
+**FAQs (Section 04).** The priority FAQs are the largest groups of cases asking the
+same question — the BO's sample lists them as questions with their case counts — and
+FAQ coverage is the share of procedures-umbrella cases a published FAQ answers. Both
+come from `analysis/faqs.py`, after umbrella discovery: each case's root cause (else its
+redacted description) is embedded and grouped by similarity; each group is shortlisted
+against the catalogue by embedding and judged covered / partial / not covered by the
+model, which also writes the customer's question for the largest groups; one more call
+merges groups that ask the same question. Paraphrase is the reason: the Q2 master writes
+10,628 root causes in 5,766 ways, so neither exact strings nor keywords count a question
+reliably. The verdicts are per-case labels (`faq_id`, `faq_status`, `faq_match`) that the
+engine sums. The tool writes FAQ questions, never answers (handoff scope). The embedding
+model is `CORE42_MODEL_EMBED` — approved models only.
 
 **Narratives.** The Full Report Prompt's Arabic system prompt, near verbatim, with its
 hard rules and the tenant vocabulary. There is no English writing prompt: the

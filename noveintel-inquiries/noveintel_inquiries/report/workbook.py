@@ -7,9 +7,10 @@ No sensitive column exists here to write — identity was excluded at ingest —
 free text is the redacted text the classifier saw.
 
 Sheets: a summary; every case; one sheet per actual contact type (D1); the
-reclassification sheet (D4); the deep-reviewed cases; and the Domain 02 handoff — cases
-whose true type is a complaint, incident or compliment. Every case appears in exactly
-one per-type sheet, so the per-type sheets sum to the cover total (R2).
+reclassification sheet (D4); the deep-reviewed cases; the Domain 02 handoff — cases
+whose true type is a complaint, incident or compliment; and, with an FAQ catalogue,
+every approved FAQ with the number of cases whose question it answers. Every case
+appears in exactly one per-type sheet, so the per-type sheets sum to the cover total (R2).
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from typing import Any
 from ..models.columns import COLUMN_BY_NAME
 from ..engine.parse import Case
 from ..engine.wording import CONTACT_TYPES, PROVENANCE, TIMELINESS_LABELS
+from .labels import FAQ_CASE_STATUS
 
 __all__ = ["write_workbook", "WORKBOOK_DERIVED_COLUMNS"]
 
@@ -49,7 +51,9 @@ WORKBOOK_DERIVED_COLUMNS: list[tuple[str, str]] = [
     ("REV", "خضعت للمراجعة المعمّقة"),
     ("LOW", "ثقة منخفضة بعد المراجعة"),
     ("DUP", "منسوخة من حالة مطابقة"),
-    ("FAQ", "السؤال الشائع المرتبط"),
+    ("FAQ", "السؤال الشائع ذو الأولوية"),
+    ("FAQS", "تغطية السؤال في القائمة المعتمدة"),
+    ("FAQM", "السؤال المعتمد الذي يجيب عنه"),
     ("FIX", "التصحيحات الآلية"),
 ]
 
@@ -65,7 +69,7 @@ def _value(case: Case, column: str) -> Any:
     return value
 
 
-def _derived(case: Case, umbrella_names: dict[str, str]) -> list[Any]:
+def _derived(case: Case, umbrella_names: dict[str, str], faq_questions: dict[int, str]) -> list[Any]:
     misclassified = case.misclassified
     return [
         case.contact_type or "",
@@ -82,6 +86,8 @@ def _derived(case: Case, umbrella_names: dict[str, str]) -> list[Any]:
         "نعم" if case.low_confidence else "لا",
         case.duplicate_of or "",
         case.faq_id or "",
+        FAQ_CASE_STATUS.get(case.faq_status or "", ""),
+        faq_questions.get(case.faq_match, "") if case.faq_match is not None else "",
         "؛ ".join(case.corrections),
     ]
 
@@ -98,6 +104,9 @@ def write_workbook(path: Path, cases: list[Case], columns: list[str], metrics: d
         f"{uid} {label}" for uid, label in WORKBOOK_DERIVED_COLUMNS
     ]
 
+    volume = metrics.get("FAQ_CATALOGUE_VOLUME") or []
+    faq_questions = {row["index"]: row["question_ar"] for row in volume}
+
     wb = Workbook()
     summary = wb.active
     summary.title = "ملخص"
@@ -111,7 +120,7 @@ def write_workbook(path: Path, cases: list[Case], columns: list[str], metrics: d
             cell.fill, cell.font = header_fill, header_font
             cell.alignment = Alignment(wrap_text=True, vertical="center")
         for case in rows:
-            ws.append([_value(case, c) for c in universal] + _derived(case, umbrella_names))
+            ws.append([_value(case, c) for c in universal] + _derived(case, umbrella_names, faq_questions))
         ws.freeze_panes = "A2"
         for index, _ in enumerate(headers, 1):
             ws.column_dimensions[ws.cell(1, index).column_letter].width = 22
@@ -153,4 +162,16 @@ def write_workbook(path: Path, cases: list[Case], columns: list[str], metrics: d
     add_sheet("إعادة التصنيف", [c for c in cases if c.misclassified])
     add_sheet("المراجعة المعمّقة", [c for c in cases if c.deep_reviewed])
     add_sheet("خارج النطاق - للشكاوى", [c for c in cases if c.true_type in ("complaint", "incident", "compliment")])
+    if volume:
+        # Every approved FAQ with the cases whose question it answers — for tagging the
+        # catalogue with its real volume. Entries no case matched are listed at zero.
+        ws = wb.create_sheet("حجم الأسئلة المعتمدة")
+        ws.sheet_view.rightToLeft = True
+        ws.append(["السؤال المعتمد", "المصدر", "الحالات التي يجيب عنها", "حالات ذات صلة (تغطية جزئية)"])
+        for cell in ws[1]:
+            cell.fill, cell.font = header_fill, header_font
+        for row in volume:
+            ws.append([row["question_ar"], "قائمة الأسئلة المعتمدة" if row["source"] == "catalogue" else "دليل الخدمات",
+                       row["cases"], row["partial_cases"]])
+        ws.column_dimensions["A"].width = 70
     wb.save(path)

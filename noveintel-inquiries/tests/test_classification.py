@@ -116,7 +116,7 @@ class TestRouting:
         from noveintel_inquiries.core42 import DEEP_MODEL, FAST_MODEL
 
         assert seen[0] == (FAST_MODEL, "classification", False, None)  # the first pass does not reason
-        assert seen[-1] == (DEEP_MODEL, "deep_review", True, "medium")
+        assert seen[-1] == (DEEP_MODEL, "deep_review", True, "low")
 
     def test_still_low_after_the_deep_review_is_flagged_not_queued(self, gateway):
         cases, s = _cases([{"case_id": "1", "description": "still-low مرحبا", "resolution_text": "تم"}])
@@ -215,7 +215,7 @@ class TestRootCausesAndUmbrellas:
             def _classify_cases(self, user, tool, system):
                 answer = super()._classify_cases(user, tool, system)
                 for item in answer["cases"]:
-                    item["root_cause"] = "متابعة"
+                    item["cause"] = "متابعة"
                 return answer
 
         install(monkeypatch, Stubborn())
@@ -223,3 +223,142 @@ class TestRootCausesAndUmbrellas:
         result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
         assert result.root_cause_fixes == 0
         assert cases[0].deep_reviewed and cases[0].provenance == "deep_review"
+
+
+class TestShortOutput:
+    """The model answers in a short schema; the classifier reads full labels (cost, measured)."""
+
+    def test_codes_follow_the_taxonomy_and_name_both_levels(self):
+        from noveintel_inquiries.classification.prompts import label_codes
+
+        codes = label_codes(TAX)
+        assert codes["M1.1"] == (TAX.main_names[0], TAX.main_to_subs[TAX.main_names[0]][0])
+        assert all(TAX.is_valid_pair(main, sub) for main, sub in codes.values())
+        assert len(codes) == sum(len(v) for v in TAX.main_to_subs.values())
+
+    def test_the_tool_asks_for_no_evidence_and_short_keys(self):
+        from noveintel_inquiries.classification.prompts import classifier_tool
+
+        item = classifier_tool(TAX, root_causes=True)["input_schema"]["properties"]["cases"]["items"]
+        assert set(item["required"]) == {"id", "type", "tt", "sub", "reason", "conf", "cause"}
+        assert "evidence" not in str(item)
+
+    def test_answers_come_back_under_the_case_id_with_full_names(self, monkeypatch):
+        from noveintel_inquiries.classification.model import BATCH_SIZE, DEEP_BATCH_SIZE, ModelClassifier
+
+        from .fakes import install
+
+        install(monkeypatch)
+        clf = ModelClassifier(TAX, root_causes=True, entity="E")
+        assert (BATCH_SIZE, DEEP_BATCH_SIZE) == (40, 10)
+        main, sub = TAX.main_names[2], TAX.main_to_subs[TAX.main_names[2]][0]
+        assert clf._short({"main_service": main, "sub_classification": sub, "root_cause": "x"}) == {"sub": "M3.1", "cause": "x"}
+        back = clf._long({"id": "c1", "type": "استفسار", "tt": "inquiry", "sub": "M3.1", "reason": "r", "conf": 0.9, "cause": "x"}, "260630-1")
+        assert back == {"case_id": "260630-1", "main_service": main, "sub_classification": sub, "actual_contact_type": "استفسار",
+                        "true_type": "inquiry", "classification_reason": "r", "confidence": 0.9, "root_cause": "x"}
+        assert "main_service" not in clf._long({"id": "c1", "sub": "M99.9"}, "x")  # an unknown code sets nothing
+
+
+
+class TestNearDuplicates:
+    """Near-identical cases copy the labels of the earlier one (measured: reviewers agreed 95%)."""
+
+    TEXT = "كيف يمكنني ضم مدة خدمة سابقة إلى خدمتي الحالية في الصندوق"
+    RES = "يمكنكم تقديم طلب ضم مدة الخدمة السابقة عبر منصة تم من خلال الرابط"
+
+    def _rows(self):
+        return [
+            {"case_id": "a", "description": self.TEXT, "resolution_text": self.RES},
+            {"case_id": "b", "description": self.TEXT + " لو سمحت", "resolution_text": self.RES},
+            {"case_id": "c", "description": self.TEXT + " لو سمحت", "resolution_text": self.RES},  # exact copy of b
+            {"case_id": "d", "description": "أرجو تعديل بيانات الحساب المصرفي لصرف المعاش", "resolution_text": "تم تعديل الحساب"},
+        ]
+
+    def test_a_near_identical_case_copies_the_earlier_one(self, monkeypatch):
+        from .fakes import install
+
+        install(monkeypatch)
+        cases, s = _cases(self._rows(), root_cause_extraction=True)
+        result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
+        by_id = {c.case_id: c for c in cases}
+        assert result.near_duplicates_reused == 1
+        assert by_id["b"].duplicate_of == "a" and by_id["c"].duplicate_of == "a"  # the exact copy follows through
+        assert by_id["d"].duplicate_of is None
+        assert by_id["b"].sub_classification == by_id["a"].sub_classification and by_id["b"].provenance == "auto"
+        assert "near-identical case a" in by_id["b"].corrections[-1]
+        assert result.duplicates_reused == 2
+
+    def test_one_turns_it_off(self, monkeypatch):
+        from .fakes import install
+
+        install(monkeypatch)
+        cases, s = _cases(self._rows(), near_duplicate_similarity=1.0)
+        result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
+        assert result.near_duplicates_reused == 0 and {c.case_id for c in cases if c.duplicate_of} == {"c"}
+
+    def test_an_embedding_failure_classifies_everything(self, monkeypatch):
+        from noveintel_inquiries.core42 import embeddings
+
+        from .fakes import install
+
+        install(monkeypatch)
+
+        def down(*args, **kwargs):
+            raise RuntimeError("gateway down")
+
+        monkeypatch.setattr(embeddings, "embed_texts", down)
+        cases, s = _cases(self._rows())
+        result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
+        assert result.near_duplicates_reused == 0 and all(c.sub_classification for c in cases)
+
+
+class TestSplitAndMissingAnswers:
+    """The deep review once returned 1 answer for 7 cases: the model had split its answer
+    across several tool calls and only the first was read."""
+
+    def test_tool_input_merges_every_block(self):
+        from types import SimpleNamespace
+
+        from noveintel_inquiries.core42 import tool_input
+
+        block = lambda data: SimpleNamespace(type="tool_use", input=data)  # noqa: E731
+        message = SimpleNamespace(content=[block({"cases": [1], "note": ""}), SimpleNamespace(type="text"),
+                                           block({"cases": [2, 3], "note": "n", "extra": "x"})])
+        assert tool_input(message) == {"cases": [1, 2, 3], "note": "n", "extra": "x"}
+        assert tool_input(SimpleNamespace(content=[SimpleNamespace(type="text")])) is None
+
+    def test_an_answer_split_across_tool_calls_labels_every_case(self, monkeypatch):
+        from .fakes import FakeGateway, _Block, _Message, install
+
+        class OneCallPerCase(FakeGateway):
+            def create(self, **kwargs):
+                message = super().create(**kwargs)
+                data = message.content[0].input
+                if "cases" not in data:
+                    return message
+                return _Message(content=[_Block(input={"cases": [c]}, name=message.content[0].name) for c in data["cases"]])
+
+        install(monkeypatch, OneCallPerCase())
+        topics = ["المعاش", "المكافأة", "الشهادة", "الإقرار", "التسجيل", "الضم", "الحساب"]
+        rows = [{"case_id": str(i), "description": f"مرحبا review-me سؤال عن {t}", "resolution_text": f"رد عن {t}"} for i, t in enumerate(topics)]
+        cases, s = _cases(rows, near_duplicate_similarity=1.0)
+        result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
+        assert result.model_unavailable == 0
+        assert result.deep_reviewed == 7 and all(c.provenance == "deep_review" for c in cases)
+
+    def test_a_case_left_out_is_asked_for_once_more(self, monkeypatch):
+        from .fakes import FakeGateway, install
+
+        class Forgetful(FakeGateway):
+            def _classify_cases(self, user, tool, system):
+                answer = super()._classify_cases(user, tool, system)
+                if len(answer["cases"]) > 1:
+                    answer["cases"] = answer["cases"][:-1]  # drop the last case of every multi-case batch
+                return answer
+
+        gateway = install(monkeypatch, Forgetful())
+        topics = ["المعاش", "المكافأة", "الشهادة"]
+        rows = [{"case_id": str(i), "description": f"سؤال مختلف عن {t} في الخدمة", "resolution_text": f"رد عن {t}"} for i, t in enumerate(topics)]
+        cases, s = _cases(rows, near_duplicate_similarity=1.0)
+        result = classify_cases(cases, TAX, s, entity_name="E", carried_umbrellas=[])
+        assert result.model_unavailable == 0 and gateway.calls.count("classify_cases") == 2

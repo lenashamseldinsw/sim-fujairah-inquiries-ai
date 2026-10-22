@@ -25,7 +25,7 @@ import logging
 from collections import Counter
 from typing import Callable
 
-from ..core42 import CHAT_MODEL, FAST_MODEL, Core42Client
+from ..core42 import CHAT_MODEL, LIGHT_MODEL, Core42Client, tool_input
 from ..engine.compute import Umbrella
 from ..engine.parse import Case
 from ..engine.text import clean_label, fold_text
@@ -69,10 +69,7 @@ def _call(client: Core42Client, model: str, user: str) -> dict:
         stage="umbrella_discovery",
         messages=[{"role": "user", "content": user}],
     )
-    for block in message.content:
-        if getattr(block, "type", "") == "tool_use":
-            return block.input or {}
-    return {}
+    return tool_input(message) or {}
 
 
 def discover_umbrellas(
@@ -104,7 +101,10 @@ def discover_umbrellas(
 
     for index, chunk in enumerate(chunks):
         remaining = chunk
-        for attempt in range(2):
+        # Up to three passes: listing member ids is cheap but a model can leave some out,
+        # so what is missing is sent again (only the missing ids) before anything falls
+        # into the unassigned bucket.
+        for attempt in range(3):
             if not remaining:
                 break
             ids = {f"rc{n + 1}": rc for n, rc in enumerate(remaining)}
@@ -116,15 +116,19 @@ def discover_umbrellas(
                 [(rid, rc, counts[rc]) for rid, rc in ids.items()], carried, target, service_names
             )
             try:
-                result = _call(client, CHAT_MODEL if index == 0 and attempt == 0 else FAST_MODEL, user)
+                # The first chunk defines and names the umbrellas (reasoning tier); later chunks
+                # mostly file root causes under them (light tier — measured to hold).
+                result = _call(client, CHAT_MODEL if index == 0 and attempt == 0 else LIGHT_MODEL, user)
             except Exception as exc:
                 logger.warning("Umbrella discovery chunk %d failed: %s", index + 1, exc)
                 result = {}
             id_map = _absorb_umbrellas(result.get("umbrellas") or [], registry)
-            for row in result.get("assignment") or []:
-                rc = ids.get(str(row.get("root_cause", "")).strip())
-                uid = id_map.get(str(row.get("umbrella_id", "")).strip())
-                if rc and uid:
+            rows = [(rid, item.get("id")) for item in result.get("umbrellas") or [] for rid in item.get("root_causes") or []]
+            rows += [(r.get("root_cause"), r.get("umbrella_id")) for r in result.get("assignment") or []]  # older shape
+            for rid, given in rows:
+                rc = ids.get(str(rid or "").strip())
+                uid = id_map.get(str(given or "").strip())
+                if rc and uid and rc not in assignment:
                     assignment[rc] = uid
             remaining = [rc for rc in remaining if rc not in assignment]
         if progress:
@@ -198,9 +202,7 @@ def _merge_if_over(registry, assignment, counts, target, client, warnings) -> No
             tools=[_MERGE_TOOL], tool_choice={"type": "any"}, stage="umbrella_discovery",
             messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
         )
-        mapping = next(
-            (b.input.get("mapping") for b in message.content if getattr(b, "type", "") == "tool_use"), []
-        ) or []
+        mapping = (tool_input(message) or {}).get("mapping") or []
     except Exception as exc:
         warnings.append(f"Umbrella merge failed ({exc}); {len(live)} umbrellas kept.")
         return

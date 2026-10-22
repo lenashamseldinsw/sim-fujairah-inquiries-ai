@@ -74,10 +74,12 @@ export, and it shuts down idle workers. That is why it is not supported.
 #### Sizing the ceiling for a tenant's volume
 
 Classification dominates a large run: about four cases in five go to the model, in
-batches of 20, `LLM_MAX_CONCURRENCY` (default 5) at a time; the uncertain ones get a
-deep review in batches of 5 with reasoning switched on. After classification the
-analysis (journey, FAQs) runs in the background; umbrella grouping, the figures and the
-narrative of every section that does not use the analysis go ahead without it. The
+batches of 40, `LLM_MAX_CONCURRENCY` (default 5) at a time; the uncertain ones get a
+deep review in batches of 10 with low reasoning. With root causes on (X8), every case
+goes to the model — the rule chain cannot write a root cause. After classification the
+journey analysis runs in the background, and FAQ detection beside it once the umbrellas
+exist; the figures and the narrative of every section that does not use them go ahead
+without them. The
 narrative is three parallel calls — the descriptive sections, the root-cause sections,
 and (once the analysis is in) Sections 04–05 with the conclusion and friction points —
 and each is translated the moment it is final. Measured against Core42 (`gpt-5.1`), a
@@ -85,9 +87,10 @@ and each is translated the moment it is final. Measured against Core42 (`gpt-5.1
 
 | Step | Cost |
 |---|---|
-| Classification | ≈ 50 s per 120 cases routed to the model; the deep review adds ≈ 20–30 s per 25 cases it re-reads (five batches of 5 at once, medium reasoning) |
-| Umbrella discovery (X8) | ≈ 1 min per 350 distinct root causes, sequential; ≈ 12 s at 40 cases |
+| Classification | measured on 500 human-reviewed ADPF Q2 cases, X8 on: 3.9 min, 16 calls, 443 input and 76 output tokens per case — ≈ $0.66 per 500 cases at gpt-5.1 list prices ($1.25 / $10 per 1M); 3–11% of cases deep-reviewed (the share varies run to run). Before the short schema and batches of 40: 5.7 min, $1.19 |
+| Umbrella discovery (X8) | ≈ 1 min per 350 distinct root causes, sequential; ≈ 12 s at 40 cases. Compact output with `CORE42_MODEL_LIGHT=gpt-4.1-mini`: ≈ $0.01 per later chunk (≈ $0.15 for Q2's 5,766 root causes, from ≈ $1.56) |
 | Analysis (journey, FAQs), in the background | 30–40 s at 40 cases; the first two narrative groups are written meanwhile |
+| FAQ detection at scale | the ADPF Q2 master with the 142-question catalogue: 8,860 cases → ≈ 3,100 question groups, ≈ 1,800 judged; 4–5.5 min, ≈ 104 calls, ≈ 650 k input and 50–75 k output tokens (embeddings included). It starts after classification and umbrella discovery and overlaps only the figures and the first two narrative groups (≈ 70 s), so on a Q2-sized run it adds about 3–4 min before the Section 04–05 narrative can start |
 | Arabic narrative, three groups | ≈ 70 s including the wait for the analysis, independent of volume |
 | English translation still running after the Arabic | ≈ 20 s |
 
@@ -146,7 +149,7 @@ keep that sum in check:
 | `NOVEINQ_JOB_TTL_SEC` | `86400` | How long a finished job can still be polled. Report files outlive this |
 | `NOVEINQ_JOB_MAX_CONCURRENT` | `2` | Runs at once per worker. Each holds its whole export in memory |
 | `NOVEINQ_MAX_RECORDS` | `100000` | Larger exports are refused up front |
-| `LLM_DEEP_REASONING_EFFORT` | `medium` | How hard the deep review reasons (`none` · `minimal` · `low` · `medium` · `high` · `xhigh`). gpt-5.1 does not reason without it |
+| `LLM_DEEP_REASONING_EFFORT` | `low` | How hard the deep review reasons (`none` · `minimal` · `low` · `medium` · `high` · `xhigh`). gpt-5.1 does not reason without it |
 | `LLM_MAX_CONCURRENCY` | `5` | Model calls in flight per worker. Raising it usually makes runs *slower* (more 429s) |
 | `LLM_ADAPTIVE_CONCURRENCY` | `true` | Halve the in-flight cap on a 429 and grow it back on clean calls; `false` keeps it fixed. See *Several instances share one gateway* |
 | `NOVEINQ_LOG_LEVEL` | `INFO` | |

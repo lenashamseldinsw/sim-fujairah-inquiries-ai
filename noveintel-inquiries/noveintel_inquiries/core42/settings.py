@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover - dotenv is a declared dependency
 CHAT_MODEL = "core42-chat"   # reasoning tier: analysis, gap analysis, report prose
 FAST_MODEL = "core42-fast"   # bulk tier: per-case classification
 DEEP_MODEL = "core42-deep"   # deep-review tier: the second, higher-effort classification pass
+LIGHT_MODEL = "core42-light" # light tier: auxiliary steps measured to hold on a smaller model
 
 _EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
 
@@ -100,8 +101,14 @@ class Core42Settings:
     # The deep review's model (defaults to ``model``) and how hard it reasons.
     # gpt-5.1 does no reasoning unless asked: without an effort it answers at once
     # and spends zero reasoning tokens. Empty or "none" sends no effort at all.
+    # "low" by default: reasoning tokens are billed as output, and on 500 reviewed
+    # ADPF cases the deep review touched about 5% of them.
     model_deep: str = "gpt-5.1"
-    deep_reasoning_effort: str = "medium"
+    deep_reasoning_effort: str = "low"
+    # The light tier (defaults to ``model``): steps a smaller model was measured to do
+    # as well — set CORE42_MODEL_LIGHT=gpt-4.1-mini. Never the classifier's first pass:
+    # on 500 reviewed ADPF cases gpt-4.1-mini lost 8–10 points of accuracy there.
+    model_light: str = "gpt-5.1"
     websearch_model: str = "gpt-5.1"
 
     max_output_tokens: int = 32768
@@ -145,6 +152,8 @@ class Core42Settings:
             return self.model_fast
         if name == DEEP_MODEL:
             return self.model_deep
+        if name == LIGHT_MODEL:
+            return self.model_light
         if name in self.aliases:
             return self.aliases[name]
         lowered = name.lower()
@@ -189,7 +198,8 @@ def get_settings() -> Core42Settings:
         model=model,
         model_fast=_env("CORE42_MODEL_FAST", "", env) or model,
         model_deep=_env("CORE42_MODEL_DEEP", "", env) or model,
-        deep_reasoning_effort=_effort(_env("LLM_DEEP_REASONING_EFFORT", "medium", env)),
+        model_light=_env("CORE42_MODEL_LIGHT", "", env) or model,
+        deep_reasoning_effort=_effort(_env("LLM_DEEP_REASONING_EFFORT", "low", env)),
         websearch_model=_env("CORE42_WEBSEARCH_MODEL", "", env) or model,
         max_output_tokens=_env_int("LLM_MAX_OUTPUT_TOKENS", 32768, env),
         output_token_headroom=_env_float("LLM_OUTPUT_TOKEN_HEADROOM", 1.5, env),

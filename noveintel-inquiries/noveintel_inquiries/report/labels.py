@@ -75,7 +75,6 @@ T: dict[str, dict[str, str]] = {
     "gap_type": {"ar": "نوع الفجوة", "en": "Gap type"},
     "priority": {"ar": "الأولوية", "en": "Priority"},
     "question": {"ar": "السؤال", "en": "Question"},
-    "answer": {"ar": "الإجابة المقترحة", "en": "Proposed answer"},
     "frequency": {"ar": "التكرار", "en": "Frequency"},
     "faq_status": {"ar": "الحالة في القائمة المعتمدة", "en": "Catalogue status"},
     "notification": {"ar": "نوع الإشعار", "en": "Notification"},
@@ -98,6 +97,7 @@ T: dict[str, dict[str, str]] = {
     "per_100": {"ar": "لكل 100 معاملة", "en": "Per 100 transactions"},
     "howto_cases": {"ar": "حالات «الكيفية»", "en": "How-to cases"},
     "coverage": {"ar": "تغطية الأسئلة الشائعة", "en": "FAQ coverage"},
+    "partial_coverage": {"ar": "تغطية جزئية", "en": "Partly covered"},
     "provenance": {"ar": "مصدر التصنيف", "en": "Classification source"},
     "previous": {"ar": "الفترة السابقة", "en": "Previous period"},
     "current": {"ar": "الفترة الحالية", "en": "This period"},
@@ -212,8 +212,14 @@ EFFORT = {
 }
 FAQ_STATUS = {
     "new": {"ar": "جديد — غير منشور", "en": "New — not published"},
+    "partial": {"ar": "مغطى جزئياً في الأسئلة المعتمدة", "en": "Partly covered by the published FAQs"},
     "in_catalogue": {"ar": "موجود في قائمة الأسئلة المعتمدة", "en": "In the FAQ catalogue"},
     "in_guidebook": {"ar": "موجود في دليل الخدمات", "en": "In the guidebook"},
+    "not_checked": {"ar": "لم يُقارَن بقائمة معتمدة", "en": "Not compared with a catalogue"},
+}
+#: Per-case FAQ verdict (``Case.faq_status``), for the workbook.
+FAQ_CASE_STATUS = {
+    "covered": "مغطى", "partial": "مغطى جزئياً", "not_covered": "غير مغطى",
 }
 
 

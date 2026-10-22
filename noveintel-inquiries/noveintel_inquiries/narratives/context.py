@@ -209,9 +209,12 @@ def build_context(
             for g in m["GAP_TABLE"]
         ]
     if m.get("VALIDATED_FAQS"):
+        # Questions only — the tool writes no FAQ answers (handoff scope). A matched
+        # catalogue question is given so the prose can say the content exists.
         ctx["VALIDATED_FAQS"] = [
             {"id": q["id"], "question": pick(q, "question"), "main_service": L(q["main_service"]),
-             "frequency": q["frequency"], "status": FAQ_STATUS[q["validation_status"]][lang]}
+             "frequency": q["frequency"], "status": FAQ_STATUS[q["validation_status"]][lang],
+             **({"matched_catalogue_question": q["matched_faqs"][0]} if lang == "ar" and q.get("matched_faqs") else {})}
             for q in m["VALIDATED_FAQS"]
         ]
     if m.get("NOTIFICATION_OPPORTUNITIES"):

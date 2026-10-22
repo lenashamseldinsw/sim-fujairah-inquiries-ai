@@ -186,6 +186,33 @@ def _tool_use_blocks(message: Any) -> List[ToolUseBlock]:
     return blocks
 
 
+def tool_input(message: Any) -> Optional[Dict[str, Any]]:
+    """Every ``tool_use`` block's arguments, merged into one dict — or None if there are none.
+
+    A model asked for one tool call sometimes answers with several (one per case, or
+    the batch in parts); the client turns each into a block. Reading only the first
+    one silently drops the rest — the classifier's deep review once returned 1 answer
+    for 7 cases this way. Lists are concatenated in order, a missing or empty field
+    is filled from a later block, and anything else keeps its first value.
+    """
+    blocks = [b.input or {} for b in getattr(message, "content", None) or [] if getattr(b, "type", "") == "tool_use"]
+    if not blocks:
+        return None
+    if len(blocks) > 1:
+        logger.info("The model split its answer across %d tool calls; merging them.", len(blocks))
+    merged: Dict[str, Any] = {}
+    for data in blocks:
+        if not isinstance(data, dict):
+            continue
+        for key, value in data.items():
+            current = merged.get(key)
+            if current in (None, "", [], {}):
+                merged[key] = value
+            elif isinstance(current, list) and isinstance(value, list):
+                merged[key] = current + value
+    return merged
+
+
 def _build_message(unpacked: Dict[str, Any], model: str) -> Core42Message:
     message = unpacked.get("message")
     blocks: List[Any] = []

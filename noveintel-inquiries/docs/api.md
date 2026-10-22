@@ -228,13 +228,21 @@ one of them is shown:
 
 | Section | Analysis it needs |
 |---|---|
-| `digital_content_opportunities` | FAQs (one call per service with enough cases) |
+| `digital_content_opportunities` | FAQ detection — embeddings to group the cases' questions and shortlist catalogue entries, then about one judging call per 30 question groups and one merge call (questions only, never answers) |
 | `improvement_roadmap` | journey frictions and notifications, FAQs — its initiatives cite them |
 | `appendices` | journey frictions — the friction-point appendix |
 | every other section | none — engine figures only |
 
+FAQ detection starts after umbrella discovery (its population is defined by umbrella)
+and runs beside the figures and the first narrative groups. With a catalogue it judges
+every question group in the procedures umbrella, small ones included, so its call
+count grows with the number of distinct questions: on the ADPF Q2 master (10,628
+cases) see `deployment.md`. Without a catalogue it judges only the largest groups, for
+their question.
+
 The guidebook gap analysis is retired with the digital-gap section; a guidebook, when
-sent, still marks proposed FAQs as already published and is listed in the methodology.
+sent, adds its FAQs to the entries FAQ detection judges against and is listed in the
+methodology.
 
 ### Response — `202`
 

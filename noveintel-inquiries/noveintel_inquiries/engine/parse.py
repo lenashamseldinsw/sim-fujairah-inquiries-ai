@@ -96,7 +96,10 @@ class Case:
     duplicate_of: str | None = None        # labels copied from this identical case
     evidence: str = ""
     corrections: list[str] = field(default_factory=list)
-    faq_id: str | None = None              # S6.1 evidence link (R5)
+    # ── Derived by FAQ detection (analysis.faqs) — labels the engine sums ─────
+    faq_id: str | None = None              # the priority FAQ this case is evidence for (R5)
+    faq_status: str | None = None          # covered · partial · not_covered — against the catalogue
+    faq_match: int | None = None           # index of the catalogue entry that answers it
 
     @property
     def misclassified(self) -> bool | None:

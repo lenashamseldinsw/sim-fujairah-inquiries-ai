@@ -1,7 +1,7 @@
 """
 Layer 2 — the classifier, end to end (Prerequisites §1.B, Data Mapping §3).
 
-    frozen labels ─► duplicates share one classification
+    frozen labels ─► duplicates (identical, then near-identical) share one classification
         ─► keyword rules («آلي - موثوق»)
             └─ confidence < X5 ─► model, first pass («نموذج»)
                   └─ codebook corrections ─► «آلي - مُصحّح»
@@ -14,7 +14,10 @@ What it guarantees:
 
 * a frozen label is never overwritten — only missing fields are filled;
 * identical cases (same description and resolution, folded) are classified once and
-  the labels copied, with provenance «آلي - موثوق» — fast, and consistent by design;
+  the labels copied, with provenance «آلي - موثوق» — fast, and consistent by design. So
+  are near-identical ones (embeddings at least ``near_duplicate_similarity`` apart): on
+  the ADPF Q2 file one case in ten had one, and reviewers had labelled the pair the same
+  95% of the time — against 68% agreement between the classifier and the reviewers;
 * every case leaves with a contact type, a main service and a sub-classification, a
   confidence and a provenance, so ``S`` never shrinks here;
 * the "review" tier is an AI pass, not a person: the cases the first pass was unsure
@@ -30,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ..models.settings import TenantSettings
-from ..core42 import Core42Client
+from ..core42 import Core42Client, embeddings
 from ..engine.compute import Umbrella
 from ..engine.parse import Case
 from ..engine.taxonomy import TaxonomyIndex
@@ -62,6 +65,7 @@ class ClassificationResult:
     corrected: int = 0
     root_cause_fixes: int = 0
     duplicates_reused: int = 0
+    near_duplicates_reused: int = 0
     deep_reviewed: int = 0
     low_confidence: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -70,6 +74,35 @@ class ClassificationResult:
 def _duplicate_key(case: Case) -> str | None:
     key = fold_text(f"{case.description} || {case.resolution_text}")
     return key if len(fold_text(case.description)) >= _MIN_DUPLICATE_KEY else None
+
+
+def _near_duplicates(candidates: list[Case], threshold: float) -> dict[str, Case]:
+    """Case id → the earlier case whose labels it copies (near-identical text).
+
+    Each case is compared with the cases before it only, and a match is followed to the
+    case that is actually classified, so labels flow one way and never in a circle. If
+    the embedding call fails, nothing is copied and every case is classified.
+    """
+    if threshold >= 1.0 or len(candidates) < 2:
+        return {}
+    texts = [f"{' '.join(c.description.split())[:700]} || {' '.join(c.resolution_text.split())[:700]}" for c in candidates]
+    try:
+        vectors = embeddings.embed_texts(texts, stage="near_duplicates")
+    except Exception as exc:  # never a reason to fail classification
+        logger.warning("Near-duplicate detection skipped: %s", exc)
+        return {}
+    source = list(range(len(candidates)))
+    for start in range(0, len(candidates), 1000):
+        block = vectors[start:start + 1000] @ vectors[:start + 1000].T
+        for k in range(block.shape[0]):
+            i = start + k
+            if i == 0:
+                continue
+            earlier = block[k, :i]
+            j = int(earlier.argmax())
+            if earlier[j] >= threshold:
+                source[i] = source[j]
+    return {candidates[i].case_id: candidates[source[i]] for i in range(len(candidates)) if source[i] != i}
 
 
 def _apply_answer(case: Case, answer: dict, tax: TaxonomyIndex, *, labels: bool, x8: bool) -> None:
@@ -92,7 +125,6 @@ def _apply_answer(case: Case, answer: dict, tax: TaxonomyIndex, *, labels: bool,
             case.confidence = max(0.0, min(1.0, float(answer.get("confidence"))))
         except (TypeError, ValueError):
             pass
-    case.evidence = clean_label(answer.get("evidence")) or case.evidence
     if x8 and "root_cause" not in case.frozen and answer.get("root_cause"):
         case.root_cause = clean_label(answer.get("root_cause")) or case.root_cause
 
@@ -126,6 +158,15 @@ def classify_cases(
             copies.append(case)
         else:
             first_of[key] = case
+    near = _near_duplicates(list(first_of.values()), settings.near_duplicate_similarity)
+    for case in copies:  # an exact copy of a near-copy reads from the case actually classified
+        if case.duplicate_of in near:
+            case.duplicate_of = near[case.duplicate_of].case_id
+    for case in first_of.values():
+        if case.case_id in near:
+            case.duplicate_of = near[case.case_id].case_id
+            copies.append(case)
+    result.near_duplicates_reused = len(near)
     work = [c for c in cases if c.duplicate_of is None]
 
     # ── Tier 1: keyword rules, for every field not frozen ─────────────────────
@@ -281,14 +322,15 @@ def classify_cases(
                      "confidence", "root_cause", "evidence", "low_confidence"):
             setattr(case, attr, getattr(source, attr))
         case.provenance = "auto"
-        case.corrections.append(f"labels copied from the identical case {source.case_id}")
+        kind = "near-identical" if case.case_id in near else "identical"
+        case.corrections.append(f"labels copied from the {kind} case {source.case_id}")
     result.duplicates_reused = len(copies)
     result.low_confidence = sum(1 for c in cases if c.low_confidence)
 
     logger.info(
-        "Classification: %d frozen, %d duplicates reused, %d to the model, %d unavailable, %d corrected, "
-        "%d root-cause fixes, %d deep-reviewed, %d still low-confidence, provenance %s.",
-        frozen.cases_with_frozen_labels, result.duplicates_reused, result.routed_to_model,
+        "Classification: %d frozen, %d duplicates reused (%d near-identical), %d to the model, %d unavailable, "
+        "%d corrected, %d root-cause fixes, %d deep-reviewed, %d still low-confidence, provenance %s.",
+        frozen.cases_with_frozen_labels, result.duplicates_reused, result.near_duplicates_reused, result.routed_to_model,
         result.model_unavailable, result.corrected, result.root_cause_fixes, result.deep_reviewed,
         result.low_confidence, dict(Counter(c.provenance for c in cases)),
     )

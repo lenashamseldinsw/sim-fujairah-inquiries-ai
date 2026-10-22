@@ -1,5 +1,5 @@
 """
-Prompts for the qualitative analysis behind S4–S6.
+Prompts for the qualitative analysis behind S4–S6, and FAQ detection (Section 04).
 
 Each writes table text in both languages in one call — ``*_ar`` fields in Arabic only,
 ``*_en`` fields in English only — so the English report needs no translation pass, and
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from ..narratives.rules import STYLE_RULES, vocabulary_lines
 
-__all__ = ["analysis_system_prompt", "JOURNEY_TOOL", "FAQ_TOOL", "GAP_TOOL"]
+__all__ = ["analysis_system_prompt", "JOURNEY_TOOL", "FAQ_JUDGE_TOOL", "FAQ_MERGE_TOOL", "GAP_TOOL"]
 
 _ROOT_CAUSE_CATEGORIES = [
     "missing_info", "inaccessible_info", "no_proactive_notification", "platform_bug", "policy_complexity",
@@ -85,32 +85,66 @@ JOURNEY_TOOL = {
     },
 }
 
-FAQ_TOOL = {
-    "name": "propose_faqs",
-    "description": "Frequently asked questions the cases of one main service show, with matching keywords.",
+# FAQ detection (``analysis.faqs``). Questions only: writing FAQ answers is outside the
+# tool's scope (handoff START-HERE, Prerequisites "Out of scope"), so no field asks for one.
+FAQ_JUDGE_TOOL = {
+    "name": "judge_faq_groups",
+    "description": "For each question group: whether one of its candidate catalogue entries already answers "
+                   "it, and — only where asked — the customer's question in one line.",
     "input_schema": {
         "type": "object",
         "properties": {
-            "faqs": {
+            "groups": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "question_ar": {"type": "string"},
-                        "question_en": {"type": "string"},
-                        "answer_ar": {"type": "string", "description": "Grounded in the agents' resolutions."},
-                        "answer_en": {"type": "string"},
-                        "keywords_ar": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "3–6 distinctive Arabic words or short phrases a customer asking this question writes.",
+                        "group_id": {"type": "string"},
+                        "status": {
+                            "type": "string", "enum": ["covered", "partial", "not_covered"],
+                            "description": "covered: a candidate entry answers the question these customers ask. "
+                                           "partial: an entry answers part of that very question (e.g. the steps but "
+                                           "not the documents asked about). not_covered: no entry answers it — an "
+                                           "entry on the same topic but a different question, another customer type "
+                                           "or another condition does not count.",
                         },
+                        "faq_ids": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": "The candidate entries that answer it, best first. Empty when not_covered.",
+                        },
+                        "question_ar": {
+                            "type": "string",
+                            "description": "Only when write_question is true: the question as a customer asks it, "
+                                           "one line ending in «؟», no answer. Otherwise empty.",
+                        },
+                        "question_en": {"type": "string", "description": "The same question in English, or empty."},
                     },
-                    "required": ["question_ar", "question_en", "answer_ar", "answer_en", "keywords_ar"],
+                    "required": ["group_id", "status", "faq_ids", "question_ar", "question_en"],
                 },
             }
         },
-        "required": ["faqs"],
+        "required": ["groups"],
+    },
+}
+
+FAQ_MERGE_TOOL = {
+    "name": "merge_faq_questions",
+    "description": "Which question groups ask the same customer question.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "same_question": {
+                "type": "array",
+                "description": "Each item: two or more group ids that ask the same question, whatever the wording. "
+                               "Groups about a different service, step or customer type are not the same question.",
+                "items": {
+                    "type": "object",
+                    "properties": {"group_ids": {"type": "array", "items": {"type": "string"}}},
+                    "required": ["group_ids"],
+                },
+            }
+        },
+        "required": ["same_question"],
     },
 }
 

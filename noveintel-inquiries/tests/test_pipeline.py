@@ -171,6 +171,36 @@ class TestPlatformisation:
         for faq in bundle.metrics["VALIDATED_FAQS"]:
             assert faq["frequency"] == sum(1 for c in labels if c["faq_id"] == faq["id"])
 
+    def test_faq_coverage_is_the_sum_of_the_case_labels(self, run):
+        bundle, files, _ = run
+        document = json.loads(files["labels.json"].read_text(encoding="utf-8"))
+        labels = document["cases"]
+        howto = next(u["id"] for u in document["umbrellas"] if "إجراءات" in u["name_ar"])
+        fc = bundle.metrics["FAQ_COVERAGE"]
+        in_howto = [c for c in labels if c["bundle_id"] == howto and c["label_true_type"] in ("inquiry", "service_request")]
+        assert sum(fc["howto_cases"]) == len(in_howto) > 0
+        assert sum(fc["covered_cases"]) == sum(1 for c in in_howto if c["faq_status"] == "covered") > 0
+        volume = bundle.metrics["FAQ_CATALOGUE_VOLUME"]
+        assert sum(r["cases"] for r in volume) == sum(1 for c in labels if c["faq_catalogue_question"] and c["faq_status"] == "covered")
+        assert sum(r["partial_cases"] for r in volume) == sum(1 for c in labels if c["faq_status"] == "partial")
+
+    def test_no_faq_answer_is_written_anywhere(self, run):
+        bundle, files, gateway = run
+        assert bundle.metrics["VALIDATED_FAQS"]
+        assert not any(k.startswith("answer") for q in bundle.metrics["VALIDATED_FAQS"] for k in q)
+        assert not any(k.startswith("answer") for r in bundle.metrics["FAQ_CATALOGUE_VOLUME"] for k in r)
+        assert "propose_faqs" not in gateway.calls
+
+    def test_the_workbook_tags_each_catalogue_question_with_its_volume(self, run):
+        from openpyxl import load_workbook
+
+        _, files, _ = run
+        wb = load_workbook(files["cases.xlsx"], read_only=True)
+        assert "حجم الأسئلة المعتمدة" in wb.sheetnames
+        rows = list(wb["حجم الأسئلة المعتمدة"].iter_rows(values_only=True))
+        assert rows[0][:3] == ("السؤال المعتمد", "المصدر", "الحالات التي يجيب عنها")
+        assert rows[1][0] == "كيف يمكنني ضم مدة خدمة سابقة"
+
     def test_r6_roadmap_counts_come_from_their_source(self, run):
         bundle = run[0]
         roadmap = next(s for s in bundle.report[Language.AR]["sections"] if s["key"] == "improvement_roadmap")
@@ -371,22 +401,22 @@ class TestSectionSelection:
         report = bundle.narratives[Language.AR].report
         assert report.friction_points == [] and report.service_focus_narratives == [] and report.priority_faqs == []
         # The roadmap draws on the journey and the FAQs, so they ran.
-        assert bundle.metrics["JOURNEY_MAP"] and {"map_journey", "propose_faqs"} <= set(gateway.calls)
+        assert bundle.metrics["JOURNEY_MAP"] and {"map_journey", "judge_faq_groups"} <= set(gateway.calls)
 
     def test_sections_without_analysis_make_no_analysis_call(self, adpf_labelled, gateway, tmp_path):
         request = _request(adpf_labelled, options={"sections": ["executive_summary", "statistics", "conclusion"]})
         bundle, _ = _run(request, tmp_path)
-        assert not {"map_journey", "propose_faqs", "assess_guidebook"} & set(gateway.calls)
+        assert not {"map_journey", "judge_faq_groups", "assess_guidebook"} & set(gateway.calls)
         assert bundle.metrics["JOURNEY_MAP"] == [] and bundle.metrics["VALIDATED_FAQS"] == []
 
     @pytest.mark.parametrize("section,calls", [
         ("appendices", {"map_journey"}),
-        ("digital_content_opportunities", {"propose_faqs"}),
+        ("digital_content_opportunities", {"judge_faq_groups"}),
     ])
     def test_each_dependency_runs_only_its_own_analysis(self, adpf_labelled, gateway, tmp_path, section, calls):
         request = _request(adpf_labelled, options={"sections": ["statistics", section]})
         _run(request, tmp_path)
-        assert {"map_journey", "propose_faqs", "assess_guidebook"} & set(gateway.calls) == calls
+        assert {"map_journey", "judge_faq_groups", "assess_guidebook"} & set(gateway.calls) == calls
 
     def test_root_cause_sections_without_x8_are_omitted_with_a_warning(self, adpf_labelled, gateway, tmp_path):
         request = _request(adpf_labelled, options={"sections": ["executive_summary", "root_causes", "service_focus"]})
@@ -421,7 +451,7 @@ class TestSectionSelection:
     def test_statistics_only_makes_one_writing_call(self, adpf_labelled, gateway, tmp_path):
         request = _request(adpf_labelled, options={"include_english": False, "sections": ["statistics"]})
         _run(request, tmp_path)
-        assert not {"map_journey", "propose_faqs", "assess_guidebook", "translate_labels"} & set(gateway.calls)
+        assert not {"map_journey", "judge_faq_groups", "assess_guidebook", "translate_labels"} & set(gateway.calls)
         assert gateway.calls.count("write_report_narratives") == 1
         assert gateway.calls.count("write_section_narratives") == 0
 

@@ -27,7 +27,7 @@ from ..models.reference import History, PeriodSnapshot, ReferenceLists
 from ..models.settings import ComparisonBasis, DigitalChannelDefinition, TenantSettings
 from .parse import Case, ParseLog
 from .taxonomy import TaxonomyIndex
-from .text import clean_label, count_hits, fold_text
+from .text import clean_label, fold_text
 from .wording import (
     CONTACT_TYPES,
     PROVENANCE,
@@ -40,7 +40,10 @@ from .wording import (
     month_name,
 )
 
-__all__ = ["Umbrella", "compute", "pct", "snapshot_of", "IN_SCOPE_TYPES"]
+__all__ = [
+    "Umbrella", "compute", "pct", "snapshot_of", "IN_SCOPE_TYPES",
+    "FaqPopulation", "faq_population", "faq_coverage", "faq_catalogue_volume",
+]
 
 IN_SCOPE_TYPES = {"inquiry", "service_request"}
 
@@ -424,11 +427,8 @@ def compute(inputs: ComputeInputs) -> dict[str, Any]:
     if inputs.reference.transactions:
         out["INQ_PER_100_TX"] = _transactions(inputs.reference.transactions, L_cases, L, tax)
 
-    # ── FAQ coverage (conditional) ─────────────────────────────────────────────
-    if inputs.reference.faq_catalogue:
-        out["FAQ_COVERAGE"] = _faq_coverage(
-            inputs.reference.faq_catalogue, L_cases, tax, out.get("BUNDLE"), umbrella_by_id
-        )
+    # FAQ_COVERAGE is not computed here: it sums the FAQ labels that FAQ detection
+    # (analysis.faqs) puts on the cases, which runs after this — see ``faq_coverage``.
 
     # ── Events ─────────────────────────────────────────────────────────────────
     out["EVENTS"] = _events(L_cases, umbrella_by_id, settings, x8)
@@ -623,61 +623,105 @@ def _transactions(rows, L_cases, L, tax: TaxonomyIndex) -> dict[str, Any]:
     }
 
 
-_STOP = {fold_text(w) for w in (
-    "كيف", "كيفية", "هل", "ما", "ماذا", "متى", "أين", "اين", "يمكن", "يمكنني", "عن", "في",
-    "من", "على", "إلى", "الى", "مع", "the", "how", "what", "when", "can", "for", "and",
-    "do", "does", "is", "are", "my", "to", "of", "a", "an", "الاستفسار", "استفسار",
-)}
+@dataclass
+class FaqPopulation:
+    """The cases FAQ detection works on (Data Mapping §4, Prerequisites FAQ_COVERAGE).
+
+    With umbrellas: the self-service-able umbrellas (``settings.deflectable()``) plus the
+    procedures umbrella — the questions a published FAQ could answer — and coverage is
+    measured on the procedures umbrella alone, as the BO defined it. Without umbrellas
+    (X8 off): the inquiry-type cases, for both.
+    """
+
+    cases: list[Case]
+    coverage: list[Case]
+    basis: str
+    howto_umbrella: str | None = None
 
 
-def faq_keywords(question: str, keywords: list[str]) -> list[str]:
-    if keywords:
-        return [fold_text(k) for k in keywords if k]
-    words = [fold_text(w) for w in question.replace("؟", " ").replace("?", " ").split()]
-    return [w for w in words if len(w) >= 4 and w not in _STOP]
-
-
-def _faq_coverage(catalogue, L_cases, tax: TaxonomyIndex, bundle_block, umbrellas) -> dict[str, Any]:
-    entries = []
-    for faq in catalogue:
-        entries.append((tax.main(faq.main_service) if faq.main_service else None,
-                        faq_keywords(faq.question_ar, faq.keywords)))
-    if bundle_block and bundle_block.get("ids"):
-        howto_id = _howto_bundle(bundle_block, umbrellas)
-        population = [c for c in L_cases if c.bundle == howto_id]
-        basis = "root causes in the procedures umbrella"
-    else:
-        population = [c for c in L_cases if c.contact_type == "استفسار"]
-        basis = "inquiry-type cases"
-    by_service: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    for c in population:
-        text = fold_text(f"{c.root_cause or ''} {c.description}")
-        covered = any(
-            (svc is None or svc == c.main_service) and count_hits(text, kws) >= min(2, len(kws))
-            for svc, kws in entries if kws
+def faq_population(cases: list[Case], umbrellas: list[Any], settings: TenantSettings) -> FaqPopulation:
+    labelled = [c for c in cases if _is_classified(c)]
+    if umbrellas and any(c.bundle for c in labelled):
+        counts = Counter(c.bundle for c in labelled if c.bundle)
+        ordered = sorted(umbrellas, key=lambda u: -counts.get(u.id, 0))
+        howto = _howto_umbrella(ordered)
+        names = {fold_text(n) for n in settings.deflectable()}
+        chosen = {u.id for u in ordered if fold_text(u.name_ar) in names or fold_text(u.name_en or "") in names}
+        chosen.add(howto)
+        return FaqPopulation(
+            cases=[c for c in labelled if c.bundle in chosen],
+            coverage=[c for c in labelled if c.bundle == howto],
+            basis="root causes in the procedures umbrella",
+            howto_umbrella=howto,
         )
-        by_service[c.main_service][0] += 1
-        by_service[c.main_service][1] += int(covered)
+    inquiries = [c for c in labelled if c.contact_type == "استفسار"]
+    return FaqPopulation(cases=inquiries, coverage=inquiries, basis="inquiry-type cases")
+
+
+def _howto_umbrella(ordered: list[Any]) -> str | None:
+    """The procedures umbrella («طلب إجراءات ومتطلبات الخدمة»), else the largest."""
+    for u in ordered:
+        folded = fold_text(u.name_ar)
+        if any(t in folded for t in (fold_text("إجراءات"), fold_text("متطلبات"), fold_text("كيفية"))):
+            return u.id
+    return ordered[0].id if ordered else None
+
+
+def faq_coverage(population: FaqPopulation, catalogue_size: int) -> dict[str, Any]:
+    """FAQ_COVERAGE — per main service, the coverage cases a catalogue entry answers.
+
+    A sum of labels: each case carries ``faq_status`` (covered · partial · not_covered),
+    the verdict on its question group. A case without one (its group was not judged) is
+    counted as not covered.
+    """
+    by_service: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    for c in population.coverage:
+        row = by_service[c.main_service]
+        row[0] += 1
+        row[1] += int(c.faq_status == "covered")
+        row[2] += int(c.faq_status == "partial")
     ranked = sorted(by_service.items(), key=lambda x: -x[1][0])
-    total = sum(n for n, _ in by_service.values())
-    covered_total = sum(k for _, k in by_service.values())
+    total = sum(r[0] for r in by_service.values())
     return {
-        "basis": basis,
-        "catalogue_size": len(catalogue),
-        "overall_pct": pct(covered_total, total),
+        "basis": population.basis,
+        "catalogue_size": catalogue_size,
+        "overall_pct": pct(sum(r[1] for r in by_service.values()), total),
+        "overall_partial_pct": pct(sum(r[2] for r in by_service.values()), total),
         "labels": [k for k, _ in ranked],
-        "howto_cases": [n for _, (n, _) in ranked],
-        "covered_cases": [k for _, (_, k) in ranked],
-        "coverage_pct": [pct(k, n) for _, (n, k) in ranked],
+        "howto_cases": [r[0] for _, r in ranked],
+        "covered_cases": [r[1] for _, r in ranked],
+        "partial_cases": [r[2] for _, r in ranked],
+        "coverage_pct": [pct(r[1], r[0]) for _, r in ranked],
+        "partial_pct": [pct(r[2], r[0]) for _, r in ranked],
     }
 
 
-def _howto_bundle(bundle_block, umbrellas) -> str | None:
-    for uid, label in zip(bundle_block["ids"], bundle_block["labels"]):
-        folded = fold_text(label)
-        if any(t in folded for t in (fold_text("إجراءات"), fold_text("متطلبات"), fold_text("كيفية"))):
-            return uid
-    return bundle_block["ids"][0] if bundle_block["ids"] else None
+def faq_catalogue_volume(population: FaqPopulation, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """FAQ_CATALOGUE_VOLUME — every catalogue entry with the cases whose question it answers.
+
+    The delivered Q2 report's integration ask: tag each approved FAQ with its real
+    volume. ``cases`` counts the cases it covers; ``partial_cases`` — where it touches
+    the question without fully answering it — are listed beside, never added in: on the
+    Q2 master the model's covered verdicts were stable, while partial and not covered
+    swapped for about one group in eight between two judging configurations. Entries
+    nobody asked about are kept, at zero — that is a finding too.
+    """
+    covered = Counter(c.faq_match for c in population.cases if c.faq_status == "covered" and c.faq_match is not None)
+    partial = Counter(c.faq_match for c in population.cases if c.faq_status == "partial" and c.faq_match is not None)
+    rows = [
+        {
+            "index": i,
+            "question_ar": e.get("question_ar", ""),
+            "question_en": e.get("question_en") or "",
+            "source": e.get("source", "catalogue"),
+            "cases": covered.get(i, 0),
+            "covered_cases": covered.get(i, 0),
+            "partial_cases": partial.get(i, 0),
+        }
+        for i, e in enumerate(entries)
+    ]
+    rows.sort(key=lambda r: (-r["cases"], -r["partial_cases"], r["index"]))
+    return rows
 
 
 def _events(L_cases, umbrellas, settings: TenantSettings, x8: bool) -> list[dict[str, Any]]:

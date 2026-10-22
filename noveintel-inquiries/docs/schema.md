@@ -146,6 +146,9 @@ boolean in a text column is stringified; a dict or list is rejected.
 | — | `deflectable_bundles` | procedures, eligibility, values, payment dates, locations | Umbrella names that count as self-serviceable. |
 | — | `event_threshold_pct` / `event_min_cases` | 50 / 30 | EVENTS. |
 | — | `top_root_causes` / `root_causes_per_bundle` | 12 / 5 | ROOT_CAUSE_TOP. |
+| — | `near_duplicate_similarity` | 0.95 | Classification: a case whose description + resolution embed at least this close to an earlier case copies its labels («آلي - موثوق»). On the ADPF Q2 file: 10.6% of cases, reviewed labels of such pairs agreed 95.3%. 1.0 turns it off; exact duplicates are always reused. |
+| — | `faq_group_similarity` | 0.88 | FAQ detection: root causes at least this similar (cosine, embeddings) are one question. Calibrated on the ADPF Q2 master — 0.85 merges a request's follow-up into how to apply for it, 0.90 splits paraphrases. |
+| — | `priority_faqs` / `faq_min_cases` | 8 / 3 | Section 04: how many priority FAQs are listed, and the smallest question group that can be one. |
 | — | `queue_owner_pattern` | `SM-ND\|queue\|قائمة\|فريق` | Regex telling queues from people. |
 | — | `case_type_map` | — | Recorded value → canonical type. |
 
@@ -172,7 +175,7 @@ never as zero.
 | Field | Required | Shape |
 |---|---|---|
 | `taxonomy` | **yes** | `"adpf_codebook_v1"`, or `{ main_services: [{ name_ar, name_en?, signals[], guidance?, crm_service_aliases[], sub_classifications: [{ name_ar, name_en?, signals[] }] }], crm_service_map: {tag: main}, edge_cases[], other_service?, examples[] }` |
-| `faq_catalogue` | no | `[{ question_ar, answer_ar?, question_en?, answer_en?, main_service?, keywords[] }]` — FAQ coverage |
+| `faq_catalogue` | no | `[{ question_ar, answer_ar?, question_en?, answer_en?, main_service?, keywords[] }]` — what FAQ detection judges coverage against (the answers are read, never written); enables `FAQ_COVERAGE` and `FAQ_CATALOGUE_VOLUME`. `keywords` is accepted and no longer used. `noveintel-ingest faq-catalogue` builds it from the tenant's FAQ workbook |
 | `vocabulary` | no | `{ ar: {avoid: use}, en: {avoid: use} }`. Omitted: the ADPF list; `{}`: none |
 | `transactions` | no | `[{ main_service, sub_service?, service_code?, total_requests, taxonomy_main_service?, taxonomy_sub_classification?, counts_in_denominator }]` |
 | `guidebook` | no | `{ title, pages, year, topics[], entries: [{title, text}] }`, or the Fujairah `guidebook_final.json` shape unchanged |
@@ -261,12 +264,13 @@ request.
 | `SERVICE_FOCUS` (X8) | per top-N service: count, share, months, peak, within-deadline (1 − over / count), sub-classes, umbrellas, phone and live-chat % |
 | `DEFLECTABLE_PCT` (X8) | cases in deflectable umbrellas / \|L\| |
 | `INQ_PER_100_TX` | \|L\| / Σ transactions (rows with `counts_in_denominator`) × 100; per main and sub service by join |
-| `FAQ_COVERAGE` | share of how-to cases matching a catalogue FAQ (service + keywords), per service |
+| `FAQ_COVERAGE` (catalogue) | per main service: the coverage cases (the procedures umbrella with X8, else inquiry-type cases), those `covered` and `partial`, and their % — a sum of each case's `faq_status`; a case whose question group was not judged counts as not covered |
+| `FAQ_CATALOGUE_VOLUME` (catalogue) | every catalogue (and guidebook) FAQ: `cases` it covers, and `partial_cases` it touches without fully answering, listed beside and never added in — sums of `faq_match`; entries nobody asked about are listed at zero. Partial is the less certain verdict: on the Q2 master, partial and not covered swapped for about one group in eight between two judging configurations, while covered held |
 | `AGENT` (X9) | per non-queue owner: count, %, within-deadline %; alphabetical, never ranked |
 | `COMPARISON` | deltas against the `history` snapshot X12 selects |
 | `JOURNEY_MAP` | frictions: name AR/EN, root-cause category, remedy, case count = Σ of the case groups assigned to it |
 | `NOTIFICATION_OPPORTUNITIES` | type, trigger, sample message, eliminable cases = Σ of their groups |
-| `VALIDATED_FAQS` | question, answer, frequency = cases matched to it (each case to one FAQ; `faq_id` on the case), catalogue status |
+| `VALIDATED_FAQS` | the priority FAQs: the largest question groups, as customer questions (AR/EN) — **no answer**; `frequency` = cases carrying its `faq_id`; `validation_status` (`new` · `partial` · `in_catalogue` · `in_guidebook` · `not_checked`); `matched_faqs`, the catalogue questions that answer it; dominant `main_service` and `bundle`; `root_causes`, its three commonest phrasings with counts; `evidence_case_ids` (first 20) |
 | `GAP_TABLE` | per friction: guidebook status, excerpt, gap type, deterministic priority, recommendation, case count |
 | `PATTERNS` | the largest case groups |
 | `FRAMEWORKS` | every registry indicator: status, value, numerator / denominator, target, recommendation |
@@ -274,9 +278,19 @@ request.
 | `METRIC_GAPS`, `DATA_NOTES` | fixed-wording recommendations for missing optional inputs; notes for present-but-empty columns |
 
 **What the model decides, and what it never does.** It writes labels (contact type,
-main service, sub-classification, root cause), names umbrellas, frictions, FAQs,
-notification opportunities and gap assessments, and writes prose. It never writes a
-count: every figure above is computed from labels and group assignments.
+main service, sub-classification, root cause, an FAQ verdict per question group),
+names umbrellas, frictions, priority FAQ questions, notification opportunities and gap
+assessments, and writes prose. It never writes a count — nor an FAQ answer: every
+figure above is computed from labels and group assignments.
+
+**How FAQs are found** (`analysis/faqs.py`). Each case's question is its root cause
+(else its redacted description). The distinct texts are embedded (Core42,
+`CORE42_MODEL_EMBED`, an approved model) and grouped by similarity
+(`faq_group_similarity`); each group is shortlisted against the catalogue by embedding,
+and the model judges it covered / partial / not covered from the shortlisted entries,
+answers included. The largest groups also get a customer question, and one more call
+merges groups that ask the same question. Every group behind the coverage figure is
+judged. The verdicts are per-case labels; the engine sums them.
 
 ### `ClassificationSummary`
 
@@ -328,7 +342,7 @@ has `id` `cover` (`tiles` O1–O6, both totals labelled — R7). Each section ha
 | `01` | `statistics` | الإحصاءات العامة ولوحة المؤشرات · General statistics and indicator dashboard | always — monthly, main services, inquiries vs transactions, channels, recorded vs true, timeliness with the framework table |
 | `02` | `service_focus` | تركيز الخدمات ذات الأولوية · Priority service focus | X8 on |
 | `03` | `root_causes` | الأسباب الجذرية وارتباطها بالخدمات · Root causes and their link to services | X8 on |
-| `04` | `digital_content_opportunities` | فرص المحتوى الرقمي الموجَّه · Targeted digital-content opportunities | always; FAQ coverage needs the FAQ catalogue, the self-service share needs X8 |
+| `04` | `digital_content_opportunities` | فرص المحتوى الرقمي الموجَّه · Targeted digital-content opportunities | always; the priority FAQs need no catalogue, FAQ coverage needs one, the self-service share needs X8 |
 | `05` | `improvement_roadmap` | خارطة الطريق التحسينية المقترحة · Proposed improvement roadmap | always; one subsection per horizon |
 | `conclusion` | `conclusion` | الخلاصة والتوصيات · Conclusion and recommendations | always |
 | `appendices` | `appendices` | الملاحق · Appendices | always — methodology (sources, parse log, method, fields, quality — R1), qualitative observations (events), journey friction points |
@@ -358,8 +372,8 @@ Keys: `classification_mix` (O7), `actual_type_mix` (O8), `service_distribution` 
 |---|---|
 | `report` | `{ ar, en? }` Word documents. |
 | `report_data` | `{ ar, en? }` the report JSON they were drawn from. |
-| `workbook` | The companion workbook (R10): summary · all cases · one sheet per actual contact type · reclassification · deep review · out of scope (Domain 02). Columns: the universal columns sent (by U-id), then D1, D1b, D2a, D2, D3, D4, D5, D6, D7, D8, deep-reviewed, low-confidence, copied-from-duplicate, FAQ link, corrections. No identity column; redacted text. |
-| `labels` | Per-case labels JSON: `label_*` fields, `misclassified`, `deep_reviewed`, `low_confidence`, `duplicate_of`, `faq_id`, `corrections` — what the platform stores and sends back next period as frozen labels. |
+| `workbook` | The companion workbook (R10): summary · all cases · one sheet per actual contact type · reclassification · deep review · out of scope (Domain 02) · with a catalogue, «حجم الأسئلة المعتمدة» — every approved FAQ with its case volume. Columns: the universal columns sent (by U-id), then D1, D1b, D2a, D2, D3, D4, D5, D6, D7, D8, deep-reviewed, low-confidence, copied-from-duplicate, priority FAQ (`FAQ`), catalogue coverage (`FAQS`), the catalogue question that answers it (`FAQM`), corrections. No identity column; redacted text. |
+| `labels` | Per-case labels JSON: `label_*` fields, `misclassified`, `deep_reviewed`, `low_confidence`, `duplicate_of`, `faq_id`, `faq_status`, `faq_catalogue_question`, `corrections` — what the platform stores and sends back next period as frozen labels. |
 
 `DocumentRef`: `container`, `key`, `filename`, `content_type`, `size_bytes`, `url`,
 `expires_at`.
@@ -367,8 +381,10 @@ Keys: `classification_mix` (O7), `actual_type_mix` (O8), `service_distribution` 
 ### `usage` — `RunUsage`
 
 `tokens`, `cost` (`null` when unpriced, never `0.0`), `input_tokens`, `output_tokens`,
-`calls`, `model`, `by_stage` — `classification`, `umbrella_discovery`, `journey`, `faqs`,
-`gaps`, `narratives`.
+`calls`, `model`, `by_stage` — `near_duplicates` (embeddings), `classification`, `deep_review`,
+`umbrella_discovery`, `journey`, `faqs`, `gaps`, `narratives`, `translation`. Cost applies
+`CORE42_INPUT_COST_PER_1M` to every input token, embeddings included, so it overstates
+them (≈ 10× their real rate); the per-stage tokens let a caller price them apart.
 
 ---
 

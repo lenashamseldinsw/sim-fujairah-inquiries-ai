@@ -107,10 +107,10 @@ _T_KEYS = {
     "count", "cases", "share", "month", "change", "channel", "digital", "main_service", "sub_classification",
     "contact_type", "recorded", "actual", "case_id", "evidence", "recorded_tag", "match", "status", "target",
     "framework", "recommendation", "department", "dominant_type", "severity", "friction", "root_cause_category",
-    "remedy", "topic", "guidebook_status", "excerpt", "gap_type", "priority", "question", "answer", "frequency",
+    "remedy", "topic", "guidebook_status", "excerpt", "gap_type", "priority", "question", "frequency",
     "faq_status", "notification", "trigger", "sample_message", "eliminable", "use_case", "function", "source_ref",
     "effort", "impact_cases", "initiative", "horizon", "description", "bundle", "root_cause", "near_over",
-    "inquiries", "transactions", "per_100", "howto_cases", "coverage", "provenance", "previous", "current",
+    "inquiries", "transactions", "per_100", "howto_cases", "coverage", "partial_coverage", "provenance", "previous", "current",
     "owner", "source", "nature", "size", "period", "field", "role", "indicator", "value", "item", "finding",
 }
 
@@ -603,8 +603,9 @@ def _digital_content_opportunities(p: _Page) -> dict | None:
     dc_tables, dc_charts = [], []
     fc = m.get("FAQ_COVERAGE")
     if fc:
-        dc_tables.append(b.table(["main_service", "howto_cases", "coverage"],
-                                 [[b.L(x), fmt_int(h), fmt_pct(c)] for x, h, c in zip(fc["labels"], fc["howto_cases"], fc["coverage_pct"])]))
+        dc_tables.append(b.table(["main_service", "howto_cases", "coverage", "partial_coverage"],
+                                 [[b.L(x), fmt_int(h), fmt_pct(c), fmt_pct(pp)]
+                                  for x, h, c, pp in zip(fc["labels"], fc["howto_cases"], fc["coverage_pct"], fc["partial_pct"])]))
         dc_charts += [
             b.chart("faq_coverage_bar", None, "bar", ("تغطية الأسئلة الشائعة حسب الخدمة", "FAQ coverage by service"),
                     fc["labels"][:12], E(fc["labels"][:12]), [("التغطية", "Coverage", fc["coverage_pct"][:12])], [primary]),
@@ -797,8 +798,8 @@ def _digital_transformation(p: _Page) -> dict | None:
     faqs = m.get("VALIDATED_FAQS", [])
     if faqs:
         subs.append(b.section(None, "", b.t("s6_faqs"), tables=[b.table(
-            ["question", "answer", "frequency", "faq_status"],
-            [[p.pick(q, "question"), p.pick(q, "answer"), fmt_int(q["frequency"]), FAQ_STATUS[q["validation_status"]][lang]] for q in faqs],
+            ["question", "frequency", "faq_status"],
+            [[p.pick(q, "question"), fmt_int(q["frequency"]), FAQ_STATUS[q["validation_status"]][lang]] for q in faqs],
         )]))
     notes = m.get("NOTIFICATION_OPPORTUNITIES", [])
     if notes:

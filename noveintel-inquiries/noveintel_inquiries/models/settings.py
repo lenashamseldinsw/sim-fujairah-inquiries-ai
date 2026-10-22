@@ -242,6 +242,27 @@ class TenantSettings(BaseModel):
     )
     top_root_causes: int = Field(default=12, ge=1, le=50)
     root_causes_per_bundle: int = Field(default=5, ge=1, le=20)
+    near_duplicate_similarity: float = Field(
+        default=0.95, ge=0.8, le=1.0,
+        description="Classification: a case whose description and resolution embed at least this "
+        "similar to an earlier case's copies its labels instead of being classified («آلي - موثوق»). "
+        "On the ADPF Q2 file, 10.6% of cases had such a neighbour, and the human-reviewed labels of "
+        "the pair agreed 95.3% of the time. 1.0 turns it off (exact duplicates are always reused).",
+    )
+    faq_group_similarity: float = Field(
+        default=0.88, ge=0.5, le=0.99,
+        description="FAQ detection: root causes whose embeddings are at least this similar "
+        "(cosine) are grouped as one question. Calibrated on the ADPF Q2 master: 0.85 "
+        "merges a request's follow-up into how to apply for it; 0.90 splits paraphrases.",
+    )
+    priority_faqs: int = Field(
+        default=8, ge=1, le=30,
+        description="Section 04: how many priority FAQs (the largest question groups) are listed.",
+    )
+    faq_min_cases: int = Field(
+        default=3, ge=1,
+        description="Section 04: the smallest question group that can be a priority FAQ.",
+    )
     queue_owner_pattern: str = Field(
         default="SM-ND|queue|قائمة|فريق",
         description="Regex. An owner matching it is a queue, not a person.",

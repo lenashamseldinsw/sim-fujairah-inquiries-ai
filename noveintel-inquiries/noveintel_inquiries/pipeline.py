@@ -7,7 +7,8 @@ accepted, and what will the run see?" before a caller commits to minutes of work
 ``generate_report`` runs the three layers (Prerequisites §0):
 
     parse ─► classify (rules → model → review; X8: root causes → umbrellas)
-          ─► analyse (frictions, FAQs, notifications, guidebook gaps)
+          ─► analyse (frictions, notifications, guidebook gaps)
+             + detect FAQs, after the umbrellas (questions and catalogue coverage, as labels)
           ─► compute (every number, on frozen labels)
           ─► narrate (AR and EN, prose only, checked against the numbers)
           ─► assemble the shown sections ─► Word ×2, report JSON ×2, workbook, per-case labels
@@ -439,14 +440,16 @@ def _run(request: GenerateInquiriesReportRequest, run_id: str, period: Period, w
     run.classify()
     run.choose_sections()
 
-    analysis_pool = ScopedThreadPoolExecutor(max_workers=1)
+    # Two workers: the journey analysis from stage 3, FAQ detection once the umbrellas exist.
+    analysis_pool = ScopedThreadPoolExecutor(max_workers=2)
     translation_pool = ScopedThreadPoolExecutor(max_workers=4)
     try:
         analysis_job = run.start_analysis(analysis_pool)
         run.discover_umbrellas()
+        faq_job = run.start_faqs(analysis_pool)
         run.compute()
         run.settle_sections()
-        outcome_ar = run.narrate(analysis_job, translation_pool)
+        outcome_ar = run.narrate(analysis_job, faq_job, translation_pool)
     except BaseException:
         analysis_pool.shutdown(wait=False, cancel_futures=True)
         translation_pool.shutdown(wait=False, cancel_futures=True)
@@ -549,8 +552,26 @@ class _Run:
         self.report(0.44, "تحليل رحلة المتعامل وتجميع الحزم", "Stage 3: Analysis and umbrella discovery")
         return pool.submit(
             _staged, "analysis", analyse, self.cases, entity=self.entity.name_en, vocabulary=self.vocab,
-            faq_catalogue=self.refs.faq_catalogue, guidebook=self.refs.guidebook, progress=self.report,
-            journey=self.needs["journey"], faqs=self.needs["faqs"], gaps=self.needs["gaps"],
+            guidebook=self.refs.guidebook, progress=self.report,
+            journey=self.needs["journey"], gaps=self.needs["gaps"],
+        )
+
+    # ── Stage 3b: FAQ detection — needs the umbrellas, so it starts after them ─
+
+    def start_faqs(self, pool) -> Any:
+        """Section 04's questions and coverage, beside compute and the early narrative.
+
+        Only when a shown section prints FAQs (Section 04, the roadmap). Its labels are
+        written on the cases; ``narrate`` sums them once the job is in.
+        """
+        from .analysis.faqs import detect_faqs
+
+        if not self.needs["faqs"]:
+            return None
+        return pool.submit(
+            _staged, "analysis", detect_faqs, self.cases, umbrellas=self.umbrellas, settings=self.settings,
+            catalogue=self.refs.faq_catalogue, guidebook=self.refs.guidebook, entity=self.entity.name_en,
+            vocabulary=self.vocab, progress=self.report,
         )
 
     def discover_umbrellas(self) -> None:
@@ -615,7 +636,7 @@ class _Run:
 
     # ── Layer 3: the Arabic narrative ─────────────────────────────────────────
 
-    def narrate(self, analysis_job, translation_pool) -> Any:
+    def narrate(self, analysis_job, faq_job, translation_pool) -> Any:
         """The Arabic narrative in three calls, each translated the moment it is final.
 
         Groups A and B need no analysis and start at once; group C (``sections.LATE_GROUP``)
@@ -643,18 +664,17 @@ class _Run:
 
             with _step(self.run_id, "Waiting for the analysis"):
                 analysis = analysis_job.result()
-            self.analysis = analysis
-            for message in analysis.warnings + self.classified.warnings:
+                faqs = self._faq_result(faq_job)
+            self.analysis, self.faqs = analysis, faqs
+            for message in analysis.warnings + faqs.warnings + self.classified.warnings:
                 self.warnings.append(BundleWarning(code="partial_analysis", message=message))
             # The full figures: a new dict, so the early narrative's never changes under it.
             self.metrics = {
                 **self.metrics_early,
                 "JOURNEY_MAP": analysis.frictions,
                 "NOTIFICATION_OPPORTUNITIES": analysis.notifications,
-                "VALIDATED_FAQS": [
-                    {k: v for k, v in q.items() if k != "keywords"} | {"evidence_case_ids": q["evidence_case_ids"][:20]}
-                    for q in analysis.faqs
-                ],
+                "VALIDATED_FAQS": [q | {"evidence_case_ids": q["evidence_case_ids"][:20]} for q in faqs.priority],
+                **_faq_figures(faqs),
                 "GAP_TABLE": analysis.gaps,
                 "PATTERNS": analysis.patterns,
                 **({"GUIDEBOOK": analysis.guidebook} if analysis.guidebook else {}),
@@ -671,6 +691,22 @@ class _Run:
         self.english = english
         self.en_loc = english.side("late")["loc"]
         return combine(early.units + late.units)
+
+    def _faq_result(self, faq_job) -> Any:
+        """The FAQ job's result; a failure leaves Section 04 without FAQs, with a warning."""
+        from .analysis.faqs import FaqResult
+
+        if faq_job is None:
+            return FaqResult()
+        try:
+            return faq_job.result()
+        except RunAbandoned:
+            raise
+        except Exception as exc:
+            logger.warning("[%s] FAQ detection failed: %s", self.run_id, exc)
+            for case in self.cases:
+                case.faq_id = case.faq_status = case.faq_match = None
+            return FaqResult(warnings=[f"FAQ detection failed ({type(exc).__name__}); Section 04 has no FAQ figures."])
 
     def arabic_context(self, metrics: dict[str, Any], sources: list[dict[str, Any]]) -> dict[str, Any]:
         from .narratives.context import build_context
@@ -899,6 +935,23 @@ def _staged(stage: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> An
         return fn(*args, **kwargs)
 
 
+def _faq_figures(faqs) -> dict[str, Any]:
+    """FAQ_COVERAGE and FAQ_CATALOGUE_VOLUME — sums of the labels FAQ detection wrote.
+
+    Conditional on the tenant's FAQ catalogue (Data Mapping §1): without one there is
+    nothing to be covered by, and Section 04 carries the metric-gap recommendation.
+    """
+    from .engine.compute import faq_catalogue_volume, faq_coverage
+
+    catalogue = sum(1 for e in faqs.entries if e["source"] == "catalogue")
+    if faqs.population is None or not catalogue:
+        return {}
+    figures: dict[str, Any] = {"FAQ_CATALOGUE_VOLUME": faq_catalogue_volume(faqs.population, faqs.entries)}
+    if faqs.population.coverage:
+        figures["FAQ_COVERAGE"] = faq_coverage(faqs.population, catalogue)
+    return figures
+
+
 def _narrative_warnings(warnings: list[BundleWarning], lang: str, outcome) -> None:
     """What the narrative checks left standing, as caller-facing warnings."""
     if outcome.unverified:
@@ -1022,9 +1075,12 @@ def _labels_to_translate(metrics: dict[str, Any], umbrellas, tax, shown=None) ->
 
 def _labels_document(run_id, cases, tax, settings, umbrellas, refs) -> dict[str, Any]:
     """Per-case labels — what the platform stores, and sends back frozen next period."""
+    from .analysis.faqs import faq_entries
     from .engine.wording import PROVENANCE
 
     names = {u.id: u for u in umbrellas}
+    # ``faq_match`` indexes the entries FAQ detection judged against, in this order.
+    faq_questions = [e["question_ar"] for e in faq_entries(refs.faq_catalogue, refs.guidebook)]
     return {
         "run_id": run_id,
         "taxonomy": tax.label,
@@ -1050,6 +1106,8 @@ def _labels_document(run_id, cases, tax, settings, umbrellas, refs) -> dict[str,
                 "low_confidence": c.low_confidence,
                 "duplicate_of": c.duplicate_of,
                 "faq_id": c.faq_id,
+                "faq_status": c.faq_status,
+                "faq_catalogue_question": faq_questions[c.faq_match] if c.faq_match is not None else None,
                 "corrections": c.corrections,
             }
             for c in cases

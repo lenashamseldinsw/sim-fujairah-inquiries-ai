@@ -4,7 +4,9 @@ A fake Core42 gateway: every model call answered locally, by tool name.
 Installed by patching ``Core42Client`` so the whole pipeline runs end to end with no
 network — the wiring, the counting, the documents and the post-processing are what is
 under test, not the model's prose. Answers are deterministic and deliberately simple:
-a label set per case, one umbrella, one friction per group pair, one FAQ per service.
+a label set per case, one umbrella, one friction per group pair, every FAQ group covered
+by its first candidate entry. Embeddings are character-trigram hashes: offline,
+deterministic, and similar for similar wording.
 
 Markers in a case description steer the classifier: ``review-me`` gives a first-pass
 confidence below X6 (so the deep review runs); ``still-low`` keeps it low through the
@@ -43,6 +45,7 @@ class FakeGateway:
     calls: list[str] = field(default_factory=list)
     fail_tools: set[str] = field(default_factory=set)
     narrative_figure: str | None = None  # a figure to plant in the prose, for the fidelity check
+    faq_payloads: list[dict] = field(default_factory=list)  # what FAQ judging was shown
 
     def create(self, *, model=None, messages=None, max_tokens=None, system=None, tools=None,
                tool_choice=None, stage=None, **_: Any) -> _Message:
@@ -61,30 +64,25 @@ class FakeGateway:
     # ── classification ──
     def _classify_cases(self, user: str, tool: dict, system: str) -> dict:
         schema = tool["input_schema"]["properties"]["cases"]["items"]["properties"]
-        mains = schema["main_service"]["enum"]
+        codes = schema["sub"]["enum"]
         blocks = user.split("\n\n---\n\n")
         out = []
         for block in blocks:
-            match = re.search(r"case_id: (\S+)", block)
+            match = re.search(r"^id: (\S+)", block, re.M)
             if not match:
                 continue
             fixed = dict(re.findall(r"(\w+)=([^;\n]+)", block.split("fixed labels (keep unchanged):")[1].split("\n")[0])) \
                 if "fixed labels" in block else {}
-            main = fixed.get("main_service") or mains[0]
-            subs = [s for s in schema["sub_classification"]["enum"]]
-            sub = fixed.get("sub_classification") or subs[0]
             item = {
-                "case_id": match.group(1),
-                "actual_contact_type": fixed.get("actual_contact_type", "استفسار"),
-                "true_type": "complaint" if "شكوى" in block[:400] else "inquiry",
-                "main_service": main,
-                "sub_classification": sub,
-                "classification_reason": "الرد يشرح الخطوات ويحيل إلى صفحة الخدمة",
-                "evidence": "الرد يقدم رابط الخدمة",
-                "confidence": self._confidence(block, system),
+                "id": match.group(1),
+                "type": fixed.get("type", "استفسار"),
+                "tt": "complaint" if "شكوى" in block[:400] else "inquiry",
+                "sub": fixed.get("sub") if fixed.get("sub") in codes else codes[0],
+                "reason": "الرد يشرح الخطوات",
+                "conf": self._confidence(block, system),
             }
-            if "root_cause" in schema:
-                item["root_cause"] = (
+            if "cause" in schema:
+                item["cause"] = (
                     "متابعة" if "short-cause" in block and "FIX:" not in block
                     else "الاستفسار عن إجراءات تقديم الخدمة عبر القنوات الرقمية المعتمدة"
                 )
@@ -107,7 +105,12 @@ class FakeGateway:
             target = "n1"
             umbrellas = [{"id": "n1", "ar": "طلب إجراءات ومتطلبات الخدمة", "en": "Procedures & requirements",
                           "meaning_ar": "كيف أقدّم وما المطلوب", "meaning_en": "How to apply and what is needed", "new": True}]
-        return {"umbrellas": umbrellas, "assignment": [{"root_cause": rc["id"], "umbrella_id": target} for rc in data["root_causes"]]}
+        members = [rc["id"] for rc in data["root_causes"]]
+        if umbrellas:
+            umbrellas[0]["root_causes"] = members
+        else:
+            umbrellas = [{"id": target, "new": False, "root_causes": members}]
+        return {"umbrellas": umbrellas}
 
     def _merge_umbrellas(self, user: str, tool: dict, system: str) -> dict:
         return {"mapping": []}
@@ -125,15 +128,18 @@ class FakeGateway:
                                             "group_ids": groups[2:3] or groups[:1]}],
         }
 
-    def _propose_faqs(self, user: str, tool: dict, system: str) -> dict:
-        data = json.loads(user)
-        words = []
-        for sample in data["samples"]:
-            words += [w for w in re.findall(r"[؀-ۿ]{4,}", sample["description"])]
-        common = [w for w, _ in __import__("collections").Counter(words).most_common(3)] or ["الخدمة"]
-        return {"faqs": [{"question_ar": "كيف أتقدم بطلب الخدمة؟", "question_en": "How do I apply for the service?",
-                          "answer_ar": "عبر القنوات الرقمية المعتمدة", "answer_en": "Through the approved digital channels",
-                          "keywords_ar": common}]}
+    def _judge_faq_groups(self, user: str, tool: dict, system: str) -> dict:
+        self.faq_payloads.append(json.loads(user))
+        return {"groups": [
+            {"group_id": g["group_id"], "status": "covered" if g["candidates"] else "not_covered",
+             "faq_ids": g["candidates"][:1],
+             "question_ar": "كيف أتقدم بطلب الخدمة؟" if g["write_question"] else "",
+             "question_en": "How do I apply for the service?" if g["write_question"] else ""}
+            for g in json.loads(user)["groups"]
+        ]}
+
+    def _merge_faq_questions(self, user: str, tool: dict, system: str) -> dict:
+        return {"same_question": []}
 
     def _assess_guidebook(self, user: str, tool: dict, system: str) -> dict:
         frictions = json.loads(user)["frictions"]
@@ -208,9 +214,32 @@ def _translate(node: Any, glossary: dict[str, str], key: str = "") -> Any:
     return node
 
 
+def fake_embed(texts, *, query: bool = False, stage: str = "faqs"):
+    """Character-trigram feature hashing — a stand-in for the embeddings endpoint."""
+    import hashlib
+
+    import numpy as np
+
+    from noveintel_inquiries.core42 import tokens
+
+    out = np.zeros((len(texts), 256), dtype=np.float32)
+    for row, text in enumerate(texts):
+        folded = " ".join(str(text).split())
+        for i in range(max(1, len(folded) - 2)):
+            h = int.from_bytes(hashlib.blake2b(folded[i:i + 3].encode(), digest_size=8).digest(), "little")
+            out[row, h % 256] += 1.0
+    if len(texts):
+        tokens.track("fake-embedding", sum(len(t) for t in texts) // 4, 0, stage)
+    norms = np.linalg.norm(out, axis=1, keepdims=True)
+    return out / np.where(norms == 0, 1, norms)
+
+
 def install(monkeypatch, gateway: FakeGateway | None = None) -> FakeGateway:
-    """Route every Core42 call in the package to ``gateway``."""
+    """Route every Core42 call in the package to ``gateway``; embeddings to ``fake_embed``."""
+    from noveintel_inquiries.core42 import embeddings as embeddings_module
     from noveintel_inquiries.core42 import messages as messages_module
+
+    monkeypatch.setattr(embeddings_module, "embed_texts", fake_embed)
 
     gateway = gateway or FakeGateway()
 

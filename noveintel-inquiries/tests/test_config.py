@@ -53,7 +53,7 @@ def test_a_bad_value_is_still_refused(monkeypatch):
 class TestDeepReviewReasoning:
     """gpt-5.1 does no reasoning unless asked, so the deep review must ask."""
 
-    def test_defaults_to_the_main_model_at_medium_effort(self, monkeypatch):
+    def test_defaults_to_the_main_model_at_low_effort(self, monkeypatch):
         from noveintel_inquiries.core42 import DEEP_MODEL, reload_settings
 
         monkeypatch.setenv("CORE42_MODEL", "gpt-5.1")
@@ -61,7 +61,7 @@ class TestDeepReviewReasoning:
         monkeypatch.delenv("LLM_DEEP_REASONING_EFFORT", raising=False)
         try:
             s = reload_settings()
-            assert s.resolve_model(DEEP_MODEL) == "gpt-5.1" and s.deep_reasoning_effort == "medium"
+            assert s.resolve_model(DEEP_MODEL) == "gpt-5.1" and s.deep_reasoning_effort == "low"
             monkeypatch.setenv("CORE42_MODEL_DEEP", "o4-mini")
             monkeypatch.setenv("LLM_DEEP_REASONING_EFFORT", "none")
             s = reload_settings()
