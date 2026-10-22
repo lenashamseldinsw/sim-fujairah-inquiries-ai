@@ -11,6 +11,11 @@ Functions or on-prem:
 Each folder is self-contained — its own `pyproject.toml`, `.env.example`, tests, and
 four documents: `README.md`, `docs/api.md`, `docs/schema.md`, `docs/deployment.md`.
 
+Beside them, [`noveintel-ingest/`](noveintel-ingest/README.md) is a library and CLI,
+not a service: it reads every sheet of an Excel workbook, embeds each row with its
+column names (Core42, approved embedding models only) into pgvector, and exports a
+FAQ sheet as the inquiries service's `reference.faq_catalogue`.
+
 ```bash
 cd noveintel-inquiries            # or noveintel-complaints
 cp .env.example .env              # set CORE42_API_KEY

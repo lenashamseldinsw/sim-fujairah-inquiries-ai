@@ -1,0 +1,41 @@
+[project]
+name = "noveintel-ingest"
+version = "0.1.0"
+description = "NoveIntelligence — document ingestion: Excel workbooks → row-serialised chunks → Core42 embeddings → pgvector"
+# 3.12, not 3.13+: the embedded Postgres used for local testing (pgserver) ships
+# wheels up to cp312 only. Production points at a real Postgres and needs neither.
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "numpy>=1.26.0",
+    "python-dotenv>=1.0.0",
+    # The Core42 gateway is OpenAI-compatible and driven with the official SDK.
+    "openai>=1.99.0",
+    "psycopg[binary]>=3.2.0",
+]
+
+[project.optional-dependencies]
+# An embedded Postgres 16 with pgvector, for local testing with no Docker and no
+# server: leave NOVEINGEST_PG_DSN unset and the store starts one in .pgdata/.
+local = [
+    "pgserver>=0.1.4",
+]
+
+[project.scripts]
+noveintel-ingest = "noveintel_ingest.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pgserver>=0.1.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["noveintel_ingest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
