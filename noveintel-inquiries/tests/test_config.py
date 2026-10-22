@@ -103,3 +103,61 @@ class TestDeepReviewReasoning:
             client.messages.create(model="gpt-4.1", max_tokens=10, messages=[{"role": "user", "content": "hi"}],
                                    reasoning_effort="medium")
         assert sent == ["medium", None, None]  # rejected once, then never sent to that model again
+
+
+class TestSingleToolCall:
+    """Every request with tools asks for exactly one tool call (parallel_tool_calls=false)."""
+
+    @staticmethod
+    def _response():
+        from types import SimpleNamespace
+
+        call = SimpleNamespace(id="t1", function=SimpleNamespace(name="label", arguments='{"cases": []}'))
+        message = SimpleNamespace(content=None, tool_calls=[call])
+        return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="tool_calls")],
+                               usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1), model="x")
+
+    def _client(self, monkeypatch, fake):
+        from noveintel_inquiries.core42 import messages as m
+
+        monkeypatch.setenv("CORE42_API_KEY", "test-key")
+        monkeypatch.setattr(m, "create_chat_completion", fake)
+        monkeypatch.setattr(m, "_parallel_unsupported", set())
+        monkeypatch.setattr(m, "_tools_unsupported", False)
+        return m, m.Core42Client(api_key="k", model="gpt-5.1")
+
+    TOOL = {"name": "label", "description": "d", "input_schema": {"type": "object", "properties": {"cases": {"type": "array"}}}}
+
+    def test_tools_ask_for_one_call_and_plain_requests_do_not(self, monkeypatch):
+        sent = []
+
+        def fake(**kwargs):
+            sent.append(kwargs.get("parallel_tool_calls"))
+            return self._response()
+
+        _, client = self._client(monkeypatch, fake)
+        client.messages.create(model="gpt-5.1", max_tokens=10, messages=[{"role": "user", "content": "x"}],
+                               tools=[self.TOOL], tool_choice={"type": "any"})
+        client.messages.create(model="gpt-5.1", max_tokens=10, messages=[{"role": "user", "content": "x"}])
+        assert sent == [False, None]
+
+    def test_a_rejection_is_retried_without_it_and_never_means_json_mode(self, monkeypatch):
+        import httpx
+        from openai import BadRequestError
+
+        sent = []
+
+        def fake(**kwargs):
+            sent.append(kwargs.get("parallel_tool_calls"))
+            if kwargs.get("parallel_tool_calls") is False:
+                raise BadRequestError("Unsupported parameter: 'parallel_tool_calls'",
+                                      response=httpx.Response(400, request=httpx.Request("POST", "http://x")), body=None)
+            return self._response()
+
+        m, client = self._client(monkeypatch, fake)
+        for _ in range(2):
+            message = client.messages.create(model="gpt-5.1", max_tokens=10, messages=[{"role": "user", "content": "x"}],
+                                             tools=[self.TOOL], tool_choice={"type": "any"})
+            assert message.content[0].type == "tool_use"
+        assert sent == [False, None, None]  # rejected once, then never sent to that model again
+        assert m._tools_unsupported is False  # the JSON-mode fallback was not triggered

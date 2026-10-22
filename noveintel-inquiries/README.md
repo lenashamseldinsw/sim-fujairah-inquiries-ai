@@ -156,7 +156,7 @@ noveintel_inquiries/
 ├── core42/                the Core42 gateway integration
 ├── jobs/  storage/        the async job layer and document stores
 fixtures/                  example request bodies; the Fujairah guidebook and catalogue
-tests/                     445 tests; tests/fakes.py answers every model call locally
+tests/                     447 tests; tests/fakes.py answers every model call locally
 ```
 
 ---

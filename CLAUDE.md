@@ -164,7 +164,10 @@ everything into the report's sections (`assemble`), renders Word (`word`) and th
   all `tool_use` blocks (lists concatenated, empty fields filled). A model asked for one
   call sometimes answers in several; reading the first silently dropped the rest (the
   deep review returned 1 answer for 7 cases). Every call site uses it; the classifier
-  also asks once more for any case still missing an answer.
+  also asks once more for any case still missing an answer. Requests with tools also send
+  `parallel_tool_calls: false` (gpt-4.1-mini split a 4-case answer in two without it);
+  a model that rejects it is asked again without it, checked before the JSON-mode
+  fallback because its name contains "tool".
 - **Thread pools are `core42.tokens.ScopedThreadPoolExecutor`**, never a bare
   `ThreadPoolExecutor` — the run's token ledger is a context variable.
   `tests/test_runs.py` fails on a bare one.
@@ -180,7 +183,7 @@ reviewed labels — re-measure before changing them, and keep any new example re
 
 ### Testing
 
-`cd noveintel-inquiries && uv run pytest` — 445 tests, no network. `tests/fakes.py`
+`cd noveintel-inquiries && uv run pytest` — 447 tests, no network. `tests/fakes.py`
 answers every model call by tool name; `tests/fixtures/adpf_q2_2026_labels.json.gz` is
 the labelled ADPF master (labels and structured columns only), against which
 `tests/test_engine.py` reproduces the Full Report Prompt's worked example exactly.

@@ -302,10 +302,21 @@ def _emulate_tool_call(
 # Models that rejected ``reasoning_effort`` this process: asked again without it.
 _effort_unsupported: set = set()
 
+# Models that rejected ``parallel_tool_calls``: sent without it from then on. Every
+# request with tools asks for exactly one tool call — a model allowed several splits one
+# answer across them (gpt-4.1-mini did on a 4-case batch); ``tool_input`` still merges
+# them if a model ignores the flag.
+_parallel_unsupported: set = set()
+
 
 def _looks_like_effort_rejection(exc: BaseException) -> bool:
     text = str(exc).lower()
     return "reasoning_effort" in text or "reasoning effort" in text
+
+
+def _looks_like_parallel_rejection(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "parallel_tool_calls" in text or "parallel tool" in text
 
 
 def _looks_like_tool_rejection(exc: BaseException) -> bool:
@@ -389,6 +400,7 @@ class _Messages:
         choice = _to_openai_tool_choice(tool_choice, tools or []) if tools else None
 
         effort = {"value": reasoning_effort if resolved_model not in _effort_unsupported else None}
+        single = {"value": False if tools and resolved_model not in _parallel_unsupported else None}
 
         def _call():
             return create_chat_completion(
@@ -398,21 +410,31 @@ class _Messages:
                 tools=openai_tools,
                 tool_choice=choice,
                 reasoning_effort=effort["value"],
+                parallel_tool_calls=single["value"],
             )
 
         try:
-            try:
-                resp = call_with_retry(_call, label=f"core42:{label}")
-            except BadRequestError as exc:
-                # A model without reasoning support: ask again without the effort, and
-                # stop sending it to that model for the rest of the process.
-                if not effort["value"] or not _looks_like_effort_rejection(exc):
-                    raise
-                logger.warning("[%s] %s rejected reasoning_effort; continuing without it: %s",
-                               label, resolved_model, exc)
-                _effort_unsupported.add(resolved_model)
-                effort["value"] = None
-                resp = call_with_retry(_call, label=f"core42:{label}")
+            # A model may reject an optional parameter: ask again without it, and stop
+            # sending it to that model for the rest of the process. parallel_tool_calls
+            # is checked first — its name contains "tool", which the JSON-mode fallback
+            # below would otherwise read as "no tool support at all".
+            for _ in range(3):
+                try:
+                    resp = call_with_retry(_call, label=f"core42:{label}")
+                    break
+                except BadRequestError as exc:
+                    if single["value"] is not None and _looks_like_parallel_rejection(exc):
+                        logger.warning("[%s] %s rejected parallel_tool_calls; continuing without it: %s",
+                                       label, resolved_model, exc)
+                        _parallel_unsupported.add(resolved_model)
+                        single["value"] = None
+                    elif effort["value"] and _looks_like_effort_rejection(exc):
+                        logger.warning("[%s] %s rejected reasoning_effort; continuing without it: %s",
+                                       label, resolved_model, exc)
+                        _effort_unsupported.add(resolved_model)
+                        effort["value"] = None
+                    else:
+                        raise
         except BadRequestError as exc:
             # A schema or tool-support rejection must not take the stage down: fall
             # back to JSON mode. ERROR, because a persistent fallback means every

@@ -82,6 +82,7 @@ def create_chat_completion(
     tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: Optional[Any] = None,
     reasoning_effort: Optional[str] = None,
+    parallel_tool_calls: Optional[bool] = None,
 ) -> Any:
     """Make one chat-completions request. No retries, no parsing — just the call.
 
@@ -105,6 +106,8 @@ def create_chat_completion(
         kwargs["tools"] = tools
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
+        if parallel_tool_calls is not None:
+            kwargs["parallel_tool_calls"] = parallel_tool_calls
     if reasoning_effort:
         kwargs["reasoning_effort"] = reasoning_effort
 
